@@ -29,7 +29,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { validateEmployeeForm, formatCPF, formatPhone } from "@/lib/validation";
 import { Plus, Search, Eye, Loader2, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -39,6 +39,7 @@ export default function Employees() {
   const [gender, setGender] = useState("");
   const [maritalStatus, setMaritalStatus] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const dialogContentRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
 
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
@@ -140,7 +141,7 @@ export default function Employees() {
                 Novo Funcionário
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogContent ref={dialogContentRef} className="max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Cadastrar Novo Funcionário</DialogTitle>
               </DialogHeader>
@@ -212,7 +213,7 @@ export default function Employees() {
                         <SelectTrigger className={errors.gender ? "border-red-500" : ""}>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent container={dialogContentRef.current}>
                           <SelectItem value="M">Masculino</SelectItem>
                           <SelectItem value="F">Feminino</SelectItem>
                           <SelectItem value="Outro">Outro</SelectItem>
@@ -240,7 +241,7 @@ export default function Employees() {
                         <SelectTrigger className={errors.maritalStatus ? "border-red-500" : ""}>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent container={dialogContentRef.current}>
                           <SelectItem value="Solteiro">Solteiro(a)</SelectItem>
                           <SelectItem value="Casado">Casado(a)</SelectItem>
                           <SelectItem value="Divorciado">Divorciado(a)</SelectItem>

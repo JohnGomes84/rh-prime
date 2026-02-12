@@ -21,6 +21,7 @@ const SafetyHealth = lazy(() => import("./pages/SafetyHealth"));
 const Integration = lazy(() => import("./pages/Integration"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Reports = lazy(() => import("./pages/Reports"));
 
 function PageLoader() {
   return (
@@ -48,6 +49,7 @@ function Router() {
         <Route path="/notificacoes" component={Notifications} />
         <Route path="/seguranca" component={SafetyHealth} />
         <Route path="/configuracoes" component={Settings} />
+        <Route path="/relatorios" component={Reports} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

@@ -62,3 +62,9 @@
 - [x] Página Notificações
 - [x] Página Configurações (feriados, alertas, empresa)
 - [x] Tema visual profissional (cores, tipografia)
+
+## Relatório de Conformidade (Em Desenvolvimento)
+- [ ] Função backend para gerar dados de conformidade
+- [ ] Geração de PDF com dados de PGR, PCMSO, ASOs, Treinamentos
+- [ ] Página de Relatórios com filtros e download
+- [ ] Testes de geração de PDF

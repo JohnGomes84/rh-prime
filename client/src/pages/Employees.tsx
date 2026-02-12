@@ -200,25 +200,26 @@ export default function Employees() {
                     </div>
                     <div>
                       <Label htmlFor="gender">Gênero *</Label>
-                      <Select value={gender} onValueChange={(value) => {
-                        setGender(value);
-                        if (errors.gender) {
-                          setErrors((prev) => {
-                            const newErrors = { ...prev };
-                            delete newErrors.gender;
-                            return newErrors;
-                          });
-                        }
-                      }}>
-                        <SelectTrigger className={errors.gender ? "border-red-500" : ""}>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent container={dialogContentRef.current}>
-                          <SelectItem value="M">Masculino</SelectItem>
-                          <SelectItem value="F">Feminino</SelectItem>
-                          <SelectItem value="Outro">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <select
+                        id="gender"
+                        value={gender}
+                        onChange={(e) => {
+                          setGender(e.target.value);
+                          if (errors.gender) {
+                            setErrors((prev) => {
+                              const newErrors = { ...prev };
+                              delete newErrors.gender;
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        className={`w-full px-3 py-2 border rounded-md bg-background text-foreground ${errors.gender ? "border-red-500" : "border-input"}`}
+                      >
+                        <option value="">Selecione</option>
+                        <option value="M">Masculino</option>
+                        <option value="F">Feminino</option>
+                        <option value="Outro">Outro</option>
+                      </select>
                       {errors.gender && (
                         <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
@@ -228,27 +229,28 @@ export default function Employees() {
                     </div>
                     <div>
                       <Label htmlFor="maritalStatus">Estado Civil *</Label>
-                      <Select value={maritalStatus} onValueChange={(value) => {
-                        setMaritalStatus(value);
-                        if (errors.maritalStatus) {
-                          setErrors((prev) => {
-                            const newErrors = { ...prev };
-                            delete newErrors.maritalStatus;
-                            return newErrors;
-                          });
-                        }
-                      }}>
-                        <SelectTrigger className={errors.maritalStatus ? "border-red-500" : ""}>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent container={dialogContentRef.current}>
-                          <SelectItem value="Solteiro">Solteiro(a)</SelectItem>
-                          <SelectItem value="Casado">Casado(a)</SelectItem>
-                          <SelectItem value="Divorciado">Divorciado(a)</SelectItem>
-                          <SelectItem value="Viúvo">Viúvo(a)</SelectItem>
-                          <SelectItem value="União Estável">União Estável</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <select
+                        id="maritalStatus"
+                        value={maritalStatus}
+                        onChange={(e) => {
+                          setMaritalStatus(e.target.value);
+                          if (errors.maritalStatus) {
+                            setErrors((prev) => {
+                              const newErrors = { ...prev };
+                              delete newErrors.maritalStatus;
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        className={`w-full px-3 py-2 border rounded-md bg-background text-foreground ${errors.maritalStatus ? "border-red-500" : "border-input"}`}
+                      >
+                        <option value="">Selecione</option>
+                        <option value="Solteiro">Solteiro(a)</option>
+                        <option value="Casado">Casado(a)</option>
+                        <option value="Divorciado">Divorciado(a)</option>
+                        <option value="Viúvo">Viúvo(a)</option>
+                        <option value="União Estável">União Estável</option>
+                      </select>
                       {errors.maritalStatus && (
                         <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />

@@ -51,6 +51,7 @@ const menuItems = [
   { icon: Clock, label: "Banco de Horas", path: "/banco-horas" },
   { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos" },
   { icon: FileText, label: "Gerador de Docs", path: "/gerador" },
+  { icon: FileText, label: "Relatórios", path: "/relatorios" },
   { icon: ArrowRightLeft, label: "Integração", path: "/integracao" },
   { icon: Bell, label: "Notificações", path: "/notificacoes" },
   { icon: Settings, label: "Configurações", path: "/configuracoes" },

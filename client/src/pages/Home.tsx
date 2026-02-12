@@ -13,6 +13,8 @@ import {
   UserCheck,
   UserX,
   Loader2,
+  Shield,
+  FileText,
 } from "lucide-react";
 
 export default function Home() {
@@ -38,7 +40,7 @@ export default function Home() {
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <Card className="border-0 shadow-sm bg-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -117,6 +119,44 @@ export default function Home() {
                   </p>
                 </CardContent>
               </Card>
+
+              <Card className="border-0 shadow-sm bg-card">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    PGR Vencendo
+                  </CardTitle>
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${(stats?.expiredPGR ?? 0) > 0 ? "bg-orange-100" : "bg-primary/10"}`}>
+                    <Shield className={`h-4 w-4 ${(stats?.expiredPGR ?? 0) > 0 ? "text-orange-600" : "text-primary"}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-3xl font-bold ${(stats?.expiredPGR ?? 0) > 0 ? "text-orange-600" : "text-foreground"}`}>
+                    {stats?.expiredPGR ?? 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vencendo em 30 dias
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-sm bg-card">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    PCMSO Vencendo
+                  </CardTitle>
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${(stats?.expiredPCMSO ?? 0) > 0 ? "bg-red-100" : "bg-primary/10"}`}>
+                    <FileText className={`h-4 w-4 ${(stats?.expiredPCMSO ?? 0) > 0 ? "text-red-600" : "text-primary"}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-3xl font-bold ${(stats?.expiredPCMSO ?? 0) > 0 ? "text-red-600" : "text-foreground"}`}>
+                    {stats?.expiredPCMSO ?? 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vencendo em 30 dias
+                  </p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Alerts Section */}
@@ -163,9 +203,33 @@ export default function Home() {
                         </Badge>
                       </div>
                     )}
+                    {(stats?.expiredPGR ?? 0) > 0 && (
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200">
+                        <div className="flex items-center gap-3">
+                          <Shield className="h-4 w-4 text-orange-600" />
+                          <span className="text-sm text-foreground">PGR vencendo</span>
+                        </div>
+                        <Badge className="text-xs bg-orange-100 text-orange-700 hover:bg-orange-200">
+                          {stats?.expiredPGR}
+                        </Badge>
+                      </div>
+                    )}
+                    {(stats?.expiredPCMSO ?? 0) > 0 && (
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 border border-red-200">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-red-600" />
+                          <span className="text-sm text-foreground">PCMSO vencendo</span>
+                        </div>
+                        <Badge className="text-xs bg-red-100 text-red-700 hover:bg-red-200">
+                          {stats?.expiredPCMSO}
+                        </Badge>
+                      </div>
+                    )}
                     {(stats?.overdueVacations ?? 0) === 0 &&
                       (stats?.expiredExams ?? 0) === 0 &&
-                      (stats?.expiringTimeBank ?? 0) === 0 && (
+                      (stats?.expiringTimeBank ?? 0) === 0 &&
+                      (stats?.expiredPGR ?? 0) === 0 &&
+                      (stats?.expiredPCMSO ?? 0) === 0 && (
                         <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                           <TrendingUp className="h-4 w-4 text-emerald-600" />
                           <span className="text-sm text-emerald-700">

@@ -26,6 +26,9 @@ import {
   auditLog, InsertAuditLog,
   absences, InsertAbsence,
   dependents, InsertDependent,
+  pgr, InsertPGR,
+  pcmso, InsertPCMSO,
+  dashboardSettings, InsertDashboardSetting,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -785,12 +788,12 @@ export async function deleteDependent(id: number) {
 // ============================================================
 export async function getDashboardStats() {
   const db = await getDb();
-  if (!db) return { totalEmployees: 0, activeEmployees: 0, statusCounts: [], overdueVacations: 0, expiredExams: 0, expiringTimeBank: 0, unreadNotifications: 0 };
+  if (!db) return { totalEmployees: 0, activeEmployees: 0, statusCounts: [], overdueVacations: 0, expiredExams: 0, expiringTimeBank: 0, unreadNotifications: 0, expiredPGR: 0, expiredPCMSO: 0 };
 
   const today = todayStr();
   const thirtyDays = futureDateStr(30);
 
-  const [totalResult, activeResult, statusCounts, overdueVacResult, expiredExamResult, expiringTBResult, unreadResult] = await Promise.all([
+  const [totalResult, activeResult, statusCounts, overdueVacResult, expiredExamResult, expiringTBResult, unreadResult, expiredPGRResult, expiredPCMSOResult] = await Promise.all([
     db.select({ count: count() }).from(employees),
     db.select({ count: count() }).from(employees).where(eq(employees.status, "Ativo")),
     db.select({ status: employees.status, count: count() }).from(employees).groupBy(employees.status),
@@ -798,6 +801,8 @@ export async function getDashboardStats() {
     db.select({ count: count() }).from(medicalExams).where(and(sql`${medicalExams.expiryDate} <= ${today}`, eq(medicalExams.status, "Válido"))),
     db.select({ count: count() }).from(timeBank).where(and(sql`${timeBank.expiryDate} <= ${thirtyDays}`, eq(timeBank.status, "Ativo"))),
     db.select({ count: count() }).from(notifications).where(eq(notifications.isRead, false)),
+    db.select({ count: count() }).from(pgr).where(and(sql`${pgr.expiryDate} <= ${thirtyDays}`, eq(pgr.status, "Válido"))),
+    db.select({ count: count() }).from(pcmso).where(and(sql`${pcmso.expiryDate} <= ${thirtyDays}`, eq(pcmso.status, "Válido"))),
   ]);
 
   return {
@@ -808,5 +813,7 @@ export async function getDashboardStats() {
     expiredExams: expiredExamResult[0]?.count ?? 0,
     expiringTimeBank: expiringTBResult[0]?.count ?? 0,
     unreadNotifications: unreadResult[0]?.count ?? 0,
+    expiredPGR: expiredPGRResult[0]?.count ?? 0,
+    expiredPCMSO: expiredPCMSOResult[0]?.count ?? 0,
   };
 }

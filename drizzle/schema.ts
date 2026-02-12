@@ -510,3 +510,58 @@ export const dependents = mysqlTable("dependents", {
 
 export type Dependent = typeof dependents.$inferSelect;
 export type InsertDependent = typeof dependents.$inferInsert;
+
+// ============================================================
+// PGR (Programa de Gestão de Riscos)
+// ============================================================
+export const pgr = mysqlTable("pgr", {
+  id: int("id").autoincrement().primaryKey(),
+  companyName: varchar("companyName", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 18 }).notNull(),
+  issueDate: date("issueDate").notNull(),
+  expiryDate: date("expiryDate").notNull(),
+  documentUrl: varchar("documentUrl", { length: 500 }),
+  fileKey: varchar("fileKey", { length: 500 }),
+  status: mysqlEnum("status", ["Válido", "Vencido", "Próximo do Vencimento"]).default("Válido").notNull(),
+  observations: text("observations"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PGR = typeof pgr.$inferSelect;
+export type InsertPGR = typeof pgr.$inferInsert;
+
+// ============================================================
+// PCMSO (Programa de Controle Médico de Saúde Ocupacional)
+// ============================================================
+export const pcmso = mysqlTable("pcmso", {
+  id: int("id").autoincrement().primaryKey(),
+  companyName: varchar("companyName", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 18 }).notNull(),
+  issueDate: date("issueDate").notNull(),
+  expiryDate: date("expiryDate").notNull(),
+  documentUrl: varchar("documentUrl", { length: 500 }),
+  fileKey: varchar("fileKey", { length: 500 }),
+  status: mysqlEnum("status", ["Válido", "Vencido", "Próximo do Vencimento"]).default("Válido").notNull(),
+  observations: text("observations"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PCMSO = typeof pcmso.$inferSelect;
+export type InsertPCMSO = typeof pcmso.$inferInsert;
+
+// ============================================================
+// DASHBOARD_SETTINGS (Configurações do Dashboard)
+// ============================================================
+export const dashboardSettings = mysqlTable("dashboard_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  visibleMetrics: text("visibleMetrics").notNull(), // JSON array de métricas visíveis
+  metricsOrder: text("metricsOrder"), // JSON array com ordem das métricas
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DashboardSetting = typeof dashboardSettings.$inferSelect;
+export type InsertDashboardSetting = typeof dashboardSettings.$inferInsert;

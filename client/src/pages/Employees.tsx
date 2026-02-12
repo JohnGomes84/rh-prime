@@ -35,6 +35,8 @@ import { toast } from "sonner";
 export default function Employees() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [gender, setGender] = useState("");
+  const [maritalStatus, setMaritalStatus] = useState("");
   const [, setLocation] = useLocation();
 
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
@@ -46,6 +48,8 @@ export default function Employees() {
     onSuccess: () => {
       utils.employees.list.invalidate();
       utils.dashboard.stats.invalidate();
+      setGender("");
+      setMaritalStatus("");
       setDialogOpen(false);
       toast.success("Funcionário cadastrado com sucesso!");
     },
@@ -64,8 +68,8 @@ export default function Employees() {
       email: (fd.get("email") as string) || undefined,
       phone: (fd.get("phone") as string) || undefined,
       birthDate: (fd.get("birthDate") as string) || undefined,
-      gender: (fd.get("gender") as "M" | "F" | "Outro") || undefined,
-      maritalStatus: (fd.get("maritalStatus") as any) || undefined,
+      gender: (gender as "M" | "F" | "Outro") || undefined,
+      maritalStatus: (maritalStatus as "Solteiro" | "Casado" | "Divorciado" | "Viúvo" | "União Estável") || undefined,
       rg: (fd.get("rg") as string) || undefined,
       pisPasep: (fd.get("pisPasep") as string) || undefined,
       ctpsNumber: (fd.get("ctpsNumber") as string) || undefined,
@@ -144,7 +148,7 @@ export default function Employees() {
                     </div>
                     <div>
                       <Label htmlFor="gender">Gênero</Label>
-                      <Select name="gender">
+                      <Select value={gender} onValueChange={setGender}>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
@@ -157,7 +161,7 @@ export default function Employees() {
                     </div>
                     <div>
                       <Label htmlFor="maritalStatus">Estado Civil</Label>
-                      <Select name="maritalStatus">
+                      <Select value={maritalStatus} onValueChange={setMaritalStatus}>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>

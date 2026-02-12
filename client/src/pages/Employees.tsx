@@ -27,7 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Eye, Loader2 } from "lucide-react";
+import { validateEmployeeForm, formatCPF, formatPhone } from "@/lib/validation";
+import { Plus, Search, Eye, Loader2, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ export default function Employees() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [gender, setGender] = useState("");
   const [maritalStatus, setMaritalStatus] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [, setLocation] = useLocation();
 
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
@@ -50,6 +52,7 @@ export default function Employees() {
       utils.dashboard.stats.invalidate();
       setGender("");
       setMaritalStatus("");
+      setErrors({});
       setDialogOpen(false);
       toast.success("Funcionário cadastrado com sucesso!");
     },
@@ -61,6 +64,28 @@ export default function Employees() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    
+    // Validar formulário
+    const validationErrors = validateEmployeeForm({
+      fullName: fd.get("fullName") as string,
+      cpf: fd.get("cpf") as string,
+      email: (fd.get("email") as string) || undefined,
+      phone: (fd.get("phone") as string) || undefined,
+      gender,
+      maritalStatus,
+    });
+    
+    if (validationErrors.length > 0) {
+      const errorMap: Record<string, string> = {};
+      validationErrors.forEach((error) => {
+        errorMap[error.field] = error.message;
+      });
+      setErrors(errorMap);
+      toast.error("Por favor, corrija os erros no formulário");
+      return;
+    }
+    
+    setErrors({});
     createMutation.mutate({
       fullName: fd.get("fullName") as string,
       cpf: fd.get("cpf") as string,
@@ -125,18 +150,44 @@ export default function Employees() {
                   <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
                     Dados Pessoais
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">                    <div>
                       <Label htmlFor="fullName">Nome Completo *</Label>
-                      <Input id="fullName" name="fullName" required />
-                    </div>
-                    <div>
+                      <Input
+                        id="fullName"
+                        name="fullName"
+                        placeholder="João da Silva"
+                        required
+                        className={errors.fullName ? "border-red-500" : ""}
+                      />
+                      {errors.fullName && (
+                        <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors.fullName}
+                        </p>
+                      )}
+                    </div>                    <div>
                       <Label htmlFor="socialName">Nome Social</Label>
                       <Input id="socialName" name="socialName" />
                     </div>
                     <div>
                       <Label htmlFor="cpf">CPF *</Label>
-                      <Input id="cpf" name="cpf" required placeholder="000.000.000-00" />
+                      <Input
+                        id="cpf"
+                        name="cpf"
+                        placeholder="000.000.000-00"
+                        required
+                        className={errors.cpf ? "border-red-500" : ""}
+                        onBlur={(e) => {
+                          const formatted = formatCPF(e.target.value);
+                          e.target.value = formatted;
+                        }}
+                      />
+                      {errors.cpf && (
+                        <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors.cpf}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="rg">RG</Label>
@@ -147,9 +198,18 @@ export default function Employees() {
                       <Input id="birthDate" name="birthDate" type="date" />
                     </div>
                     <div>
-                      <Label htmlFor="gender">Gênero</Label>
-                      <Select value={gender} onValueChange={setGender}>
-                        <SelectTrigger>
+                      <Label htmlFor="gender">Gênero *</Label>
+                      <Select value={gender} onValueChange={(value) => {
+                        setGender(value);
+                        if (errors.gender) {
+                          setErrors((prev) => {
+                            const newErrors = { ...prev };
+                            delete newErrors.gender;
+                            return newErrors;
+                          });
+                        }
+                      }}>
+                        <SelectTrigger className={errors.gender ? "border-red-500" : ""}>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
@@ -158,11 +218,26 @@ export default function Employees() {
                           <SelectItem value="Outro">Outro</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.gender && (
+                        <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors.gender}
+                        </p>
+                      )}
                     </div>
                     <div>
-                      <Label htmlFor="maritalStatus">Estado Civil</Label>
-                      <Select value={maritalStatus} onValueChange={setMaritalStatus}>
-                        <SelectTrigger>
+                      <Label htmlFor="maritalStatus">Estado Civil *</Label>
+                      <Select value={maritalStatus} onValueChange={(value) => {
+                        setMaritalStatus(value);
+                        if (errors.maritalStatus) {
+                          setErrors((prev) => {
+                            const newErrors = { ...prev };
+                            delete newErrors.maritalStatus;
+                            return newErrors;
+                          });
+                        }
+                      }}>
+                        <SelectTrigger className={errors.maritalStatus ? "border-red-500" : ""}>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
@@ -173,14 +248,46 @@ export default function Employees() {
                           <SelectItem value="União Estável">União Estável</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.maritalStatus && (
+                        <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors.maritalStatus}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="email">E-mail</Label>
-                      <Input id="email" name="email" type="email" />
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        className={errors.email ? "border-red-500" : ""}
+                      />
+                      {errors.email && (
+                        <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors.email}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="phone">Telefone</Label>
-                      <Input id="phone" name="phone" placeholder="(00) 00000-0000" />
+                      <Input
+                        id="phone"
+                        name="phone"
+                        placeholder="(00) 00000-0000"
+                        className={errors.phone ? "border-red-500" : ""}
+                        onChange={(e) => {
+                          const formatted = formatPhone(e.target.value);
+                          e.target.value = formatted;
+                        }}
+                      />
+                      {errors.phone && (
+                        <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors.phone}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -207,10 +207,17 @@ export default function Documents() {
                         <TableCell>
                           <div className="flex gap-1">
                             {doc.documentUrl && (
-                              <Button variant="ghost" size="icon" asChild>
-                                <a href={doc.documentUrl} download target="_blank" rel="noopener noreferrer">
-                                  <Download className="h-4 w-4" />
-                                </a>
+                              <Button variant="ghost" size="icon" onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = doc.documentUrl!;
+                                link.download = '';
+                                link.target = '_blank';
+                                link.rel = 'noopener noreferrer';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }}>
+                                <Download className="h-4 w-4" />
                               </Button>
                             )}
                             <Button variant="ghost" size="icon" onClick={() => {

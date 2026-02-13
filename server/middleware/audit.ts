@@ -3,11 +3,13 @@ import { auditLogs } from '../../drizzle/schema';
 
 /**
  * Middleware de auditoria para rastrear todas as alterações
+ * CPF é obrigatório para rastreabilidade
  */
 export async function auditMiddleware(
   userAction: string,
   tableName: string,
   recordId: number,
+  cpf: string,
   oldValues?: Record<string, any>,
   newValues?: Record<string, any>,
   performedBy: string = 'system'
@@ -16,6 +18,7 @@ export async function auditMiddleware(
     const db = await getDb();
     if (!db) return;
     await db.insert(auditLogs).values({
+      cpf,
       action: userAction,
       resource: tableName,
       resourceId: recordId,

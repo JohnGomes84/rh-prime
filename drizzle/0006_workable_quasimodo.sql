@@ -1,0 +1,1 @@
+ALTER TABLE `audit_logs` ADD `cpf` varchar(14) NOT NULL;

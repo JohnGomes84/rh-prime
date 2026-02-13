@@ -1,0 +1,1 @@
+ALTER TABLE `documents` ADD `cpf` varchar(14) NOT NULL;

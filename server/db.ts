@@ -726,14 +726,21 @@ export async function createAuditEntry(data: InsertAuditLog) {
   await db.insert(auditLogs).values(data);
 }
 
-export async function listAuditLog(tableName?: string, recordId?: number) {
+export async function listAuditLog(tableName?: string, recordId?: number, cpf?: string) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
   if (tableName) conditions.push(eq(auditLogs.resource, tableName));
   if (recordId) conditions.push(eq(auditLogs.resourceId, recordId));
+  if (cpf) conditions.push(eq(auditLogs.cpf, cpf));
   if (conditions.length > 0) return db.select().from(auditLogs).where(and(...conditions)).orderBy(desc(auditLogs.timestamp)).limit(100);
   return db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(100);
+}
+
+export async function listAuditLogByCpf(cpf: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(auditLogs).where(eq(auditLogs.cpf, cpf)).orderBy(desc(auditLogs.timestamp)).limit(500);
 }
 
 // ============================================================

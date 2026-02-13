@@ -10,6 +10,7 @@ import { complianceRouter } from "./routers/compliance";
 import { integrationsRouter } from "./routers/integrations";
 import { authRbacRouter } from "./routers/auth-rbac";
 import { rbacRouter } from "./routers/rbac";
+import { auditCpfRouter } from "./routers/audit-cpf";
 
 // ============================================================
 // ROUTERS
@@ -851,6 +852,10 @@ export const appRouter = router({
   // ============================================================
   authRbac: authRbacRouter,
   rbac: rbacRouter,
+  // ============================================================
+  // AUDIT BY CPF
+  // ============================================================
+  auditCpf: auditCpfRouter,
 });
 
 export type AppRouter = typeof appRouter;

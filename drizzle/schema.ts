@@ -33,6 +33,7 @@ export type InsertUser = typeof users.$inferInsert;
 export const auditLogs = mysqlTable("audit_logs", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId"),
+  cpf: varchar("cpf", { length: 14 }).notNull(),
   action: varchar("action", { length: 50 }).notNull(), // CREATE, READ, UPDATE, DELETE
   resource: varchar("resource", { length: 100 }).notNull(), // employees, vacations, etc
   resourceId: int("resourceId"),
@@ -312,6 +313,7 @@ export type InsertBenefit = typeof benefits.$inferInsert;
 export const documents = mysqlTable("documents", {
   id: int("id").autoincrement().primaryKey(),
   employeeId: int("employeeId").notNull(),
+  cpf: varchar("cpf", { length: 14 }).notNull(),
   category: mysqlEnum("category", ["Pessoal", "Contratual", "Saúde e Segurança", "Benefícios", "Termos", "Treinamentos", "Outros"]).notNull(),
   documentName: varchar("documentName", { length: 255 }).notNull(),
   fileUrl: varchar("fileUrl", { length: 500 }).notNull(),

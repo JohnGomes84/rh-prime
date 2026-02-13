@@ -9,6 +9,7 @@ import { nanoid } from "nanoid";
 import { complianceRouter } from "./routers/compliance";
 import { integrationsRouter } from "./routers/integrations";
 import { authRbacRouter } from "./routers/auth-rbac";
+import { rbacRouter } from "./routers/rbac";
 
 // ============================================================
 // ROUTERS
@@ -849,6 +850,7 @@ export const appRouter = router({
   // AUTH RBAC
   // ============================================================
   authRbac: authRbacRouter,
+  rbac: rbacRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -10,6 +10,20 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  // Login route - redirects to OAuth provider
+  app.get("/api/oauth/login", (req: Request, res: Response) => {
+    try {
+      const returnPath = req.query.returnPath as string || "/";
+      const state = btoa(returnPath); // Encode return path in state
+      const loginUrl = `${process.env.VITE_OAUTH_PORTAL_URL}/oauth/authorize?app_id=${process.env.VITE_APP_ID}&state=${state}`;
+      res.redirect(302, loginUrl);
+    } catch (error) {
+      console.error("[OAuth] Login failed", error);
+      res.status(500).json({ error: "OAuth login failed" });
+    }
+  });
+
+  // Callback route - handles OAuth callback
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

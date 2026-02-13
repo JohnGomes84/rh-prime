@@ -22,6 +22,10 @@ const Integration = lazy(() => import("./pages/Integration"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Reports = lazy(() => import("./pages/Reports"));
+const Recruitment = lazy(() => import("./pages/Recruitment"));
+const Timesheet = lazy(() => import("./pages/Timesheet"));
+const Payroll = lazy(() => import("./pages/Payroll"));
+const ProfessionalAssessment = lazy(() => import("./pages/ProfessionalAssessment"));
 
 function PageLoader() {
   return (
@@ -50,6 +54,10 @@ function Router() {
         <Route path="/seguranca" component={SafetyHealth} />
         <Route path="/configuracoes" component={Settings} />
         <Route path="/relatorios" component={Reports} />
+        <Route path="/recrutamento" component={Recruitment} />
+        <Route path="/ponto" component={Timesheet} />
+        <Route path="/folha" component={Payroll} />
+        <Route path="/avaliacoes" component={ProfessionalAssessment} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

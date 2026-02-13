@@ -1,0 +1,106 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3w6LaRB3GVsYroF.a7cd62c280db --database CGmy49xKQ63PS9N6aZZJgb --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "absences"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "audit_log"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "audit_logs"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "benefits"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "checklist_items"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "contracts"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "dashboard_settings"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "dependents"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "document_templates"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "documents"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "employee_positions"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "employees"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "equipment"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "equipment_loans"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "holidays"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "leaves"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "login_logs"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "medical_exams"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "notifications"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "pcmso"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "permissions"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "pgr"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "positions"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "ppe_deliveries"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "service_orders"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "settings"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "time_bank"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "trainings"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "users"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "vacation_periods"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb": "vacations"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_CGmy49xKQ63PS9N6aZZJgb\n__drizzle_migrations\nabsences\naudit_log\naudit_logs\nbenefits\nchecklist_items\ncontracts\ndashboard_settings\ndependents\ndocument_templates\ndocuments\nemployee_positions\nemployees\nequipment\nequipment_loans\nholidays\nleaves\nlogin_logs\nmedical_exams\nnotifications\npcmso\npermissions\npgr\npositions\nppe_deliveries\nservice_orders\nsettings\ntime_bank\ntrainings\nusers\nvacation_periods\nvacations\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

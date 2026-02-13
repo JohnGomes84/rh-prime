@@ -132,6 +132,17 @@
 
 ---
 
+## FASE ATUAL: CRUD Funcionários (5 créditos) - CONCLUÍDO
+
+- [x] Validar schema de funcionários no banco
+- [x] Criar testes unitários para CRUD
+- [x] Implementar endpoints tRPC (create, list, get, update, delete)
+- [x] Criar interface de listagem com busca
+- [x] Implementar formulário de cadastro/edição
+- [x] Testar fluxo completo
+
+---
+
 ## Módulos Já Implementados (Mantém-se)
 
 ### Banco de Dados

@@ -115,7 +115,8 @@ export async function createEmployee(data: InsertEmployee) {
   const employeeId = result[0].insertId;
   // Disparar webhook de criação de funcionário
   await onEmployeeCreated({ id: employeeId, ...data });
-  return { id: employeeId };
+  // Retornar funcionário completo
+  return await getEmployee(employeeId);
 }
 
 export async function updateEmployee(id: number, data: Partial<InsertEmployee>) {

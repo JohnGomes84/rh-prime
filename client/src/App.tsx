@@ -26,6 +26,7 @@ const Recruitment = lazy(() => import("./pages/Recruitment"));
 const Timesheet = lazy(() => import("./pages/Timesheet"));
 const Payroll = lazy(() => import("./pages/Payroll"));
 const ProfessionalAssessment = lazy(() => import("./pages/ProfessionalAssessment"));
+const Audit = lazy(() => import("./pages/Audit"));
 
 function PageLoader() {
   return (
@@ -58,6 +59,7 @@ function Router() {
         <Route path="/ponto" component={Timesheet} />
         <Route path="/folha" component={Payroll} />
         <Route path="/avaliacoes" component={ProfessionalAssessment} />
+        <Route path="/auditoria" component={Audit} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

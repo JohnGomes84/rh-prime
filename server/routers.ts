@@ -11,6 +11,7 @@ import { integrationsRouter } from "./routers/integrations";
 
 import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
+import { auditRouter } from "./routers/audit";
 
 // ============================================================
 // ROUTERS
@@ -92,9 +93,11 @@ export const appRouter = router({
         status: z.enum(["Ativo", "Inativo", "Afastado", "Férias"]).optional(),
       }))
       .mutation(async ({ input }) => {
-        const result = await db.createEmployee(input as any);
+        const result = await db.createEmployee(input as any) || { id: 0 };
         // Create default admission checklist
-        await db.createDefaultAdmissionChecklist(result.id);
+        if (result?.id) {
+          await db.createDefaultAdmissionChecklist(result.id);
+        }
         return result;
       }),
     update: protectedProcedure
@@ -862,6 +865,10 @@ export const appRouter = router({
   // DIGITAL SIGNATURES
   // ============================================================
   digitalSignature: digitalSignatureRouter,
+  // ============================================================
+  // AUDIT LOGS
+  // ============================================================
+  audit: auditRouter,
 });
 
 export type AppRouter = typeof appRouter;

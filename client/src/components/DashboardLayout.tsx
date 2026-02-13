@@ -54,6 +54,7 @@ const menuItems = [
   { icon: FileText, label: "Relatórios", path: "/relatorios" },
   { icon: ArrowRightLeft, label: "Integração", path: "/integracao" },
   { icon: Bell, label: "Notificações", path: "/notificacoes" },
+  { icon: Shield, label: "Auditoria", path: "/auditoria" },
   { icon: Settings, label: "Configurações", path: "/configuracoes" },
 ];
 

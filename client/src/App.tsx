@@ -8,6 +8,7 @@ import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
+const LoginLocal = lazy(() => import("./pages/LoginLocal"));
 const Employees = lazy(() => import("./pages/Employees"));
 const EmployeeDetail = lazy(() => import("./pages/EmployeeDetail"));
 const Positions = lazy(() => import("./pages/Positions"));
@@ -39,6 +40,7 @@ function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
+        <Route path="/login" component={LoginLocal} />
         <Route path="/" component={Home} />
         <Route path="/funcionarios" component={Employees} />
         <Route path="/funcionarios/:id" component={EmployeeDetail} />

@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE users ADD COLUMN IF NOT EXISTS departmentId int, ADD COLUMN IF NOT EXISTS managerId int, ADD COLUMN IF NOT EXISTS status varchar(50) DEFAULT 'ativo', ADD COLUMN IF NOT EXISTS loginAttempts int DEFAULT 0, ADD COLUMN IF NOT EXISTS lockedUntil timestamp NULL, ADD COLUMN IF NOT EXISTS lastLogin timestamp NULL, ADD COLUMN IF NOT EXISTS passwordExpiresAt timestamp NULL, ADD COLUMN IF NOT EXISTS twoFactorEnabled boolean DEFAULT false;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3w6LaRB3GVsYroF.a7cd62c280db --database CGmy49xKQ63PS9N6aZZJgb --execute ALTER TABLE users ADD COLUMN IF NOT EXISTS departmentId int, ADD COLUMN IF NOT EXISTS managerId int, ADD COLUMN IF NOT EXISTS status varchar(50) DEFAULT 'ativo', ADD COLUMN IF NOT EXISTS loginAttempts int DEFAULT 0, ADD COLUMN IF NOT EXISTS lockedUntil timestamp NULL, ADD COLUMN IF NOT EXISTS lastLogin timestamp NULL, ADD COLUMN IF NOT EXISTS passwordExpiresAt timestamp NULL, ADD COLUMN IF NOT EXISTS twoFactorEnabled boolean DEFAULT false;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 6796
+}

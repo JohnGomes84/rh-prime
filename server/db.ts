@@ -62,7 +62,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
   try {
-    const values: InsertUser = { email: user.email };
+    const values: InsertUser = { email: user.email, passwordHash: null };
     const updateSet: Record<string, unknown> = {};
     const textFields = ["name", "openId", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];

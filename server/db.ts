@@ -23,7 +23,7 @@ import {
   notifications, InsertNotification,
   holidays, InsertHoliday,
   settings, InsertSetting,
-  auditLog, InsertAuditLog,
+  auditLogs, InsertAuditLog,
   absences, InsertAbsence,
   dependents, InsertDependent,
   pgr, InsertPGR,
@@ -31,6 +31,7 @@ import {
   dashboardSettings, InsertDashboardSetting,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -57,13 +58,13 @@ function futureDateStr(days: number) {
 // USERS
 // ============================================================
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) throw new Error("User openId is required for upsert");
+  if (!user.email) throw new Error("User email is required for upsert");
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
   try {
-    const values: InsertUser = { openId: user.openId };
+    const values: InsertUser = { email: user.email };
     const updateSet: Record<string, unknown> = {};
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "openId", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
     const assignNullable = (field: TextField) => {
       const value = user[field];
@@ -114,7 +115,10 @@ export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const result = await db.insert(employees).values(data);
-  return { id: result[0].insertId };
+  const employeeId = result[0].insertId;
+  // Disparar webhook de criação de funcionário
+  await onEmployeeCreated({ id: employeeId, ...data });
+  return { id: employeeId };
 }
 
 export async function updateEmployee(id: number, data: Partial<InsertEmployee>) {
@@ -719,17 +723,17 @@ export async function listSettings() {
 export async function createAuditEntry(data: InsertAuditLog) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(auditLog).values(data);
+  await db.insert(auditLogs).values(data);
 }
 
 export async function listAuditLog(tableName?: string, recordId?: number) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
-  if (tableName) conditions.push(eq(auditLog.tableName, tableName));
-  if (recordId) conditions.push(eq(auditLog.recordId, recordId));
-  if (conditions.length > 0) return db.select().from(auditLog).where(and(...conditions)).orderBy(desc(auditLog.performedAt)).limit(100);
-  return db.select().from(auditLog).orderBy(desc(auditLog.performedAt)).limit(100);
+  if (tableName) conditions.push(eq(auditLogs.resource, tableName));
+  if (recordId) conditions.push(eq(auditLogs.resourceId, recordId));
+  if (conditions.length > 0) return db.select().from(auditLogs).where(and(...conditions)).orderBy(desc(auditLogs.timestamp)).limit(100);
+  return db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(100);
 }
 
 // ============================================================

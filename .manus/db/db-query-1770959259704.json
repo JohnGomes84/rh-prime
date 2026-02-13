@@ -1,0 +1,28 @@
+{
+  "query": "SHOW TABLES LIKE 'audit%'; SHOW TABLES LIKE 'permission%'; SHOW TABLES LIKE 'login%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3w6LaRB3GVsYroF.a7cd62c280db --database CGmy49xKQ63PS9N6aZZJgb --execute SHOW TABLES LIKE 'audit%'; SHOW TABLES LIKE 'permission%'; SHOW TABLES LIKE 'login%';",
+  "rows": [
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)": "audit_log"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)": "audit_logs"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)": "Tables_in_CGmy49xKQ63PS9N6aZZJgb (permission%)"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)": "permissions"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)": "Tables_in_CGmy49xKQ63PS9N6aZZJgb (login%)"
+    },
+    {
+      "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)": "login_logs"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_CGmy49xKQ63PS9N6aZZJgb (audit%)\naudit_log\naudit_logs\nTables_in_CGmy49xKQ63PS9N6aZZJgb (permission%)\npermissions\nTables_in_CGmy49xKQ63PS9N6aZZJgb (login%)\nlogin_logs\n",
+  "stderr": "",
+  "execution_time_ms": 134
+}

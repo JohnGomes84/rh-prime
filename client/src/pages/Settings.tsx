@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Settings as SettingsIcon, Building2, Mail, Bell } from "lucide-react";
+import { Loader2, Settings as SettingsIcon, Building2, Mail, Bell, Moon, Sun } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Settings() {
+  const { theme, toggleTheme, switchable } = useTheme();
   const { data: settings, isLoading } = trpc.settings.list.useQuery();
 
   const [companyName, setCompanyName] = useState("");
@@ -45,12 +47,15 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="company" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="company" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" /> Empresa
             </TabsTrigger>
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="h-4 w-4" /> Notificações
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Sun className="h-4 w-4" /> Aparência
             </TabsTrigger>
           </TabsList>
 

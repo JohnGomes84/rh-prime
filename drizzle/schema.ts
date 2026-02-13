@@ -5,11 +5,20 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal, bo
 // ============================================================
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: varchar("openId", { length: 64 }).unique(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  loginMethod: varchar("loginMethod", { length: 64 }).default("jwt"),
+  role: mysqlEnum("role", ["admin", "gestor", "colaborador", "user"]).default("colaborador").notNull(),
+  departmentId: int("departmentId"),
+  managerId: int("managerId"),
+  status: mysqlEnum("status", ["ativo", "inativo", "bloqueado"]).default("ativo").notNull(),
+  loginAttempts: int("loginAttempts").default(0),
+  lockedUntil: timestamp("lockedUntil"),
+  lastLogin: timestamp("lastLogin"),
+  passwordExpiresAt: timestamp("passwordExpiresAt"),
+  twoFactorEnabled: boolean("twoFactorEnabled").default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -17,6 +26,58 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// ============================================================
+// AUDIT_LOGS (Log de Auditoria)
+// ============================================================
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  action: varchar("action", { length: 50 }).notNull(), // CREATE, READ, UPDATE, DELETE
+  resource: varchar("resource", { length: 100 }).notNull(), // employees, vacations, etc
+  resourceId: int("resourceId"),
+  status: int("status").default(200), // HTTP status code
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  changesBefore: json("changesBefore"),
+  changesAfter: json("changesAfter"),
+  description: text("description"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+// ============================================================
+// PERMISSIONS (Permissões por Role)
+// ============================================================
+export const permissions = mysqlTable("permissions", {
+  id: int("id").autoincrement().primaryKey(),
+  role: mysqlEnum("role", ["admin", "gestor", "colaborador"]).notNull(),
+  resource: varchar("resource", { length: 100 }).notNull(), // employees, vacations, etc
+  action: varchar("action", { length: 50 }).notNull(), // create, read, update, delete
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = typeof permissions.$inferInsert;
+
+// ============================================================
+// LOGIN_LOGS (Log de Acesso)
+// ============================================================
+export const loginLogs = mysqlTable("login_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  email: varchar("email", { length: 320 }),
+  success: boolean("success").notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  reason: varchar("reason", { length: 255 }), // Motivo da falha
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export type LoginLog = typeof loginLogs.$inferSelect;
+export type InsertLoginLog = typeof loginLogs.$inferInsert;
 
 // ============================================================
 // EMPLOYEES (Funcionários)
@@ -460,22 +521,7 @@ export const settings = mysqlTable("settings", {
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = typeof settings.$inferInsert;
 
-// ============================================================
-// AUDIT_LOG (Log de Auditoria - LGPD)
-// ============================================================
-export const auditLog = mysqlTable("audit_log", {
-  id: int("id").autoincrement().primaryKey(),
-  userAction: varchar("userAction", { length: 100 }).notNull(),
-  tableName: varchar("tableName", { length: 100 }).notNull(),
-  recordId: int("recordId"),
-  oldValues: json("oldValues"),
-  newValues: json("newValues"),
-  performedBy: varchar("performedBy", { length: 255 }),
-  performedAt: timestamp("performedAt").defaultNow().notNull(),
-});
-
-export type AuditLog = typeof auditLog.$inferSelect;
-export type InsertAuditLog = typeof auditLog.$inferInsert;
+// Tabela auditLog removida - usar auditLogs ao invés
 
 // ============================================================
 // ABSENCES (Faltas - para cálculo de férias CLT)

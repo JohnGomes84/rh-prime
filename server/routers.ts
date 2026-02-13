@@ -7,6 +7,8 @@ import * as db from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
 import { complianceRouter } from "./routers/compliance";
+import { integrationsRouter } from "./routers/integrations";
+import { authRbacRouter } from "./routers/auth-rbac";
 
 // ============================================================
 // ROUTERS
@@ -835,10 +837,18 @@ export const appRouter = router({
       }),
   }),
 
+   // ============================================================
+  // INTEGRATIONS
+  // ============================================================
+  integrations: integrationsRouter,
   // ============================================================
   // COMPLIANCE REPORTS
   // ============================================================
   compliance: complianceRouter,
+  // ============================================================
+  // AUTH RBAC
+  // ============================================================
+  authRbac: authRbacRouter,
 });
 
 export type AppRouter = typeof appRouter;

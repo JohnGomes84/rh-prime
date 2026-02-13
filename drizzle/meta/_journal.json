@@ -22,6 +22,27 @@
       "when": 1770933159766,
       "tag": "0002_orange_komodo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1770959180780,
+      "tag": "0003_gifted_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1770959205796,
+      "tag": "0004_tiresome_whirlwind",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1770959397552,
+      "tag": "0005_great_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

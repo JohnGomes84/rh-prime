@@ -275,9 +275,9 @@ class SDKServer {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({
+          email: userInfo.email || userInfo.openId,
           openId: userInfo.openId,
           name: userInfo.name || null,
-          email: userInfo.email ?? null,
           loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
           lastSignedIn: signedInAt,
         });
@@ -292,10 +292,13 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    if (user.email) {
+      await db.upsertUser({
+        email: user.email,
+        openId: user.openId || undefined,
+        lastSignedIn: signedInAt,
+      });
+    }
 
     return user;
   }

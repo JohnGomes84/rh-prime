@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { auditLog } from '../../drizzle/schema';
+import { auditLogs } from '../../drizzle/schema';
 
 /**
  * Middleware de auditoria para rastrear todas as alterações
@@ -15,14 +15,14 @@ export async function auditMiddleware(
   try {
     const db = await getDb();
     if (!db) return;
-    await db.insert(auditLog).values({
-      userAction,
-      tableName,
-      recordId,
-      oldValues: oldValues ? JSON.stringify(oldValues) : null,
-      newValues: newValues ? JSON.stringify(newValues) : null,
-      performedBy,
-      performedAt: new Date(),
+    await db.insert(auditLogs).values({
+      action: userAction,
+      resource: tableName,
+      resourceId: recordId,
+      changesBefore: oldValues,
+      changesAfter: newValues,
+      description: `${userAction} by ${performedBy}`,
+      timestamp: new Date(),
     });
   } catch (error) {
     console.error('Erro ao registrar auditoria:', error);

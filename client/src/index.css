@@ -44,16 +44,16 @@
 }
 
 :root {
-  /* Teal/Emerald professional palette for HR */
-  --primary: oklch(0.45 0.12 175);
-  --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.45 0.12 175);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.72 0.14 175);
-  --chart-2: oklch(0.60 0.13 175);
-  --chart-3: oklch(0.50 0.12 175);
-  --chart-4: oklch(0.65 0.10 250);
-  --chart-5: oklch(0.55 0.15 30);
+  /* MT Serviços: Azul Marinho (#0311BE) + Azul Ciano (#00AAFF) */
+  --primary: #0311BE;
+  --primary-foreground: #F6F6F6;
+  --sidebar-primary: #0311BE;
+  --sidebar-primary-foreground: #F6F6F6;
+  --chart-1: #00AAFF;
+  --chart-2: #0311BE;
+  --chart-3: #9D9D9D;
+  --chart-4: #000000;
+  --chart-5: #00AAFF;
   --radius: 0.625rem;
   --background: oklch(0.985 0.002 250);
   --foreground: oklch(0.18 0.01 260);

@@ -57,6 +57,13 @@
       "when": 1770961086737,
       "tag": "0007_medical_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1770961352744,
+      "tag": "0008_whole_beast",
+      "breakpoints": true
     }
   ]
 }

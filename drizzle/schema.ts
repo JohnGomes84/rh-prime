@@ -613,3 +613,26 @@ export const dashboardSettings = mysqlTable("dashboard_settings", {
 
 export type DashboardSetting = typeof dashboardSettings.$inferSelect;
 export type InsertDashboardSetting = typeof dashboardSettings.$inferInsert;
+
+// ============================================================
+// DIGITAL SIGNATURES (Assinatura Digital)
+// ============================================================
+export const digitalSignatures = mysqlTable("digital_signatures", {
+  id: int("id").autoincrement().primaryKey(),
+  documentId: int("documentId").notNull(),
+  cpf: varchar("cpf", { length: 14 }).notNull(),
+  signerName: varchar("signerName", { length: 255 }).notNull(),
+  signerEmail: varchar("signerEmail", { length: 255 }).notNull(),
+  documentHash: varchar("documentHash", { length: 512 }).notNull(),
+  signatureHash: varchar("signatureHash", { length: 512 }).notNull(),
+  signatureTimestamp: timestamp("signatureTimestamp").notNull(),
+  signatureMethod: mysqlEnum("signatureMethod", ["PIN", "BIOMETRIC", "CERTIFICATE"]).default("PIN").notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  isValid: boolean("isValid").default(true).notNull(),
+  validationTimestamp: timestamp("validationTimestamp"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DigitalSignature = typeof digitalSignatures.$inferSelect;
+export type InsertDigitalSignature = typeof digitalSignatures.$inferInsert;

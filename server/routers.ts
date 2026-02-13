@@ -11,6 +11,7 @@ import { integrationsRouter } from "./routers/integrations";
 import { authRbacRouter } from "./routers/auth-rbac";
 import { rbacRouter } from "./routers/rbac";
 import { auditCpfRouter } from "./routers/audit-cpf";
+import { digitalSignatureRouter } from "./routers/digital-signature";
 
 // ============================================================
 // ROUTERS
@@ -856,6 +857,10 @@ export const appRouter = router({
   // AUDIT BY CPF
   // ============================================================
   auditCpf: auditCpfRouter,
+  // ============================================================
+  // DIGITAL SIGNATURES
+  // ============================================================
+  digitalSignature: digitalSignatureRouter,
 });
 
 export type AppRouter = typeof appRouter;

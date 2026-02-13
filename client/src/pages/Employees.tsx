@@ -111,6 +111,13 @@ export default function Employees() {
       bankAgency: (fd.get("bankAgency") as string) || undefined,
       bankAccount: (fd.get("bankAccount") as string) || undefined,
       pixKey: (fd.get("pixKey") as string) || undefined,
+      branch: (fd.get("branch") as string) || undefined,
+      externalCode: (fd.get("externalCode") as string) || undefined,
+      costCenter: (fd.get("costCenter") as string) || undefined,
+      corporateEmail: (fd.get("corporateEmail") as string) || undefined,
+      employmentType: (fd.get("employmentType") as "CLT" | "CLT_Comissao" | "Comissionado" | "Concursado" | "Contrato" | "Cooperado" | "Efetivo" | "Estagio" | "Estatutario" | "MenorAprendiz" | "JovemAprendiz" | "PrestadorServico" | "Socio" | "Temporario" | "Outro") || undefined,
+      esocialMatricula: (fd.get("esocialMatricula") as string) || undefined,
+      insalubrityPercentage: (fd.get("insalubrityPercentage") as "0" | "10" | "20" | "40") || undefined,
     });
   };
 
@@ -349,6 +356,72 @@ export default function Employees() {
                     <div>
                       <Label htmlFor="addressZip">CEP</Label>
                       <Input id="addressZip" name="addressZip" placeholder="00000-000" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dados Contratuais Críticos */}
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
+                    Dados Contratuais
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="branch">Filial</Label>
+                      <Input id="branch" name="branch" placeholder="Matriz, Filial 1, etc" />
+                    </div>
+                    <div>
+                      <Label htmlFor="externalCode">Código Externo</Label>
+                      <Input id="externalCode" name="externalCode" placeholder="Para integração" />
+                    </div>
+                    <div>
+                      <Label htmlFor="costCenter">Centro de Custo</Label>
+                      <Input id="costCenter" name="costCenter" placeholder="CC-001" />
+                    </div>
+                    <div>
+                      <Label htmlFor="corporateEmail">E-mail Corporativo</Label>
+                      <Input id="corporateEmail" name="corporateEmail" type="email" />
+                    </div>
+                    <div>
+                      <Label htmlFor="employmentType">Tipo de Vínculo</Label>
+                      <select
+                        id="employmentType"
+                        name="employmentType"
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                      >
+                        <option value="CLT">CLT</option>
+                        <option value="CLT_Comissao">CLT + Comissão</option>
+                        <option value="Comissionado">Comissionado</option>
+                        <option value="Concursado">Concursado</option>
+                        <option value="Contrato">Contrato</option>
+                        <option value="Cooperado">Cooperado</option>
+                        <option value="Efetivo">Efetivo</option>
+                        <option value="Estagio">Estágio</option>
+                        <option value="Estatutario">Estatutário</option>
+                        <option value="MenorAprendiz">Menor Aprendiz</option>
+                        <option value="JovemAprendiz">Jovem Aprendiz</option>
+                        <option value="PrestadorServico">Prestador de Serviço</option>
+                        <option value="Socio">Sócio</option>
+                        <option value="Temporario">Temporário</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="esocialMatricula">Matrícula eSocial</Label>
+                      <Input id="esocialMatricula" name="esocialMatricula" placeholder="Número eSocial" />
+                    </div>
+                    <div>
+                      <Label htmlFor="insalubrityPercentage">Percentual Insalubridade</Label>
+                      <select
+                        id="insalubrityPercentage"
+                        name="insalubrityPercentage"
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                      >
+                        <option value="0">Nenhuma (0%)</option>
+                        <option value="10">10%</option>
+                        <option value="20">20%</option>
+                        <option value="40">40%</option>
+                      </select>
                     </div>
                   </div>
                 </div>

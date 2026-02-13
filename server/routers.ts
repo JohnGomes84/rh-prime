@@ -82,6 +82,13 @@ export const appRouter = router({
         bankAgency: z.string().optional(),
         bankAccount: z.string().optional(),
         pixKey: z.string().optional(),
+        branch: z.string().optional(),
+        externalCode: z.string().optional(),
+        costCenter: z.string().optional(),
+        corporateEmail: z.string().optional(),
+        employmentType: z.enum(["CLT", "CLT_Comissao", "Comissionado", "Concursado", "Contrato", "Cooperado", "Efetivo", "Estagio", "Estatutario", "MenorAprendiz", "JovemAprendiz", "PrestadorServico", "Socio", "Temporario", "Outro"]).optional(),
+        esocialMatricula: z.string().optional(),
+        insalubrityPercentage: z.enum(["0", "10", "20", "40"]).optional(),
         status: z.enum(["Ativo", "Inativo", "Afastado", "Férias"]).optional(),
       }))
       .mutation(async ({ input }) => {

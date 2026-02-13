@@ -132,7 +132,7 @@
 
 ---
 
-## FASE ATUAL: CRUD Funcionários (5 créditos) - CONCLUÍDO
+## FASE ANTERIOR: CRUD Funcionarios (5 creditos) - CONCLUIDO
 
 - [x] Validar schema de funcionários no banco
 - [x] Criar testes unitários para CRUD
@@ -228,3 +228,16 @@
 **Módulos:** 7 (Autenticação, Auditoria, Recrutamento, Ponto, Folha, Otimizações, Integrações)
 **Funcionalidades:** 100+
 **Testes:** 200+ casos de teste vitest
+
+## FASE ATUAL: 7 Campos Criticos para Compatibilidade Solides (8 creditos) - CONCLUIDO
+
+- [x] Adicionar campo Filial (branch)
+- [x] Adicionar campo Codigo Externo (externalCode) - para integracao
+- [x] Adicionar campo Centro de Custo (costCenter)
+- [x] Adicionar campo E-mail Corporativo (corporateEmail)
+- [x] Adicionar campo Tipo de Vinculo (employmentType) - 15 opcoes
+- [x] Adicionar campo Matricula eSocial (esocialMatricula)
+- [x] Adicionar campo Percentual Insalubridade (insalubrityPercentage) - 0%, 10%, 20%, 40%
+- [x] Atualizar formulario de cadastro com novos campos
+- [x] Atualizar schema de validacao tRPC
+- [x] Testar interface com todos os campos

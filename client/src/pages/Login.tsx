@@ -1,58 +1,10 @@
-import React, { useState } from 'react';
-import { useLocation } from 'wouter';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
-import { trpc } from '@/lib/trpc';
 
 export function Login() {
-  const [, navigate] = useLocation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const loginMutation = trpc.authRbac.login.useMutation({
-    onSuccess: (data: any) => {
-      localStorage.setItem('jwtToken', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/');
-    },
-    onError: (err: any) => {
-      setError(err.message || 'Erro ao fazer login');
-    },
-  });
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      if (!email || !password) {
-        setError('Email e senha são obrigatórios');
-        setIsLoading(false);
-        return;
-      }
-
-      if (!email.includes('@')) {
-        setError('Email inválido');
-        setIsLoading(false);
-        return;
-      }
-
-      await loginMutation.mutateAsync({
-        email,
-        password,
-      });
-    } catch (err) {
-      console.error('Erro ao fazer login:', err);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleOAuthLogin = () => {
+    window.location.href = `/api/oauth/authorize?redirect_uri=${window.location.origin}`;
   };
 
   return (
@@ -71,98 +23,26 @@ export function Login() {
         </CardHeader>
 
         <CardContent className="pt-6 space-y-6">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu.email@empresa.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                disabled={isLoading}
-                className="h-10"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Senha
-              </label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  className="h-10 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  disabled={isLoading}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
+          <div className="text-center space-y-4">
+            <p className="text-gray-600">
+              Acesse o sistema com sua conta Manus
+            </p>
 
             <Button
-              type="submit"
-              className="w-full h-10 bg-blue-600 hover:bg-blue-700 gap-2"
-              disabled={isLoading}
+              onClick={handleOAuthLogin}
+              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-2"
             >
-              {isLoading ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  Entrando...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  Entrar
-                </>
-              )}
+              <span className="text-lg">🔐</span>
+              Entrar com Manus OAuth
             </Button>
-          </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">ou</span>
-            </div>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-10"
-            onClick={() => {
-              window.location.href = `/api/oauth/authorize?redirect_uri=${window.location.origin}`;
-            }}
-            disabled={isLoading}
-          >
-            <span className="mr-2">🔐</span>
-            Entrar com Manus OAuth
-          </Button>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-xs text-blue-900">
-              <strong>Demo:</strong> Use email: demo@ml-servicos.com | Senha: Demo@123
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+            <p className="text-sm font-semibold text-blue-900">
+              Segurança
+            </p>
+            <p className="text-xs text-blue-800">
+              Autenticação segura delegada ao provedor Manus. Seus dados estão protegidos.
             </p>
           </div>
         </CardContent>

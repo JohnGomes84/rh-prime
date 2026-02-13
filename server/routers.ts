@@ -8,7 +8,6 @@ import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
 import { complianceRouter } from "./routers/compliance";
 import { integrationsRouter } from "./routers/integrations";
-import { authRbacRouter } from "./routers/auth-rbac";
 
 import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
@@ -848,10 +847,6 @@ export const appRouter = router({
   // COMPLIANCE REPORTS
   // ============================================================
   compliance: complianceRouter,
-  // ============================================================
-  // AUTH RBAC
-  // ============================================================
-  authRbac: authRbacRouter,
   // ============================================================
   // AUDIT BY CPF
   // ============================================================

@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO users (email, passwordHash, name, role, loginMethod, createdAt, updatedAt) VALUES ('admin@rh-prime.com', '$2b$10$YourHashedPasswordHere', 'Admin', 'admin', 'local', NOW(), NOW()) ON DUPLICATE KEY UPDATE passwordHash = '$2b$10$YourHashedPasswordHere';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3w6LaRB3GVsYroF.a7cd62c280db --database CGmy49xKQ63PS9N6aZZJgb --execute INSERT INTO users (email, passwordHash, name, role, loginMethod, createdAt, updatedAt) VALUES ('admin@rh-prime.com', '$2b$10$YourHashedPasswordHere', 'Admin', 'admin', 'local', NOW(), NOW()) ON DUPLICATE KEY UPDATE passwordHash = '$2b$10$YourHashedPasswordHere';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 62
+}

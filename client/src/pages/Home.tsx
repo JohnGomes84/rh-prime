@@ -23,10 +23,9 @@ export default function Home() {
     enabled: !!auth, // Só faz a query se usuário está autenticado
   });
 
-  // Se não está autenticado, redirecionar para login
+  // Se não está autenticado, redirecionar para login OAuth
   if (!auth) {
-    // Redirecionar para página de login local
-    window.location.href = '/login';
+    window.location.href = `/api/oauth/login`;
     return null;
   }
 

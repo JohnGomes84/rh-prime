@@ -1,0 +1,165 @@
+/**
+ * Serviço de Cálculo de Folha de Pagamento
+ * Conformidade CLT com INSS, IR, FGTS
+ * Tabelas atualizadas para 2026
+ */
+
+export interface PayrollInput {
+  baseSalary: number;
+  allowances?: number;
+  bonuses?: number;
+  otherDeductions?: number;
+  dependents?: number;
+}
+
+export interface PayrollOutput {
+  baseSalary: number;
+  allowances: number;
+  bonuses: number;
+  grossSalary: number;
+  inss: number;
+  ir: number;
+  fgts: number;
+  otherDeductions: number;
+  netSalary: number;
+  details: {
+    inssRate: number;
+    irRate: number;
+    fgtsRate: number;
+  };
+}
+
+// Tabelas 2026
+const INSS_RATES_2026 = [
+  { min: 0, max: 1412.00, rate: 0.075 },
+  { min: 1412.01, max: 2666.68, rate: 0.09 },
+  { min: 2666.69, max: 4000.03, rate: 0.12 },
+  { min: 4000.04, max: 7786.02, rate: 0.14 },
+];
+
+const INSS_CEILING_2026 = 7786.02;
+const INSS_MAX_DISCOUNT_2026 = 1090.44;
+
+const IR_RATES_2026 = [
+  { min: 0, max: 2259.20, rate: 0, deduction: 0 },
+  { min: 2259.21, max: 2826.65, rate: 0.075, deduction: 169.44 },
+  { min: 2826.66, max: 3751.05, rate: 0.15, deduction: 381.44 },
+  { min: 3751.06, max: 4664.68, rate: 0.225, deduction: 662.77 },
+  { min: 4664.69, max: Infinity, rate: 0.275, deduction: 896.00 },
+];
+
+const FGTS_RATE = 0.08;
+
+/**
+ * Calcula INSS com progressão de alíquotas
+ */
+function calculateINSS(baseSalary: number): number {
+  if (baseSalary > INSS_CEILING_2026) {
+    return INSS_MAX_DISCOUNT_2026;
+  }
+
+  let inss = 0;
+  for (const bracket of INSS_RATES_2026) {
+    if (baseSalary <= bracket.min) break;
+
+    const taxableAmount = Math.min(baseSalary, bracket.max) - bracket.min;
+    inss += taxableAmount * bracket.rate;
+  }
+
+  return Math.round(inss * 100) / 100;
+}
+
+/**
+ * Calcula IR com deduções por dependente
+ */
+function calculateIR(grossSalary: number, dependents: number = 0): number {
+  // Dedução por dependente: R$ 189,59 em 2026
+  const dependentDeduction = dependents * 189.59;
+  const taxableBase = grossSalary - dependentDeduction;
+
+  if (taxableBase <= 0) return 0;
+
+  // Encontra o bracket aplicável
+  const applicableBracket = IR_RATES_2026.find(
+    (b) => taxableBase >= b.min && taxableBase <= b.max
+  );
+
+  if (!applicableBracket || applicableBracket.rate === 0) {
+    return 0;
+  }
+
+  // Calcula IR: (base - limite inferior) * alíquota - dedução
+  const ir = (taxableBase - applicableBracket.min) * applicableBracket.rate - applicableBracket.deduction;
+
+  return Math.max(0, Math.round(ir * 100) / 100);
+}
+
+/**
+ * Calcula FGTS
+ */
+function calculateFGTS(baseSalary: number): number {
+  return Math.round(baseSalary * FGTS_RATE * 100) / 100;
+}
+
+/**
+ * Calcula folha de pagamento completa
+ */
+export function calculatePayroll(input: PayrollInput): PayrollOutput {
+  const allowances = input.allowances || 0;
+  const bonuses = input.bonuses || 0;
+  const otherDeductions = input.otherDeductions || 0;
+  const dependents = input.dependents || 0;
+
+  // Gross = Base + Adicionais
+  const grossSalary = input.baseSalary + allowances + bonuses;
+
+  // Cálculos de descontos
+  const inss = calculateINSS(input.baseSalary);
+  const ir = calculateIR(grossSalary - inss, dependents);
+  const fgts = calculateFGTS(input.baseSalary);
+
+  // Líquido = Bruto - Descontos (INSS + IR + Outros)
+  const netSalary = grossSalary - inss - ir - otherDeductions;
+
+  return {
+    baseSalary: input.baseSalary,
+    allowances,
+    bonuses,
+    grossSalary: Math.round(grossSalary * 100) / 100,
+    inss: Math.round(inss * 100) / 100,
+    ir: Math.round(ir * 100) / 100,
+    fgts: Math.round(fgts * 100) / 100,
+    otherDeductions,
+    netSalary: Math.round(netSalary * 100) / 100,
+    details: {
+      inssRate: 0.14, // Taxa máxima
+      irRate: 0.275, // Taxa máxima
+      fgtsRate: FGTS_RATE,
+    },
+  };
+}
+
+/**
+ * Valida entrada de folha
+ */
+export function validatePayrollInput(input: PayrollInput): string[] {
+  const errors: string[] = [];
+
+  if (input.baseSalary < 0) {
+    errors.push('Salário base não pode ser negativo');
+  }
+
+  if ((input.allowances || 0) < 0) {
+    errors.push('Adicionais não podem ser negativos');
+  }
+
+  if ((input.bonuses || 0) < 0) {
+    errors.push('Bônus não podem ser negativos');
+  }
+
+  if ((input.dependents || 0) < 0) {
+    errors.push('Número de dependentes não pode ser negativo');
+  }
+
+  return errors;
+}

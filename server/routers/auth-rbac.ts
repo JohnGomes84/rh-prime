@@ -37,42 +37,11 @@ export const authRbacRouter = router({
         throw new Error('Email ou senha inválidos');
       }
 
-      // Verificar status
-      if (user.status === 'bloqueado') {
-        throw new Error('Usuário bloqueado');
-      }
-
-      if (user.lockedUntil && new Date() < user.lockedUntil) {
-        throw new Error('Usuário temporariamente bloqueado. Tente novamente mais tarde.');
-      }
-
       // Verificar senha
       const passwordValid = await verifyPassword(input.password, user.passwordHash);
       if (!passwordValid) {
-        // Incrementar tentativas falhas
-        await db
-          .update(users)
-          .set({
-            loginAttempts: (user.loginAttempts || 0) + 1,
-            lockedUntil:
-              (user.loginAttempts || 0) + 1 >= 5
-                ? new Date(Date.now() + 30 * 60 * 1000) // Bloquear por 30 minutos
-                : null,
-          })
-          .where(eq(users.id, user.id));
-
         throw new Error('Email ou senha inválidos');
       }
-
-      // Limpar tentativas falhas
-      await db
-        .update(users)
-        .set({
-          loginAttempts: 0,
-          lockedUntil: null,
-          lastLogin: new Date(),
-        })
-        .where(eq(users.id, user.id));
 
       // Gerar token
       const token = createToken(user.id, user.email, user.role as any);
@@ -135,7 +104,6 @@ export const authRbacRouter = router({
         passwordHash,
         name: input.name,
         role: input.role,
-        status: 'ativo',
         loginMethod: 'jwt',
       });
 
@@ -193,7 +161,6 @@ export const authRbacRouter = router({
         .update(users)
         .set({
           passwordHash: newPasswordHash,
-          passwordExpiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 dias
         })
         .where(eq(users.id, ctx.user.id));
 
@@ -217,8 +184,6 @@ export const authRbacRouter = router({
         email: users.email,
         name: users.name,
         role: users.role,
-        status: users.status,
-        lastLogin: users.lastLogin,
         createdAt: users.createdAt,
       })
       .from(users);
@@ -247,32 +212,6 @@ export const authRbacRouter = router({
       await db
         .update(users)
         .set({ role: input.role })
-        .where(eq(users.id, input.userId));
-
-      return { success: true };
-    }),
-
-  /**
-   * Bloquear/desbloquear usuário (admin apenas)
-   */
-  toggleUserStatus: protectedProcedure
-    .input(
-      z.object({
-        userId: z.number(),
-        status: z.enum(['ativo', 'inativo', 'bloqueado']),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.user?.role !== 'admin') {
-        throw new Error('Apenas administradores podem alterar status');
-      }
-
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-
-      await db
-        .update(users)
-        .set({ status: input.status })
         .where(eq(users.id, input.userId));
 
       return { success: true };

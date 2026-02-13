@@ -15,18 +15,18 @@ export function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const loginMutation = trpc.rbac.login.useMutation({
-    onSuccess: data => {
+  const loginMutation = trpc.authRbac.login.useMutation({
+    onSuccess: (data: any) => {
       localStorage.setItem('jwtToken', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
     },
-    onError: err => {
+    onError: (err: any) => {
       setError(err.message || 'Erro ao fazer login');
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);

@@ -13,9 +13,9 @@ export default function LoginLocal() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const loginMutation = trpc.rbac.login.useMutation();
+  const loginMutation = trpc.authRbac.login.useMutation();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);

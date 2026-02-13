@@ -11,17 +11,9 @@ export const users = mysqlTable("users", {
   name: text("name"),
   loginMethod: varchar("loginMethod", { length: 64 }).default("jwt"),
   role: mysqlEnum("role", ["admin", "gestor", "colaborador", "user"]).default("colaborador").notNull(),
-  departmentId: int("departmentId"),
-  managerId: int("managerId"),
-  status: mysqlEnum("status", ["ativo", "inativo", "bloqueado"]).default("ativo").notNull(),
-  loginAttempts: int("loginAttempts").default(0),
-  lockedUntil: timestamp("lockedUntil"),
-  lastLogin: timestamp("lastLogin"),
-  passwordExpiresAt: timestamp("passwordExpiresAt"),
-  twoFactorEnabled: boolean("twoFactorEnabled").default(false),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;

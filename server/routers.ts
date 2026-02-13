@@ -9,7 +9,7 @@ import { nanoid } from "nanoid";
 import { complianceRouter } from "./routers/compliance";
 import { integrationsRouter } from "./routers/integrations";
 import { authRbacRouter } from "./routers/auth-rbac";
-import { rbacRouter } from "./routers/rbac";
+
 import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
 
@@ -852,7 +852,6 @@ export const appRouter = router({
   // AUTH RBAC
   // ============================================================
   authRbac: authRbacRouter,
-  rbac: rbacRouter,
   // ============================================================
   // AUDIT BY CPF
   // ============================================================

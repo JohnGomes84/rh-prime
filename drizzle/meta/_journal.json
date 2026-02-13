@@ -64,6 +64,13 @@
       "when": 1770961352744,
       "tag": "0008_whole_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1770964869937,
+      "tag": "0009_giant_virginia_dare",
+      "breakpoints": true
     }
   ]
 }

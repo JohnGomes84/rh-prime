@@ -18,7 +18,28 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
+  const { data: auth } = trpc.auth.me.useQuery();
+  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery(undefined, {
+    enabled: !!auth, // Só faz a query se usuário está autenticado
+  });
+
+  // Se não está autenticado, mostrar página de boas-vindas
+  if (!auth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
+        <div className="text-center space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold text-foreground">RH Prime</h1>
+            <p className="text-lg text-muted-foreground">Sistema de Gestão de Recursos Humanos</p>
+          </div>
+          <p className="text-muted-foreground max-w-md">Faça login para acessar o painel de controle e gerenciar seus recursos humanos.</p>
+          <a href="/api/oauth/login" className="inline-block px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition">
+            Entrar
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <DashboardLayout>

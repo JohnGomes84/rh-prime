@@ -46,7 +46,7 @@ describe("Webhook System", () => {
   });
 
   it("deve disparar webhook para evento registrado", async () => {
-    (global.fetch as any).mockResolvedValueOnce({ ok: true });
+    (global.fetch).mockResolvedValueOnce({ ok: true });
 
     registerWebhook("https://example.com/webhook", "employee.created");
 
@@ -68,7 +68,7 @@ describe("Webhook System", () => {
   });
 
   it("deve nao disparar webhook para evento nao registrado", async () => {
-    (global.fetch as any).mockResolvedValueOnce({ ok: true });
+    (global.fetch).mockResolvedValueOnce({ ok: true });
 
     registerWebhook("https://example.com/webhook", "employee.created");
 
@@ -81,7 +81,7 @@ describe("Webhook System", () => {
   });
 
   it("deve marcar webhook como inativo apos falha", async () => {
-    (global.fetch as any).mockRejectedValueOnce(new Error("Network error"));
+    (global.fetch).mockRejectedValueOnce(new Error("Network error"));
 
     const webhook = registerWebhook(
       "https://example.com/webhook",
@@ -99,13 +99,13 @@ describe("Webhook System", () => {
   });
 
   it("deve incluir assinatura HMAC no webhook", async () => {
-    (global.fetch as any).mockResolvedValueOnce({ ok: true });
+    (global.fetch).mockResolvedValueOnce({ ok: true });
 
     registerWebhook("https://example.com/webhook", "employee.created");
 
     await triggerWebhook("employee.created", { id: 1 });
 
-    const calls = (global.fetch as any).mock.calls;
+    const calls = (global.fetch).mock.calls;
     if (calls.length > 0) {
       const headers = calls[0][1].headers;
       expect(headers).toHaveProperty("X-Webhook-Signature");

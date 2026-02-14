@@ -11,7 +11,7 @@ describe("Email Service", () => {
 
   it("deve enviar email com sucesso quando API key está configurada", async () => {
     process.env.SENDGRID_API_KEY = "test-api-key";
-    (global.fetch as any).mockResolvedValueOnce({ ok: true });
+    (global.fetch).mockResolvedValueOnce({ ok: true });
 
     const result = await sendEmail({
       to: "test@example.com",
@@ -47,7 +47,7 @@ describe("Email Service", () => {
 
   it("deve retornar false quando API retorna erro", async () => {
     process.env.SENDGRID_API_KEY = "test-api-key";
-    (global.fetch as any).mockResolvedValueOnce({ ok: false });
+    (global.fetch).mockResolvedValueOnce({ ok: false });
 
     const result = await sendEmail({
       to: "test@example.com",
@@ -75,7 +75,7 @@ describe("Email Service", () => {
 
   it("deve notificar evento crítico com detalhes", async () => {
     process.env.SENDGRID_API_KEY = "test-api-key";
-    (global.fetch as any).mockResolvedValueOnce({ ok: true });
+    (global.fetch).mockResolvedValueOnce({ ok: true });
 
     const result = await notifyCriticalEvent(
       "ASO Vencido",

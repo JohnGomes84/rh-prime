@@ -424,7 +424,7 @@ export async function listDocuments(employeeId?: number, category?: string) {
   if (!db) return [];
   const conditions = [];
   if (employeeId) conditions.push(eq(documents.employeeId, employeeId));
-  if (category) conditions.push(eq(documents.category, category as any));
+  if (category) conditions.push(eq(documents.category, category));
   if (conditions.length > 0) return db.select().from(documents).where(and(...conditions)).orderBy(desc(documents.uploadedAt));
   return db.select().from(documents).orderBy(desc(documents.uploadedAt));
 }
@@ -449,7 +449,7 @@ export async function listChecklistItems(employeeId: number, checklistType?: str
   const db = await getDb();
   if (!db) return [];
   const conditions = [eq(checklistItems.employeeId, employeeId)];
-  if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType as any));
+  if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType));
   return db.select().from(checklistItems).where(and(...conditions)).orderBy(asc(checklistItems.category), asc(checklistItems.id));
 }
 

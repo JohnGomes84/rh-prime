@@ -44,7 +44,7 @@ export const authRbacRouter = router({
       }
 
       // Gerar token
-      const token = createToken(user.id, user.email, user.role as any);
+      const token = createToken(user.id, user.email, user.role);
 
       return {
         token,
@@ -109,7 +109,7 @@ export const authRbacRouter = router({
 
       return {
         success: true,
-        userId: (result as any)[0],
+        userId: (result)[0],
       };
     }),
 

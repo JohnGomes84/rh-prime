@@ -35,7 +35,7 @@ describe("Employees CRUD", () => {
   };
 
   it("deve criar um funcionário com dados válidos", async () => {
-    const result = await db.createEmployee(validEmployee as any);
+    const result = await db.createEmployee(validEmployee);
     
     expect(result).toBeDefined();
     expect(result.id).toBeGreaterThan(0);
@@ -77,7 +77,7 @@ describe("Employees CRUD", () => {
       phone: "11988888888",
     };
 
-    await db.updateEmployee(createdEmployeeId, updateData as any);
+    await db.updateEmployee(createdEmployeeId, updateData);
     const updated = await db.getEmployee(createdEmployeeId);
 
     expect(updated?.fullName).toBe(updateData.fullName);
@@ -86,7 +86,7 @@ describe("Employees CRUD", () => {
   });
 
   it("deve alterar status do funcionário para Inativo", async () => {
-    await db.updateEmployee(createdEmployeeId, { status: "Inativo" } as any);
+    await db.updateEmployee(createdEmployeeId, { status: "Inativo" });
     const updated = await db.getEmployee(createdEmployeeId);
 
     expect(updated?.status).toBe("Inativo");
@@ -101,13 +101,13 @@ describe("Employees CRUD", () => {
 
   it("deve validar CPF duplicado", async () => {
     // Criar primeiro funcionário
-    const emp1 = await db.createEmployee(validEmployee as any);
+    const emp1 = await db.createEmployee(validEmployee);
     
     // Tentar criar segundo com mesmo CPF deve falhar
     const emp2Data = { ...validEmployee, fullName: "Outro Nome", email: "outro@example.com" };
     
     try {
-      await db.createEmployee(emp2Data as any);
+      await db.createEmployee(emp2Data);
       expect.fail("Deveria ter lançado erro de CPF duplicado");
     } catch (error: any) {
       expect(error.message).toContain("Duplicate");
@@ -120,12 +120,12 @@ describe("Employees CRUD", () => {
   it("deve validar email duplicado", async () => {
     const email = "teste@example.com";
     const emp1Data = { ...validEmployee, cpf: "98765432101", email };
-    const emp1 = await db.createEmployee(emp1Data as any);
+    const emp1 = await db.createEmployee(emp1Data);
     
     const emp2Data = { ...validEmployee, cpf: "11122233344", email };
     
     try {
-      await db.createEmployee(emp2Data as any);
+      await db.createEmployee(emp2Data);
       expect.fail("Deveria ter lançado erro de email duplicado");
     } catch (error: any) {
       expect(error.message).toContain("Duplicate");

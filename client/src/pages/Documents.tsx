@@ -83,7 +83,7 @@ export default function Documents() {
       employeeId: fd.get("employeeId") ? Number(fd.get("employeeId")) : 0,
       documentName: fd.get("documentName") as string,
       category: fd.get("category") as "Pessoal" | "Contratual" | "Saúde e Segurança" | "Benefícios" | "Termos" | "Treinamentos" | "Outros",
-      fileBase64: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(buffer)) as any)),
+      fileBase64: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(buffer)))),
       fileName: uploadFile.name,
       fileType: uploadFile.type,
       fileSize: uploadFile.size,

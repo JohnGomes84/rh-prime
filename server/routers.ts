@@ -12,6 +12,7 @@ import { integrationsRouter } from "./routers/integrations";
 import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
+import { convertEmployeeInput, convertUpdateData } from "./utils/type-converters";
 
 // ============================================================
 // ROUTERS
@@ -93,7 +94,7 @@ export const appRouter = router({
         status: z.enum(["Ativo", "Inativo", "Afastado", "Férias"]).optional(),
       }))
       .mutation(async ({ input }) => {
-        const result = await db.createEmployee(input as any) || { id: 0 };
+        const result = await db.createEmployee(convertEmployeeInput(input)) || { id: 0 };
         // Create default admission checklist
         if (result?.id) {
           await db.createDefaultAdmissionChecklist(result.id);
@@ -106,7 +107,7 @@ export const appRouter = router({
         data: z.record(z.string(), z.any()),
       }))
       .mutation(async ({ input }) => {
-        await db.updateEmployee(input.id, input.data as any);
+        await db.updateEmployee(input.id, convertUpdateData(input.data));
         return { success: true };
       }),
     delete: protectedProcedure
@@ -139,12 +140,12 @@ export const appRouter = router({
         hazardLevel: z.enum(["Nenhum", "Insalubridade", "Periculosidade"]).optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createPosition(input as any);
+        return db.createPosition(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updatePosition(input.id, input.data as any);
+        await db.updatePosition(input.id, input.data);
         return { success: true };
       }),
     delete: protectedProcedure
@@ -182,12 +183,12 @@ export const appRouter = router({
         salary: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createContract(input as any);
+        return db.createContract(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateContract(input.id, input.data as any);
+        await db.updateContract(input.id, input.data);
         return { success: true };
       }),
   }),
@@ -211,7 +212,7 @@ export const appRouter = router({
         changeReason: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createEmployeePosition(input as any);
+        return db.createEmployeePosition(input);
       }),
   }),
 
@@ -238,12 +239,12 @@ export const appRouter = router({
         daysEntitled: z.number().default(30),
       }))
       .mutation(async ({ input }) => {
-        return db.createVacation(input as any);
+        return db.createVacation(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateVacation(input.id, input.data as any);
+        await db.updateVacation(input.id, input.data);
         return { success: true };
       }),
     overdue: protectedProcedure.query(async () => {
@@ -282,12 +283,12 @@ export const appRouter = router({
         noticeDate: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createVacationPeriod(input as any);
+        return db.createVacationPeriod(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateVacationPeriod(input.id, input.data as any);
+        await db.updateVacationPeriod(input.id, input.data);
         return { success: true };
       }),
   }),
@@ -315,12 +316,12 @@ export const appRouter = router({
         documentUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createMedicalExam(input as any);
+        return db.createMedicalExam(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateMedicalExam(input.id, input.data as any);
+        await db.updateMedicalExam(input.id, input.data);
         return { success: true };
       }),
     expired: protectedProcedure.query(async () => {
@@ -353,12 +354,12 @@ export const appRouter = router({
         documentUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createLeave(input as any);
+        return db.createLeave(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateLeave(input.id, input.data as any);
+        await db.updateLeave(input.id, input.data);
         return { success: true };
       }),
   }),
@@ -381,12 +382,12 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createTimeBankEntry(input as any);
+        return db.createTimeBankEntry(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateTimeBankEntry(input.id, input.data as any);
+        await db.updateTimeBankEntry(input.id, input.data);
         return { success: true };
       }),
     expiring: protectedProcedure
@@ -418,12 +419,12 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createBenefit(input as any);
+        return db.createBenefit(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateBenefit(input.id, input.data as any);
+        await db.updateBenefit(input.id, input.data);
         return { success: true };
       }),
   }),
@@ -450,7 +451,7 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createDocument(input as any);
+        return db.createDocument(input);
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -482,7 +483,7 @@ export const appRouter = router({
           fileType: input.fileType.split("/").pop() ?? input.fileType,
           fileSize: input.fileSize,
           expiryDate: input.expiryDate,
-        } as any);
+        });
       }),
   }),
 
@@ -498,7 +499,7 @@ export const appRouter = router({
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateChecklistItem(input.id, input.data as any);
+        await db.updateChecklistItem(input.id, input.data);
         return { success: true };
       }),
     createDefault: protectedProcedure
@@ -527,12 +528,12 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createEquipmentItem(input as any);
+        return db.createEquipmentItem(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateEquipmentItem(input.id, input.data as any);
+        await db.updateEquipmentItem(input.id, input.data);
         return { success: true };
       }),
   }),
@@ -555,8 +556,8 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         // Mark equipment as emprestado
-        await db.updateEquipmentItem(input.equipmentId, { status: "Emprestado" } as any);
-        return db.createEquipmentLoan(input as any);
+        await db.updateEquipmentItem(input.equipmentId, { status: "Emprestado" });
+        return db.createEquipmentLoan(input);
       }),
     return: protectedProcedure
       .input(z.object({
@@ -570,8 +571,8 @@ export const appRouter = router({
           returnDate: input.returnDate,
           conditionAtReturn: input.conditionAtReturn,
           status: "Devolvido",
-        } as any);
-        await db.updateEquipmentItem(input.equipmentId, { status: "Disponível" } as any);
+        });
+        await db.updateEquipmentItem(input.equipmentId, { status: "Disponível" });
         return { success: true };
       }),
   }),
@@ -595,7 +596,7 @@ export const appRouter = router({
         reason: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createPpeDelivery(input as any);
+        return db.createPpeDelivery(input);
       }),
   }),
 
@@ -620,12 +621,12 @@ export const appRouter = router({
         certificateUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createTraining(input as any);
+        return db.createTraining(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateTraining(input.id, input.data as any);
+        await db.updateTraining(input.id, input.data);
         return { success: true };
       }),
   }),
@@ -652,7 +653,7 @@ export const appRouter = router({
         issueDate: z.string(),
       }))
       .mutation(async ({ input }) => {
-        return db.createServiceOrder(input as any);
+        return db.createServiceOrder(input);
       }),
   }),
 
@@ -676,12 +677,12 @@ export const appRouter = router({
         placeholders: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createDocumentTemplate(input as any);
+        return db.createDocumentTemplate(input);
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
       .mutation(async ({ input }) => {
-        await db.updateDocumentTemplate(input.id, input.data as any);
+        await db.updateDocumentTemplate(input.id, input.data);
         return { success: true };
       }),
     generate: protectedProcedure
@@ -749,7 +750,7 @@ export const appRouter = router({
         dueDate: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createNotification(input as any);
+        return db.createNotification(input);
       }),
   }),
 
@@ -768,7 +769,7 @@ export const appRouter = router({
         recurring: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createHoliday(input as any);
+        return db.createHoliday(input);
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -818,7 +819,7 @@ export const appRouter = router({
         familySalary: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createDependent(input as any);
+        return db.createDependent(input);
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -845,7 +846,7 @@ export const appRouter = router({
         reason: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createAbsence(input as any);
+        return db.createAbsence(input);
       }),
   }),
 

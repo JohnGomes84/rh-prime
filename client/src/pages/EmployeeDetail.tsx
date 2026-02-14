@@ -64,7 +64,7 @@ export default function EmployeeDetail() {
   const { data: positions } = trpc.positions.list.useQuery();
   const { data: timeBank } = trpc.timeBank.list.useQuery({ employeeId: empId });
   const { data: ppeDeliveries } = trpc.ppeDeliveries.list.useQuery({ employeeId: empId });
-  const { data: checklist } = trpc.checklist.list.useQuery({ employeeId: empId, checklistType: "admissao" as any });
+  const { data: checklist } = trpc.checklist.list.useQuery({ employeeId: empId, checklistType: "admissao" });
 
   const utils = trpc.useUtils();
 

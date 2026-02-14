@@ -1,4 +1,4 @@
-import { eq, desc, asc, and, gte, lte, sql, like, or, count } from "drizzle-orm";
+import { eq, desc, asc, and, gte, lte, sql, like, or, count, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -29,6 +29,8 @@ import {
   pgr, InsertPGR,
   pcmso, InsertPCMSO,
   dashboardSettings, InsertDashboardSetting,
+  timeRecords, InsertTimeRecord,
+  overtimeRecords, InsertOvertimeRecord,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks';
@@ -36,6 +38,9 @@ import { withDBRetry } from './utils/retry';
 import { encryptCPF } from './utils/encryption';
 import { withTransaction } from './utils/transactions';
 import { formatDateTimeBR } from './utils/timezone';
+import { nanoid } from 'nanoid';
+
+const generateId = () => nanoid(36);
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -993,20 +998,20 @@ export async function getDashboardStats() {
     const db = await getDb();
     if (!db) return { totalEmployees: 0, activeEmployees: 0, statusCounts: [], overdueVacations: 0, expiredExams: 0, expiringTimeBank: 0, unreadNotifications: 0, expiredPGR: 0, expiredPCMSO: 0 };
 
-  const today = todayStr();
-  const thirtyDays = futureDateStr(30);
+    const today = todayStr();
+    const thirtyDays = futureDateStr(30);
 
-  const [totalResult, activeResult, statusCounts, overdueVacResult, expiredExamResult, expiringTBResult, unreadResult, expiredPGRResult, expiredPCMSOResult] = await Promise.all([
-    db.select({ count: count() }).from(employees),
-    db.select({ count: count() }).from(employees).where(eq(employees.status, "Ativo")),
-    db.select({ status: employees.status, count: count() }).from(employees).groupBy(employees.status),
-    db.select({ count: count() }).from(vacations).where(and(sql`${vacations.concessionLimit} <= ${today}`, eq(vacations.status, "Pendente"))),
-    db.select({ count: count() }).from(medicalExams).where(and(sql`${medicalExams.expiryDate} <= ${today}`, eq(medicalExams.status, "Válido"))),
-    db.select({ count: count() }).from(timeBank).where(and(sql`${timeBank.expiryDate} <= ${thirtyDays}`, eq(timeBank.status, "Ativo"))),
-    db.select({ count: count() }).from(notifications).where(eq(notifications.isRead, false)),
-    db.select({ count: count() }).from(pgr).where(and(sql`${pgr.expiryDate} <= ${thirtyDays}`, eq(pgr.status, "Válido"))),
-    db.select({ count: count() }).from(pcmso).where(and(sql`${pcmso.expiryDate} <= ${thirtyDays}`, eq(pcmso.status, "Válido"))),
-  ]);
+    const [totalResult, activeResult, statusCounts, overdueVacResult, expiredExamResult, expiringTBResult, unreadResult, expiredPGRResult, expiredPCMSOResult] = await Promise.all([
+      db.select({ count: count() }).from(employees),
+      db.select({ count: count() }).from(employees).where(eq(employees.status, "Ativo")),
+      db.select({ status: employees.status, count: count() }).from(employees).groupBy(employees.status),
+      db.select({ count: count() }).from(vacations).where(and(sql`${vacations.concessionLimit} <= ${today}`, eq(vacations.status, "Pendente"))),
+      db.select({ count: count() }).from(medicalExams).where(and(sql`${medicalExams.expiryDate} <= ${today}`, eq(medicalExams.status, "Válido"))),
+      db.select({ count: count() }).from(timeBank).where(and(sql`${timeBank.expiryDate} <= ${thirtyDays}`, eq(timeBank.status, "Ativo"))),
+      db.select({ count: count() }).from(notifications).where(eq(notifications.isRead, false)),
+      db.select({ count: count() }).from(pgr).where(and(sql`${pgr.expiryDate} <= ${thirtyDays}`, eq(pgr.status, "Válido"))),
+      db.select({ count: count() }).from(pcmso).where(and(sql`${pcmso.expiryDate} <= ${thirtyDays}`, eq(pcmso.status, "Válido"))),
+    ]);
 
     return {
       totalEmployees: totalResult[0]?.count ?? 0,
@@ -1020,4 +1025,254 @@ export async function getDashboardStats() {
       expiredPCMSO: expiredPCMSOResult[0]?.count ?? 0,
     };
   }, "getDashboardStats");
+}
+
+// ============================================================
+// TIME RECORDS (CONTROLE DE PONTO)
+// ============================================================
+export async function createTimeRecord(data: {
+  employeeId: string;
+  clockIn: Date;
+  clockOut?: Date;
+  location?: string;
+  notes?: string;
+}) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      
+      const result = await db.insert(timeRecords).values({
+        id: nanoid(36),
+        employeeId: data.employeeId,
+        clockIn: data.clockIn,
+        clockOut: data.clockOut,
+        status: "PENDING",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      
+      return { success: true, id: result[0]?.insertId };
+    }, "createTimeRecord");
+  }, { name: "createTimeRecord-transaction" });
+}
+
+export async function listTimeRecords(
+  employeeId: string,
+  startDate?: Date,
+  endDate?: Date
+) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    
+    let query = db.select().from(timeRecords).where(eq(timeRecords.employeeId, employeeId));
+    
+    if (startDate && endDate) {
+      query = query.where(
+        and(
+          sql`${timeRecords.clockIn} >= ${startDate}`,
+          sql`${timeRecords.clockIn} <= ${endDate}`
+        )
+      );
+    }
+    
+    return query.orderBy(desc(timeRecords.clockIn));
+  }, "listTimeRecords");
+}
+
+export async function getTimeRecord(id: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    
+    const result = await db.select().from(timeRecords).where(eq(timeRecords.id, id));
+    return result[0] || null;
+  }, "getTimeRecord");
+}
+
+export async function updateTimeRecord(id: string, data: Record<string, any>) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      
+      await db.update(timeRecords)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(timeRecords.id, id));
+      
+      return { success: true };
+    }, "updateTimeRecord");
+  }, { name: "updateTimeRecord-transaction" });
+}
+
+export async function getMonthlyTimeSummary(
+  employeeId: string,
+  month: number,
+  year: number
+) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return { totalHours: 0, overtimeHours: 0, absences: 0, delays: 0 };
+    
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    
+    const records = await db.select().from(timeRecords)
+      .where(
+        and(
+          eq(timeRecords.employeeId, employeeId),
+          sql`${timeRecords.clockIn} >= ${startDate}`,
+          sql`${timeRecords.clockIn} <= ${endDate}`
+        )
+      );
+    
+    let totalHours = 0;
+    records.forEach(record => {
+      if (record.clockIn && record.clockOut) {
+        const hours = (record.clockOut.getTime() - record.clockIn.getTime()) / (1000 * 60 * 60);
+        totalHours += hours;
+      }
+    });
+    
+    return {
+      totalHours: Math.round(totalHours * 100) / 100,
+      overtimeHours: 0,
+      absences: 0,
+      delays: 0,
+    };
+  }, "getMonthlyTimeSummary");
+}
+
+// ============================================================
+// OVERTIME RECORDS (HORAS EXTRAS)
+// ============================================================
+export async function createOvertimeRequest(data: {
+  employeeId: string;
+  timeRecordId: string;
+  overtimeHours: number;
+  type: "50%" | "100%" | "NOTURNO";
+  reason?: string;
+}) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      
+      const multipliers: Record<string, number> = {
+        "50%": 1.5,
+        "100%": 2.0,
+        "NOTURNO": 1.2,
+      };
+      
+      const multiplier = multipliers[data.type];
+      
+      const result = await db.insert(overtimeRecords).values({
+        id: nanoid(36),
+        employeeId: data.employeeId,
+        timeRecordId: data.timeRecordId,
+        overtimeHours: data.overtimeHours,
+        multiplier,
+        type: data.type,
+        status: "PENDING",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      
+      return { success: true, id: result[0]?.insertId };
+    }, "createOvertimeRequest");
+  }, { name: "createOvertimeRequest-transaction" });
+}
+
+export async function listOvertimeRequests(
+  employeeId?: string,
+  status?: "PENDING" | "APPROVED" | "REJECTED"
+) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    
+    let query = db.select().from(overtimeRecords);
+    
+    if (employeeId) {
+      query = query.where(eq(overtimeRecords.employeeId, employeeId));
+    }
+    
+    if (status) {
+      query = query.where(eq(overtimeRecords.status, status));
+    }
+    
+    return query.orderBy(desc(overtimeRecords.createdAt));
+  }, "listOvertimeRequests");
+}
+
+export async function updateOvertimeRequest(id: string, data: Record<string, any>) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      
+      await db.update(overtimeRecords)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(overtimeRecords.id, id));
+      
+      return { success: true };
+    }, "updateOvertimeRequest");
+  }, { name: "updateOvertimeRequest-transaction" });
+}
+
+export async function getOvertimeStats(
+  employeeId?: string,
+  month?: number,
+  year?: number
+) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return {
+      totalRequests: 0,
+      approvedRequests: 0,
+      rejectedRequests: 0,
+      pendingRequests: 0,
+      totalOvertimeHours: 0,
+      totalOvertimeValue: 0,
+    };
+    
+    let query = db.select({
+      status: overtimeRecords.status,
+      count: count(),
+      totalHours: sum(overtimeRecords.overtimeHours),
+      totalValue: sum(sql`${overtimeRecords.overtimeHours} * ${overtimeRecords.multiplier}`),
+    }).from(overtimeRecords).groupBy(overtimeRecords.status);
+    
+    if (employeeId) {
+      query = query.where(eq(overtimeRecords.employeeId, employeeId));
+    }
+    
+    const results = await query;
+    
+    let totalRequests = 0;
+    let approvedRequests = 0;
+    let rejectedRequests = 0;
+    let pendingRequests = 0;
+    let totalOvertimeHours = 0;
+    let totalOvertimeValue = 0;
+    
+    results.forEach(row => {
+      totalRequests += row.count || 0;
+      if (row.status === "APPROVED") approvedRequests += row.count || 0;
+      if (row.status === "REJECTED") rejectedRequests += row.count || 0;
+      if (row.status === "PENDING") pendingRequests += row.count || 0;
+      totalOvertimeHours += (row.totalHours as number) || 0;
+      totalOvertimeValue += (row.totalValue as number) || 0;
+    });
+    
+    return {
+      totalRequests,
+      approvedRequests,
+      rejectedRequests,
+      pendingRequests,
+      totalOvertimeHours: Math.round(totalOvertimeHours * 100) / 100,
+      totalOvertimeValue: Math.round(totalOvertimeValue * 100) / 100,
+    };
+  }, "getOvertimeStats");
 }

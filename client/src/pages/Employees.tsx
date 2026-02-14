@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { validateEmployeeForm, formatCPF, formatPhone } from "@/lib/validation";
-import { Plus, Search, Eye, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Search, Eye, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -61,6 +61,23 @@ export default function Employees() {
       toast.error("Erro ao cadastrar: " + err.message);
     },
   });
+
+  const deleteMutation = trpc.employees.delete.useMutation({
+    onSuccess: () => {
+      utils.employees.list.invalidate();
+      utils.dashboard.stats.invalidate();
+      toast.success("Funcionário deletado com sucesso!");
+    },
+    onError: (err) => {
+      toast.error("Erro ao deletar: " + err.message);
+    },
+  });
+
+  const handleDelete = (id: number, name: string) => {
+    if (confirm(`Tem certeza que deseja deletar ${name}? Esta ação não pode ser desfeita.`)) {
+      deleteMutation.mutate({ id });
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -537,6 +554,22 @@ export default function Employees() {
                             }}
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(emp.id, emp.fullName);
+                            }}
+                            disabled={deleteMutation.isPending}
+                          >
+                            {deleteMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </TableCell>
                       </TableRow>

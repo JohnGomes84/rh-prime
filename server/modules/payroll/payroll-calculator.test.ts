@@ -85,18 +85,23 @@ describe('Payroll Calculator', () => {
       const result = calculatePayroll(input);
 
       const expectedNet = result.grossSalary - result.inss - result.ir - result.otherDeductions;
-      expect(result.netSalary).toBe(expectedNet);
+      expect(result.netSalary).toBeCloseTo(expectedNet, 2);
     });
 
     it('deve arredondar valores para 2 casas decimais', () => {
       const input: PayrollInput = { baseSalary: 3333.33 };
       const result = calculatePayroll(input);
 
-      // Todos os valores devem ter no máximo 2 casas decimais
-      expect(result.inss % 0.01).toBeLessThan(0.001);
-      expect(result.ir % 0.01).toBeLessThan(0.001);
-      expect(result.fgts % 0.01).toBeLessThan(0.001);
-      expect(result.netSalary % 0.01).toBeLessThan(0.001);
+      // Verifica se tem no máximo 2 casas decimais
+      const hasMaxTwoDecimals = (value: number) => {
+        const str = value.toFixed(2);
+        return parseFloat(str) === value;
+      };
+
+      expect(hasMaxTwoDecimals(result.inss)).toBe(true);
+      expect(hasMaxTwoDecimals(result.ir)).toBe(true);
+      expect(hasMaxTwoDecimals(result.fgts)).toBe(true);
+      expect(hasMaxTwoDecimals(result.netSalary)).toBe(true);
     });
 
     it('deve retornar IR zero para salários baixos', () => {

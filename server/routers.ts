@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withDBRetry } from "./utils/retry";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -12,6 +13,7 @@ import { integrationsRouter } from "./routers/integrations";
 import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
+import { timesheetRouter } from "./routers/timesheet";
 import { convertEmployeeInput, convertUpdateData } from "./utils/type-converters";
 
 // ============================================================
@@ -870,6 +872,10 @@ export const appRouter = router({
   // AUDIT LOGS
   // ============================================================
   audit: auditRouter,
+  // ============================================================
+  // TIMESHEET & OVERTIME
+  // ============================================================
+  timesheet: timesheetRouter,
 });
 
 export type AppRouter = typeof appRouter;

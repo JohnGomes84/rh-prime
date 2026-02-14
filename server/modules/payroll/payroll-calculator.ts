@@ -40,13 +40,16 @@ const INSS_RATES_2026 = [
 const INSS_CEILING_2026 = 7786.02;
 const INSS_MAX_DISCOUNT_2026 = 1090.44;
 
+// Tabela de IR 2026 - Receita Federal (vigente desde janeiro de 2026)
 const IR_RATES_2026 = [
-  { min: 0, max: 2259.20, rate: 0, deduction: 0 },
-  { min: 2259.21, max: 2826.65, rate: 0.075, deduction: 169.44 },
-  { min: 2826.66, max: 3751.05, rate: 0.15, deduction: 381.44 },
-  { min: 3751.06, max: 4664.68, rate: 0.225, deduction: 662.77 },
-  { min: 4664.69, max: Infinity, rate: 0.275, deduction: 896.00 },
+  { min: 0, max: 2428.80, rate: 0, deduction: 0 },
+  { min: 2428.81, max: 2826.65, rate: 0.075, deduction: 182.16 },
+  { min: 2826.66, max: 3751.05, rate: 0.15, deduction: 394.16 },
+  { min: 3751.06, max: 4664.68, rate: 0.225, deduction: 675.49 },
+  { min: 4664.69, max: Infinity, rate: 0.275, deduction: 908.73 },
 ];
+
+
 
 const FGTS_RATE = 0.08;
 
@@ -79,17 +82,18 @@ function calculateIR(grossSalary: number, dependents: number = 0): number {
 
   if (taxableBase <= 0) return 0;
 
-  // Encontra o bracket aplicável
-  const applicableBracket = IR_RATES_2026.find(
-    (b) => taxableBase >= b.min && taxableBase <= b.max
+  // Encontra o bracket aplicável (maior min que seja <= taxableBase)
+  const applicableBracket = IR_RATES_2026.findLast(
+    (b) => taxableBase >= b.min
   );
 
   if (!applicableBracket || applicableBracket.rate === 0) {
     return 0;
   }
 
-  // Calcula IR: (base - limite inferior) * alíquota - dedução
-  const ir = (taxableBase - applicableBracket.min) * applicableBracket.rate - applicableBracket.deduction;
+  // Calcula IR: (base * alíquota) - dedução
+  // A dedução já inclui o efeito da alíquota anterior
+  const ir = taxableBase * applicableBracket.rate - applicableBracket.deduction;
 
   return Math.max(0, Math.round(ir * 100) / 100);
 }
@@ -115,7 +119,7 @@ export function calculatePayroll(input: PayrollInput): PayrollOutput {
 
   // Cálculos de descontos
   const inss = calculateINSS(input.baseSalary);
-  const ir = calculateIR(grossSalary - inss, dependents);
+  const ir = calculateIR(grossSalary, dependents);
   const fgts = calculateFGTS(input.baseSalary);
 
   // Líquido = Bruto - Descontos (INSS + IR + Outros)

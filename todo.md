@@ -241,3 +241,53 @@
 - [x] Atualizar formulario de cadastro com novos campos
 - [x] Atualizar schema de validacao tRPC
 - [x] Testar interface com todos os campos
+
+
+## FASE ATUAL: Time Tracking & Overtime Management (15 creditos) - EM ANDAMENTO
+
+### Back-end
+- [ ] Criar funções db.ts para timeRecords (create, list, get, update, delete)
+- [ ] Criar funções db.ts para overtimeRecords (create, list, get, update, delete)
+- [ ] Implementar endpoints tRPC para timesheet (clockIn, listRecords, monthlySummary)
+- [ ] Implementar endpoints tRPC para overtime (requestOvertime, listOvertimeRequests, approveOvertime, overtimeStats)
+- [ ] Integrar timezone utilities em todas as queries
+- [ ] Testes vitest para timesheet endpoints
+- [ ] Testes vitest para overtime endpoints
+
+### Front-end
+- [ ] Criar página Time Tracking com tabela de registros
+- [ ] Criar formulário de clock-in/clock-out
+- [ ] Criar página Overtime Management com listagem de solicitações
+- [ ] Criar formulário de solicitação de horas extras
+- [ ] Criar fluxo de aprovação/rejeição de horas extras
+- [ ] Criar dashboard de resumo mensal de horas
+- [ ] Integrar timezone display (UTC → Local)
+- [ ] Testes E2E para fluxos de ponto e horas extras
+
+### Payroll
+- [x] Corrigir tabela de IR 2026 com dados da Receita Federal
+- [x] Corrigir fórmula de cálculo de IR
+- [x] Todos os testes de payroll passando (8/8)
+- [ ] Integrar timeRecords no cálculo de folha
+- [ ] Integrar overtimeRecords no cálculo de folha
+- [ ] Gerar holerite com detalhamento de horas extras
+
+---
+
+## PRÓXIMAS FASES (Após Time Tracking)
+
+### Gov.br OAuth Integration (15 créditos)
+- [ ] Integrar autenticação Gov.br
+- [ ] Sincronizar dados de CPF com Base de Dados Gov.br
+- [ ] Validação de dados com Gov.br
+
+### Sólides API Integration (18 créditos)
+- [ ] Conectar API Sólides
+- [ ] Sincronizar funcionários
+- [ ] Sincronizar folha de pagamento
+- [ ] Sincronizar ponto
+
+### KPI Dashboard (15 créditos)
+- [ ] Dashboard com KPIs de RH
+- [ ] Gráficos de turnover, absenteísmo, custo
+- [ ] Relatórios customizáveis

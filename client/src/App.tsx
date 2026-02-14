@@ -27,6 +27,9 @@ const Timesheet = lazy(() => import("./pages/Timesheet"));
 const Payroll = lazy(() => import("./pages/Payroll"));
 const ProfessionalAssessment = lazy(() => import("./pages/ProfessionalAssessment"));
 const Audit = lazy(() => import("./pages/Audit"));
+const TimeTracking = lazy(() => import("./pages/TimeTracking"));
+const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement"));
+const Payslip = lazy(() => import("./pages/Payslip"));
 
 function PageLoader() {
   return (
@@ -57,7 +60,10 @@ function Router() {
         <Route path="/relatorios" component={Reports} />
         <Route path="/recrutamento" component={Recruitment} />
         <Route path="/ponto" component={Timesheet} />
+        <Route path="/ponto-novo" component={TimeTracking} />
+        <Route path="/horas-extras" component={OvertimeManagement} />
         <Route path="/folha" component={Payroll} />
+        <Route path="/holerite" component={Payslip} />
         <Route path="/avaliacoes" component={ProfessionalAssessment} />
         <Route path="/auditoria" component={Audit} />
         <Route path="/404" component={NotFound} />

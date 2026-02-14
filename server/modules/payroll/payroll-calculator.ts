@@ -10,12 +10,15 @@ export interface PayrollInput {
   bonuses?: number;
   otherDeductions?: number;
   dependents?: number;
+  overtimeHours?: number;
+  overtimeType?: '50%' | '100%' | 'NOTURNO';
 }
 
 export interface PayrollOutput {
   baseSalary: number;
   allowances: number;
   bonuses: number;
+  overtimeValue: number;
   grossSalary: number;
   inss: number;
   ir: number;
@@ -26,6 +29,8 @@ export interface PayrollOutput {
     inssRate: number;
     irRate: number;
     fgtsRate: number;
+    overtimeHours?: number;
+    overtimeType?: string;
   };
 }
 
@@ -113,22 +118,30 @@ export function calculatePayroll(input: PayrollInput): PayrollOutput {
   const bonuses = input.bonuses || 0;
   const otherDeductions = input.otherDeductions || 0;
   const dependents = input.dependents || 0;
+  const overtimeHours = input.overtimeHours || 0;
+  const overtimeType = input.overtimeType || '100%';
 
-  // Gross = Base + Adicionais
-  const grossSalary = input.baseSalary + allowances + bonuses;
+  const hourlyRate = input.baseSalary / 220;
+  const overtimeMultipliers: Record<string, number> = {
+    '50%': 1.5,
+    '100%': 2.0,
+    'NOTURNO': 1.2,
+  };
+  const overtimeValue = overtimeHours * hourlyRate * overtimeMultipliers[overtimeType];
 
-  // Cálculos de descontos
+  const grossSalary = input.baseSalary + allowances + bonuses + overtimeValue;
+
   const inss = calculateINSS(input.baseSalary);
   const ir = calculateIR(grossSalary, dependents);
   const fgts = calculateFGTS(input.baseSalary);
 
-  // Líquido = Bruto - Descontos (INSS + IR + Outros)
   const netSalary = grossSalary - inss - ir - otherDeductions;
 
   return {
     baseSalary: input.baseSalary,
     allowances,
     bonuses,
+    overtimeValue: Math.round(overtimeValue * 100) / 100,
     grossSalary: Math.round(grossSalary * 100) / 100,
     inss: Math.round(inss * 100) / 100,
     ir: Math.round(ir * 100) / 100,
@@ -136,9 +149,11 @@ export function calculatePayroll(input: PayrollInput): PayrollOutput {
     otherDeductions,
     netSalary: Math.round(netSalary * 100) / 100,
     details: {
-      inssRate: 0.14, // Taxa máxima
-      irRate: 0.275, // Taxa máxima
+      inssRate: 0.14,
+      irRate: 0.275,
       fgtsRate: FGTS_RATE,
+      overtimeHours,
+      overtimeType,
     },
   };
 }

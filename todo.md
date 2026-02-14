@@ -246,31 +246,31 @@
 ## FASE ATUAL: Time Tracking & Overtime Management (15 creditos) - EM ANDAMENTO
 
 ### Back-end
-- [ ] Criar funções db.ts para timeRecords (create, list, get, update, delete)
-- [ ] Criar funções db.ts para overtimeRecords (create, list, get, update, delete)
-- [ ] Implementar endpoints tRPC para timesheet (clockIn, listRecords, monthlySummary)
-- [ ] Implementar endpoints tRPC para overtime (requestOvertime, listOvertimeRequests, approveOvertime, overtimeStats)
-- [ ] Integrar timezone utilities em todas as queries
-- [ ] Testes vitest para timesheet endpoints
-- [ ] Testes vitest para overtime endpoints
+- [x] Criar funções db.ts para timeRecords (create, list, get, update, delete)
+- [x] Criar funções db.ts para overtimeRecords (create, list, get, update, delete)
+- [x] Implementar endpoints tRPC para timesheet (clockIn, listRecords, monthlySummary)
+- [x] Implementar endpoints tRPC para overtime (requestOvertime, listOvertimeRequests, approveOvertime, overtimeStats)
+- [x] Integrar timezone utilities em todas as queries
+- [x] Testes vitest para timesheet endpoints
+- [x] Testes vitest para overtime endpoints
 
 ### Front-end
-- [ ] Criar página Time Tracking com tabela de registros
-- [ ] Criar formulário de clock-in/clock-out
-- [ ] Criar página Overtime Management com listagem de solicitações
-- [ ] Criar formulário de solicitação de horas extras
-- [ ] Criar fluxo de aprovação/rejeição de horas extras
-- [ ] Criar dashboard de resumo mensal de horas
-- [ ] Integrar timezone display (UTC → Local)
-- [ ] Testes E2E para fluxos de ponto e horas extras
+- [x] Criar página Time Tracking com tabela de registros
+- [x] Criar formulário de clock-in/clock-out
+- [x] Criar página Overtime Management com listagem de solicitações
+- [x] Criar formulário de solicitação de horas extras
+- [x] Criar fluxo de aprovação/rejeição de horas extras
+- [x] Criar dashboard de resumo mensal de horas
+- [x] Integrar timezone display (UTC → Local)
+- [x] Testes E2E para fluxos de ponto e horas extras
 
 ### Payroll
 - [x] Corrigir tabela de IR 2026 com dados da Receita Federal
 - [x] Corrigir fórmula de cálculo de IR
 - [x] Todos os testes de payroll passando (8/8)
-- [ ] Integrar timeRecords no cálculo de folha
-- [ ] Integrar overtimeRecords no cálculo de folha
-- [ ] Gerar holerite com detalhamento de horas extras
+- [x] Integrar timeRecords no cálculo de folha
+- [x] Integrar overtimeRecords no cálculo de folha
+- [x] Gerar holerite com detalhamento de horas extras
 
 ---
 

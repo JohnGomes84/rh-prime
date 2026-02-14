@@ -14,6 +14,7 @@ import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
 import { timesheetRouter } from "./routers/timesheet";
+import { authJwtRouter } from "./routers/auth-jwt";
 import { convertEmployeeInput, convertUpdateData } from "./utils/type-converters";
 
 // ============================================================
@@ -29,6 +30,7 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    ...authJwtRouter._def.procedures,
   }),
 
   // ============================================================
@@ -876,6 +878,7 @@ export const appRouter = router({
   // TIMESHEET & OVERTIME
   // ============================================================
   timesheet: timesheetRouter,
+  authJwt: authJwtRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -243,7 +243,7 @@
 - [x] Testar interface com todos os campos
 
 
-## FASE ATUAL: Time Tracking & Overtime Management (15 creditos) - EM ANDAMENTO
+## FASE CONCLUIDA: Time Tracking & Overtime Management (15 creditos) - CONCLUIDO
 
 ### Back-end
 - [x] Criar funções db.ts para timeRecords (create, list, get, update, delete)
@@ -274,7 +274,21 @@
 
 ---
 
-## PRÓXIMAS FASES (Após Time Tracking)
+## FASE 1: RBAC + Autenticação JWT (20 créditos) - CONCLUIDO
+
+### Sprint 1: RBAC com Autenticação JWT (20 créditos)
+- [x] Criar tabelas: users, roles, permissions
+- [x] Implementar autenticação JWT (login/logout)
+- [x] Middleware de proteção de rotas
+- [x] Criar 3 roles: admin, gestor, colaborador
+- [x] Página de login com formulário
+- [x] Gerenciamento de usuários (CRUD)
+- [x] Testes vitest para autenticação
+- [x] Hash de senha com bcrypt
+
+---
+
+## PRÓXIMAS FASES (Após FASE 1)
 
 ### Gov.br OAuth Integration (15 créditos)
 - [ ] Integrar autenticação Gov.br

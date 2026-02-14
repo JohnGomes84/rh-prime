@@ -1276,3 +1276,84 @@ export async function getOvertimeStats(
     };
   }, "getOvertimeStats");
 }
+
+
+// ============================================================
+// USERS (AUTENTICAÇÃO JWT)
+// ============================================================
+export async function getUser(email: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    
+    return db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
+  }, "getUser");
+}
+
+export async function getUserById(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    
+    return db.query.users.findFirst({
+      where: eq(users.id, id),
+    });
+  }, "getUserById");
+}
+
+export async function createUser(data: {
+  email: string;
+  name?: string;
+  passwordHash?: string;
+  role?: string;
+  loginMethod?: string;
+}) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    
+    const result = await db.insert(users).values({
+      email: data.email,
+      name: data.name,
+      passwordHash: data.passwordHash,
+      role: (data.role as any) || 'colaborador',
+      loginMethod: data.loginMethod || 'jwt',
+    });
+    
+    return result;
+  }, "createUser");
+}
+
+export async function updateUser(id: number, data: Partial<{
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: string;
+}>) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    
+    return db.update(users).set(data).where(eq(users.id, id));
+  }, "updateUser");
+}
+
+export async function deleteUser(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    
+    return db.delete(users).where(eq(users.id, id));
+  }, "deleteUser");
+}
+
+export async function listUsers() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    
+    return db.query.users.findMany();
+  }, "listUsers");
+}

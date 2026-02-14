@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +7,7 @@ import { trpc } from '@/lib/trpc';
 import { AlertCircle } from 'lucide-react';
 
 export function Login() {
+  const [, setLocation] = useLocation();
   const [loginMethod, setLoginMethod] = useState<'oauth' | 'jwt'>('oauth');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,10 +21,13 @@ export function Login() {
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: (data) => {
       localStorage.setItem('token', data.token);
-      window.location.href = '/';
+      setLocation('/');
     },
     onError: (error) => {
-      setError(error.message || 'Erro ao fazer login');
+      const errorMessage = error.data?.code === 'UNAUTHORIZED' 
+        ? 'Email ou senha invalidos'
+        : error.message || 'Erro ao fazer login';
+      setError(errorMessage);
       setIsLoading(false);
     },
   });

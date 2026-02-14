@@ -14,8 +14,10 @@ import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
 import { timesheetRouter } from "./routers/timesheet";
-import { authJwtRouter } from "./routers/auth-jwt";
+import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData } from "./utils/type-converters";
+import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
+import { z } from 'zod';
 
 // ============================================================
 // ROUTERS
@@ -30,7 +32,41 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
-    ...authJwtRouter._def.procedures,
+    login: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          password: z.string().min(6),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const result = await authLogin(input);
+        if (!result) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Email ou senha inválidos',
+          });
+        }
+        return result;
+      }),
+    register: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          password: z.string().min(8),
+          name: z.string().min(3),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const result = await authRegister(input);
+        if (!result) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Email já cadastrado ou erro ao registrar',
+          });
+        }
+        return result;
+      }),
   }),
 
   // ============================================================
@@ -878,7 +914,6 @@ export const appRouter = router({
   // TIMESHEET & OVERTIME
   // ============================================================
   timesheet: timesheetRouter,
-  authJwt: authJwtRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -339,151 +339,207 @@ export async function updateMedicalExam(id: number, data: Partial<InsertMedicalE
 }
 
 export async function getExpiredExams() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(medicalExams)
-    .where(and(sql`${medicalExams.expiryDate} <= ${todayStr()}`, eq(medicalExams.status, "Válido")));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(medicalExams)
+      .where(and(sql`${medicalExams.expiryDate} <= ${todayStr()}`, eq(medicalExams.status, "Válido")));
+  }, "getExpiredExams");
 }
 
 export async function getUpcomingExamExpirations(daysAhead: number = 30) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(medicalExams)
-    .where(and(
-      sql`${medicalExams.expiryDate} >= ${todayStr()}`,
-      sql`${medicalExams.expiryDate} <= ${futureDateStr(daysAhead)}`,
-      eq(medicalExams.status, "Válido")
-    ));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(medicalExams)
+      .where(and(
+        sql`${medicalExams.expiryDate} >= ${todayStr()}`,
+        sql`${medicalExams.expiryDate} <= ${futureDateStr(daysAhead)}`,
+        eq(medicalExams.status, "Válido")
+      ));
+  }, "getUpcomingExamExpirations");
 }
 
 // ============================================================
 // LEAVES
 // ============================================================
 export async function listLeaves(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(leaves).where(eq(leaves.employeeId, employeeId)).orderBy(desc(leaves.startDate));
-  return db.select().from(leaves).orderBy(desc(leaves.startDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(leaves).where(eq(leaves.employeeId, employeeId)).orderBy(desc(leaves.startDate));
+    return db.select().from(leaves).orderBy(desc(leaves.startDate));
+  }, "listLeaves");
 }
 
 export async function createLeave(data: InsertLeave) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(leaves).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(leaves).values(data);
+      return { id: result[0].insertId };
+    }, "createLeave");
+  }, { name: "createLeave-transaction" });
 }
 
 export async function updateLeave(id: number, data: Partial<InsertLeave>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(leaves).set(data).where(eq(leaves.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(leaves).set(data).where(eq(leaves.id, id));
+    }, "updateLeave");
+  }, { name: "updateLeave-transaction" });
 }
 
 // ============================================================
 // TIME BANK
 // ============================================================
 export async function listTimeBank(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(timeBank).where(eq(timeBank.employeeId, employeeId)).orderBy(desc(timeBank.referenceMonth));
-  return db.select().from(timeBank).orderBy(desc(timeBank.referenceMonth));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(timeBank).where(eq(timeBank.employeeId, employeeId)).orderBy(desc(timeBank.referenceMonth));
+    return db.select().from(timeBank).orderBy(desc(timeBank.referenceMonth));
+  }, "listTimeBank");
 }
 
 export async function createTimeBankEntry(data: InsertTimeBank) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(timeBank).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(timeBank).values(data);
+      return { id: result[0].insertId };
+    }, "createTimeBankEntry");
+  }, { name: "createTimeBankEntry-transaction" });
 }
 
 export async function updateTimeBankEntry(id: number, data: Partial<InsertTimeBank>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(timeBank).set(data).where(eq(timeBank.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(timeBank).set(data).where(eq(timeBank.id, id));
+    }, "updateTimeBankEntry");
+  }, { name: "updateTimeBankEntry-transaction" });
 }
 
 export async function getExpiringTimeBank(daysAhead: number = 30) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(timeBank)
-    .where(and(
-      sql`${timeBank.expiryDate} >= ${todayStr()}`,
-      sql`${timeBank.expiryDate} <= ${futureDateStr(daysAhead)}`,
-      eq(timeBank.status, "Ativo")
-    ));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(timeBank)
+      .where(and(
+        sql`${timeBank.expiryDate} >= ${todayStr()}`,
+        sql`${timeBank.expiryDate} <= ${futureDateStr(daysAhead)}`,
+        eq(timeBank.status, "Ativo")
+      ));
+  }, "getExpiringTimeBank");
 }
 
 // ============================================================
 // BENEFITS
 // ============================================================
 export async function listBenefits(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(benefits).where(eq(benefits.employeeId, employeeId)).orderBy(desc(benefits.startDate));
-  return db.select().from(benefits).orderBy(desc(benefits.startDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(benefits).where(eq(benefits.employeeId, employeeId)).orderBy(desc(benefits.startDate));
+    return db.select().from(benefits).orderBy(desc(benefits.startDate));
+  }, "listBenefits");
 }
 
 export async function createBenefit(data: InsertBenefit) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(benefits).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(benefits).values(data);
+      return { id: result[0].insertId };
+    }, "createBenefit");
+  }, { name: "createBenefit-transaction" });
 }
 
 export async function updateBenefit(id: number, data: Partial<InsertBenefit>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(benefits).set(data).where(eq(benefits.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(benefits).set(data).where(eq(benefits.id, id));
+    }, "updateBenefit");
+  }, { name: "updateBenefit-transaction" });
 }
 
 // ============================================================
 // DOCUMENTS (GED)
 // ============================================================
 export async function listDocuments(employeeId?: number, category?: string) {
-  const db = await getDb();
-  if (!db) return [];
-  const conditions = [];
-  if (employeeId) conditions.push(eq(documents.employeeId, employeeId));
-  if (category) conditions.push(eq(documents.category, category));
-  if (conditions.length > 0) return db.select().from(documents).where(and(...conditions)).orderBy(desc(documents.uploadedAt));
-  return db.select().from(documents).orderBy(desc(documents.uploadedAt));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const conditions = [];
+    if (employeeId) conditions.push(eq(documents.employeeId, employeeId));
+    if (category) conditions.push(eq(documents.category, category));
+    if (conditions.length > 0) return db.select().from(documents).where(and(...conditions)).orderBy(desc(documents.uploadedAt));
+    return db.select().from(documents).orderBy(desc(documents.uploadedAt));
+  }, "listDocuments");
 }
 
 export async function createDocument(data: InsertDocument) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(documents).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(documents).values(data);
+      return { id: result[0].insertId };
+    }, "createDocument");
+  }, { name: "createDocument-transaction" });
 }
 
 export async function deleteDocument(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.delete(documents).where(eq(documents.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.delete(documents).where(eq(documents.id, id));
+    }, "deleteDocument");
+  }, { name: "deleteDocument-transaction" });
 }
 
 // ============================================================
 // CHECKLIST ITEMS
 // ============================================================
 export async function listChecklistItems(employeeId: number, checklistType?: string) {
-  const db = await getDb();
-  if (!db) return [];
-  const conditions = [eq(checklistItems.employeeId, employeeId)];
-  if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType));
-  return db.select().from(checklistItems).where(and(...conditions)).orderBy(asc(checklistItems.category), asc(checklistItems.id));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const conditions = [eq(checklistItems.employeeId, employeeId)];
+    if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType));
+    return db.select().from(checklistItems).where(and(...conditions)).orderBy(asc(checklistItems.category), asc(checklistItems.id));
+  }, "listChecklistItems");
 }
 
 export async function createChecklistItem(data: InsertChecklistItem) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(checklistItems).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(checklistItems).values(data);
+      return { id: result[0].insertId };
+    }, "createChecklistItem");
+  }, { name: "createChecklistItem-transaction" });
 }
 
 export async function updateChecklistItem(id: number, data: Partial<InsertChecklistItem>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(checklistItems).set(data).where(eq(checklistItems.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(checklistItems).set(data).where(eq(checklistItems.id, id));
+    }, "updateChecklistItem");
+  }, { name: "updateChecklistItem-transaction" });
 }
 
 export async function createDefaultAdmissionChecklist(employeeId: number) {
@@ -527,212 +583,300 @@ export async function createDefaultAdmissionChecklist(employeeId: number) {
 // EQUIPMENT
 // ============================================================
 export async function listEquipment() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(equipment).orderBy(asc(equipment.equipmentType));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(equipment).orderBy(asc(equipment.equipmentType));
+  }, "listEquipment");
 }
 
 export async function createEquipmentItem(data: InsertEquipment) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(equipment).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(equipment).values(data);
+      return { id: result[0].insertId };
+    }, "createEquipmentItem");
+  }, { name: "createEquipmentItem-transaction" });
 }
 
 export async function updateEquipmentItem(id: number, data: Partial<InsertEquipment>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(equipment).set(data).where(eq(equipment.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(equipment).set(data).where(eq(equipment.id, id));
+    }, "updateEquipmentItem");
+  }, { name: "updateEquipmentItem-transaction" });
 }
 
 // ============================================================
 // EQUIPMENT LOANS
 // ============================================================
 export async function listEquipmentLoans(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(equipmentLoans).where(eq(equipmentLoans.employeeId, employeeId)).orderBy(desc(equipmentLoans.loanDate));
-  return db.select().from(equipmentLoans).orderBy(desc(equipmentLoans.loanDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(equipmentLoans).where(eq(equipmentLoans.employeeId, employeeId)).orderBy(desc(equipmentLoans.loanDate));
+    return db.select().from(equipmentLoans).orderBy(desc(equipmentLoans.loanDate));
+  }, "listEquipmentLoans");
 }
 
 export async function createEquipmentLoan(data: InsertEquipmentLoan) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(equipmentLoans).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(equipmentLoans).values(data);
+      return { id: result[0].insertId };
+    }, "createEquipmentLoan");
+  }, { name: "createEquipmentLoan-transaction" });
 }
 
 export async function updateEquipmentLoan(id: number, data: Partial<InsertEquipmentLoan>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(equipmentLoans).set(data).where(eq(equipmentLoans.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(equipmentLoans).set(data).where(eq(equipmentLoans.id, id));
+    }, "updateEquipmentLoan");
+  }, { name: "updateEquipmentLoan-transaction" });
 }
 
 // ============================================================
 // PPE DELIVERIES (EPIs)
 // ============================================================
 export async function listPpeDeliveries(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(ppeDeliveries).where(eq(ppeDeliveries.employeeId, employeeId)).orderBy(desc(ppeDeliveries.deliveryDate));
-  return db.select().from(ppeDeliveries).orderBy(desc(ppeDeliveries.deliveryDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(ppeDeliveries).where(eq(ppeDeliveries.employeeId, employeeId)).orderBy(desc(ppeDeliveries.deliveryDate));
+    return db.select().from(ppeDeliveries).orderBy(desc(ppeDeliveries.deliveryDate));
+  }, "listPpeDeliveries");
 }
 
 export async function createPpeDelivery(data: InsertPpeDelivery) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(ppeDeliveries).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(ppeDeliveries).values(data);
+      return { id: result[0].insertId };
+    }, "createPpeDelivery");
+  }, { name: "createPpeDelivery-transaction" });
 }
 
 // ============================================================
 // TRAININGS
 // ============================================================
 export async function listTrainings(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(trainings).where(eq(trainings.employeeId, employeeId)).orderBy(desc(trainings.trainingDate));
-  return db.select().from(trainings).orderBy(desc(trainings.trainingDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(trainings).where(eq(trainings.employeeId, employeeId)).orderBy(desc(trainings.trainingDate));
+    return db.select().from(trainings).orderBy(desc(trainings.trainingDate));
+  }, "listTrainings");
 }
 
 export async function createTraining(data: InsertTraining) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(trainings).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(trainings).values(data);
+      return { id: result[0].insertId };
+    }, "createTraining");
+  }, { name: "createTraining-transaction" });
 }
 
 export async function updateTraining(id: number, data: Partial<InsertTraining>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(trainings).set(data).where(eq(trainings.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(trainings).set(data).where(eq(trainings.id, id));
+    }, "updateTraining");
+  }, { name: "updateTraining-transaction" });
 }
 
 // ============================================================
 // SERVICE ORDERS
 // ============================================================
 export async function listServiceOrders(employeeId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  if (employeeId) return db.select().from(serviceOrders).where(eq(serviceOrders.employeeId, employeeId)).orderBy(desc(serviceOrders.issueDate));
-  return db.select().from(serviceOrders).orderBy(desc(serviceOrders.issueDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (employeeId) return db.select().from(serviceOrders).where(eq(serviceOrders.employeeId, employeeId)).orderBy(desc(serviceOrders.issueDate));
+    return db.select().from(serviceOrders).orderBy(desc(serviceOrders.issueDate));
+  }, "listServiceOrders");
 }
 
 export async function createServiceOrder(data: InsertServiceOrder) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(serviceOrders).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(serviceOrders).values(data);
+      return { id: result[0].insertId };
+    }, "createServiceOrder");
+  }, { name: "createServiceOrder-transaction" });
 }
 
 // ============================================================
 // DOCUMENT TEMPLATES
 // ============================================================
 export async function listDocumentTemplates() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(documentTemplates).where(eq(documentTemplates.isActive, true)).orderBy(asc(documentTemplates.templateName));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(documentTemplates).where(eq(documentTemplates.isActive, true)).orderBy(asc(documentTemplates.templateName));
+  }, "listDocumentTemplates");
 }
 
 export async function getDocumentTemplate(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(documentTemplates).where(eq(documentTemplates.id, id)).limit(1);
-  return result[0];
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return undefined;
+    const result = await db.select().from(documentTemplates).where(eq(documentTemplates.id, id)).limit(1);
+    return result[0];
+  }, "getDocumentTemplate");
 }
 
 export async function createDocumentTemplate(data: InsertDocumentTemplate) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(documentTemplates).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(documentTemplates).values(data);
+      return { id: result[0].insertId };
+    }, "createDocumentTemplate");
+  }, { name: "createDocumentTemplate-transaction" });
 }
 
 export async function updateDocumentTemplate(id: number, data: Partial<InsertDocumentTemplate>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(documentTemplates).set(data).where(eq(documentTemplates.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(documentTemplates).set(data).where(eq(documentTemplates.id, id));
+    }, "updateDocumentTemplate");
+  }, { name: "updateDocumentTemplate-transaction" });
 }
 
 // ============================================================
 // NOTIFICATIONS
 // ============================================================
 export async function listNotifications(unreadOnly?: boolean) {
-  const db = await getDb();
-  if (!db) return [];
-  if (unreadOnly) return db.select().from(notifications).where(eq(notifications.isRead, false)).orderBy(desc(notifications.createdAt));
-  return db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(100);
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (unreadOnly) return db.select().from(notifications).where(eq(notifications.isRead, false)).orderBy(desc(notifications.createdAt));
+    return db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(100);
+  }, "listNotifications");
 }
 
 export async function createNotification(data: InsertNotification) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(notifications).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(notifications).values(data);
+      return { id: result[0].insertId };
+    }, "createNotification");
+  }, { name: "createNotification-transaction" });
 }
 
 export async function markNotificationRead(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+    }, "markNotificationRead");
+  }, { name: "markNotificationRead-transaction" });
 }
 
 export async function markAllNotificationsRead() {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(notifications).set({ isRead: true }).where(eq(notifications.isRead, false));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(notifications).set({ isRead: true }).where(eq(notifications.isRead, false));
+    }, "markAllNotificationsRead");
+  }, { name: "markAllNotificationsRead-transaction" });
 }
 
 export async function countUnreadNotifications() {
-  const db = await getDb();
-  if (!db) return 0;
-  const result = await db.select({ count: count() }).from(notifications).where(eq(notifications.isRead, false));
-  return result[0]?.count ?? 0;
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return 0;
+    const result = await db.select({ count: count() }).from(notifications).where(eq(notifications.isRead, false));
+    return result[0]?.count ?? 0;
+  }, "countUnreadNotifications");
 }
 
 // ============================================================
 // HOLIDAYS
 // ============================================================
 export async function listHolidays() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(holidays).orderBy(asc(holidays.date));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(holidays).orderBy(asc(holidays.date));
+  }, "listHolidays");
 }
 
 export async function createHoliday(data: InsertHoliday) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(holidays).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(holidays).values(data);
+      return { id: result[0].insertId };
+    }, "createHoliday");
+  }, { name: "createHoliday-transaction" });
 }
 
 export async function deleteHoliday(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.delete(holidays).where(eq(holidays.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.delete(holidays).where(eq(holidays.id, id));
+    }, "deleteHoliday");
+  }, { name: "deleteHoliday-transaction" });
 }
 
 // ============================================================
 // SETTINGS
 // ============================================================
 export async function getSetting(key: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
-  return result[0]?.value;
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return undefined;
+    const result = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
+    return result[0]?.value;
+  }, "getSetting");
 }
 
 export async function upsertSetting(key: string, value: string, description?: string) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.insert(settings).values({ key, value, description: description ?? "" })
-    .onDuplicateKeyUpdate({ set: { value } });
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.insert(settings).values({ key, value, description: description ?? "" })
+        .onDuplicateKeyUpdate({ set: { value } });
+    }, "upsertSetting");
+  }, { name: "upsertSetting-transaction" });
 }
 
 export async function listSettings() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(settings).orderBy(asc(settings.key));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(settings).orderBy(asc(settings.key));
+  }, "listSettings");
 }
 
 // ============================================================
@@ -776,59 +920,78 @@ export async function listAuditLogByCpf(cpf: string) {
 // ABSENCES
 // ============================================================
 export async function listAbsences(employeeId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(absences).where(eq(absences.employeeId, employeeId)).orderBy(desc(absences.absenceDate));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(absences).where(eq(absences.employeeId, employeeId)).orderBy(desc(absences.absenceDate));
+  }, "listAbsences");
 }
 
 export async function createAbsence(data: InsertAbsence) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(absences).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(absences).values(data);
+      return { id: result[0].insertId };
+    }, "createAbsence");
+  }, { name: "createAbsence-transaction" });
 }
 
 export async function countUnjustifiedAbsences(employeeId: number, startDate: string, endDate: string) {
-  const db = await getDb();
-  if (!db) return 0;
-  const result = await db.select({ count: count() }).from(absences)
-    .where(and(
-      eq(absences.employeeId, employeeId),
-      eq(absences.justified, false),
-      sql`${absences.absenceDate} >= ${startDate}`,
-      sql`${absences.absenceDate} <= ${endDate}`
-    ));
-  return result[0]?.count ?? 0;
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return 0;
+    const result = await db.select({ count: count() }).from(absences)
+      .where(and(
+        eq(absences.employeeId, employeeId),
+        eq(absences.justified, false),
+        sql`${absences.absenceDate} >= ${startDate}`,
+        sql`${absences.absenceDate} <= ${endDate}`
+      ));
+    return result[0]?.count ?? 0;
+  }, "countUnjustifiedAbsences");
 }
 
 // ============================================================
 // DEPENDENTS
 // ============================================================
 export async function listDependents(employeeId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(dependents).where(eq(dependents.employeeId, employeeId)).orderBy(asc(dependents.name));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(dependents).where(eq(dependents.employeeId, employeeId)).orderBy(asc(dependents.name));
+  }, "listDependents");
 }
 
 export async function createDependent(data: InsertDependent) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(dependents).values(data);
-  return { id: result[0].insertId };
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(dependents).values(data);
+      return { id: result[0].insertId };
+    }, "createDependent");
+  }, { name: "createDependent-transaction" });
 }
 
 export async function deleteDependent(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.delete(dependents).where(eq(dependents.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.delete(dependents).where(eq(dependents.id, id));
+    }, "deleteDependent");
+  }, { name: "deleteDependent-transaction" });
 }
 
 // ============================================================
 // DASHBOARD HELPERS
 // ============================================================
 export async function getDashboardStats() {
-  const db = await getDb();
-  if (!db) return { totalEmployees: 0, activeEmployees: 0, statusCounts: [], overdueVacations: 0, expiredExams: 0, expiringTimeBank: 0, unreadNotifications: 0, expiredPGR: 0, expiredPCMSO: 0 };
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return { totalEmployees: 0, activeEmployees: 0, statusCounts: [], overdueVacations: 0, expiredExams: 0, expiringTimeBank: 0, unreadNotifications: 0, expiredPGR: 0, expiredPCMSO: 0 };
 
   const today = todayStr();
   const thirtyDays = futureDateStr(30);
@@ -845,15 +1008,16 @@ export async function getDashboardStats() {
     db.select({ count: count() }).from(pcmso).where(and(sql`${pcmso.expiryDate} <= ${thirtyDays}`, eq(pcmso.status, "Válido"))),
   ]);
 
-  return {
-    totalEmployees: totalResult[0]?.count ?? 0,
-    activeEmployees: activeResult[0]?.count ?? 0,
-    statusCounts,
-    overdueVacations: overdueVacResult[0]?.count ?? 0,
-    expiredExams: expiredExamResult[0]?.count ?? 0,
-    expiringTimeBank: expiringTBResult[0]?.count ?? 0,
-    unreadNotifications: unreadResult[0]?.count ?? 0,
-    expiredPGR: expiredPGRResult[0]?.count ?? 0,
-    expiredPCMSO: expiredPCMSOResult[0]?.count ?? 0,
-  };
+    return {
+      totalEmployees: totalResult[0]?.count ?? 0,
+      activeEmployees: activeResult[0]?.count ?? 0,
+      statusCounts,
+      overdueVacations: overdueVacResult[0]?.count ?? 0,
+      expiredExams: expiredExamResult[0]?.count ?? 0,
+      expiringTimeBank: expiringTBResult[0]?.count ?? 0,
+      unreadNotifications: unreadResult[0]?.count ?? 0,
+      expiredPGR: expiredPGRResult[0]?.count ?? 0,
+      expiredPCMSO: expiredPCMSOResult[0]?.count ?? 0,
+    };
+  }, "getDashboardStats");
 }

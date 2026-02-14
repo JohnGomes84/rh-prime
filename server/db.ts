@@ -32,6 +32,10 @@ import {
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks';
+import { withDBRetry } from './utils/retry';
+import { encryptCPF } from './utils/encryption';
+import { withTransaction } from './utils/transactions';
+import { formatDateTimeBR } from './utils/timezone';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -91,44 +95,60 @@ export async function getUserByOpenId(openId: string) {
 // EMPLOYEES
 // ============================================================
 export async function listEmployees(search?: string) {
-  const db = await getDb();
-  if (!db) return [];
-  if (search) {
-    return db.select().from(employees)
-      .where(or(like(employees.fullName, `%${search}%`), like(employees.cpf, `%${search}%`)))
-      .orderBy(asc(employees.fullName));
-  }
-  return db.select().from(employees).orderBy(asc(employees.fullName));
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (search) {
+      return db.select().from(employees)
+        .where(or(like(employees.fullName, `%${search}%`), like(employees.cpf, `%${search}%`)))
+        .orderBy(asc(employees.fullName));
+    }
+    return db.select().from(employees).orderBy(asc(employees.fullName));
+  }, "listEmployees");
 }
 
 export async function getEmployee(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(employees).where(eq(employees.id, id)).limit(1);
-  return result[0];
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return undefined;
+    const result = await db.select().from(employees).where(eq(employees.id, id)).limit(1);
+    return result[0];
+  }, "getEmployee");
 }
 
 export async function createEmployee(data: InsertEmployee) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(employees).values(data);
-  const employeeId = result[0].insertId;
-  // Disparar webhook de criação de funcionário
-  await onEmployeeCreated({ id: employeeId, ...data });
-  // Retornar funcionário completo
-  return await getEmployee(employeeId);
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const result = await db.insert(employees).values(data);
+      const employeeId = result[0].insertId;
+      // Disparar webhook de criação de funcionário
+      await onEmployeeCreated({ id: employeeId, ...data });
+      // Retornar funcionário completo
+      return await getEmployee(employeeId);
+    }, "createEmployee");
+  }, { name: "createEmployee-transaction" });
 }
 
 export async function updateEmployee(id: number, data: Partial<InsertEmployee>) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(employees).set(data).where(eq(employees.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(employees).set(data).where(eq(employees.id, id));
+    }, "updateEmployee");
+  }, { name: "updateEmployee-transaction" });
 }
 
 export async function deleteEmployee(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.delete(employees).where(eq(employees.id, id));
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.delete(employees).where(eq(employees.id, id));
+    }, "deleteEmployee");
+  }, { name: "deleteEmployee-transaction" });
 }
 
 export async function countEmployees() {
@@ -719,26 +739,37 @@ export async function listSettings() {
 // AUDIT LOG
 // ============================================================
 export async function createAuditEntry(data: InsertAuditLog) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(auditLogs).values(data);
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return;
+    // Encriptar CPF se presente
+    const auditData = {
+      ...data,
+      cpf: data.cpf ? encryptCPF(data.cpf) : undefined,
+    };
+    await db.insert(auditLogs).values(auditData);
+  }, "createAuditEntry");
 }
 
 export async function listAuditLog(tableName?: string, recordId?: number, cpf?: string) {
-  const db = await getDb();
-  if (!db) return [];
-  const conditions = [];
-  if (tableName) conditions.push(eq(auditLogs.resource, tableName));
-  if (recordId) conditions.push(eq(auditLogs.resourceId, recordId));
-  if (cpf) conditions.push(eq(auditLogs.cpf, cpf));
-  if (conditions.length > 0) return db.select().from(auditLogs).where(and(...conditions)).orderBy(desc(auditLogs.timestamp)).limit(100);
-  return db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(100);
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const conditions = [];
+    if (tableName) conditions.push(eq(auditLogs.resource, tableName));
+    if (recordId) conditions.push(eq(auditLogs.resourceId, recordId));
+    if (cpf) conditions.push(eq(auditLogs.cpf, encryptCPF(cpf)));
+    if (conditions.length > 0) return db.select().from(auditLogs).where(and(...conditions)).orderBy(desc(auditLogs.timestamp)).limit(100);
+    return db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(100);
+  }, "listAuditLog");
 }
 
 export async function listAuditLogByCpf(cpf: string) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(auditLogs).where(eq(auditLogs.cpf, cpf)).orderBy(desc(auditLogs.timestamp)).limit(500);
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(auditLogs).where(eq(auditLogs.cpf, encryptCPF(cpf))).orderBy(desc(auditLogs.timestamp)).limit(500);
+  }, "listAuditLogByCpf");
 }
 
 // ============================================================

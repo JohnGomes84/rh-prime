@@ -17,7 +17,7 @@ export function TimeTracking() {
 
   const { data: records = [], isLoading } = trpc.timesheet.listRecords.useQuery(
     {
-      employeeId: user?.id || '',
+      employeeId: String(user?.id || ''),
       startDate: new Date(selectedDate),
       endDate: new Date(selectedDate + 'T23:59:59'),
     },
@@ -26,7 +26,7 @@ export function TimeTracking() {
 
   const { data: summary } = trpc.timesheet.monthlySummary.useQuery(
     {
-      employeeId: user?.id || '',
+      employeeId: String(user?.id || ''),
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
     },
@@ -50,7 +50,7 @@ export function TimeTracking() {
   const handleClockIn = () => {
     if (!user?.id) return;
     clockInMutation.mutate({
-      employeeId: user.id,
+      employeeId: String(user.id),
       clockIn: new Date(),
     });
   };
@@ -58,7 +58,7 @@ export function TimeTracking() {
   const handleClockOut = () => {
     if (!user?.id) return;
     clockOutMutation.mutate({
-      employeeId: user.id,
+      employeeId: String(user.id),
       clockIn: new Date(),
       clockOut: new Date(),
     });

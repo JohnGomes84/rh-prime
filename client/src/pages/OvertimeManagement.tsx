@@ -28,12 +28,12 @@ export function OvertimeManagement() {
   });
 
   const { data: requests = [], isLoading, refetch } = trpc.timesheet.listOvertimeRequests.useQuery(
-    { employeeId: user?.id || '' },
+    { employeeId: String(user?.id || '') },
     { enabled: !!user?.id }
   );
 
   const { data: stats } = trpc.timesheet.overtimeStats.useQuery(
-    { employeeId: user?.id || '' },
+    { employeeId: String(user?.id || '') },
     { enabled: !!user?.id }
   );
 
@@ -66,7 +66,7 @@ export function OvertimeManagement() {
       return;
     }
     requestMutation.mutate({
-      employeeId: user.id,
+      employeeId: String(user.id),
       timeRecordId: formData.timeRecordId,
       overtimeHours: formData.overtimeHours,
       type: formData.type,

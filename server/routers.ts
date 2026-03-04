@@ -13,7 +13,8 @@ import { integrationsRouter } from "./routers/integrations";
 import { auditCpfRouter } from "./routers/audit-cpf";
 import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
-import { timesheetRouter } from "./routers/timesheet";
+import { timesheetRouter } from './routers/timesheet';
+import { reportsRouter } from './routers/reports';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData } from "./utils/type-converters";
 import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
@@ -914,6 +915,10 @@ export const appRouter = router({
   // TIMESHEET & OVERTIME
   // ============================================================
   timesheet: timesheetRouter,
+  // ============================================================
+  // REPORTS
+  // ============================================================
+  reports: reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;

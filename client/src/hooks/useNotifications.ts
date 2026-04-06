@@ -2,9 +2,12 @@ import { useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 export interface SSENotification {
-  type: "pix_request_created" | "attendance_closed" | "pix_request_reviewed" | "duplicate_allocation_detected";
+  type: "pix_request_created" | "attendance_closed" | "pix_request_reviewed" | "duplicate_allocation_detected" | "alert" | "success" | "warning" | "error";
   data: Record<string, any>;
   timestamp: string;
+  title?: string;
+  message?: string;
+  actionUrl?: string;
 }
 
 export function useNotifications(onNotification?: (notif: SSENotification) => void) {
@@ -47,6 +50,18 @@ export function useNotifications(onNotification?: (notif: SSENotification) => vo
               break;
             case "duplicate_allocation_detected":
               toast.warning(`Alocacao duplicada detectada: ${notification.data.employeeName}`);
+              break;
+            case "success":
+              toast.success(notification.title || notification.message);
+              break;
+            case "warning":
+              toast.warning(notification.title || notification.message);
+              break;
+            case "error":
+              toast.error(notification.title || notification.message);
+              break;
+            case "alert":
+              toast.info(notification.title || notification.message);
               break;
           }
         } catch (error) {

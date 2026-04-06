@@ -7,6 +7,7 @@ import { AlertCircle, TrendingUp, TrendingDown, FileText, Download } from "lucid
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "wouter";
 import { HealthScoreGauge } from "@/components/HealthScoreGauge";
+import { CashFlowForecast } from "@/components/CashFlowForecast";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -23,6 +24,9 @@ export default function Dashboard() {
   const healthScore = trpc.dashboardEnhancements.getHealthScore.useQuery({ year, month });
   const trimestrialComparison = trpc.dashboardEnhancements.getTrimestrialComparison.useQuery({ year });
   const exportData = trpc.dashboardEnhancements.getExportData.useMutation();
+  const revenueDetails = trpc.dashboardAdvanced.getRevenueDetails.useQuery({ year, month });
+  const costsDetails = trpc.dashboardAdvanced.getCostsDetails.useQuery({ year, month });
+  const cashFlowForecast = trpc.dashboardAdvanced.getCashFlowForecast.useQuery({ year, month });
 
   // Navegação de mês
   const handlePrevMonth = () => {
@@ -62,6 +66,16 @@ export default function Dashboard() {
   // Função para navegar com filtro de mês
   const navigateWithMonth = (path: string) => {
     router(`${path}?month=${month}&year=${year}`);
+  };
+
+  // Função para drill-down em receita
+  const handleRevenueDrilldown = () => {
+    navigateWithMonth("/contas?tab=receivable");
+  };
+
+  // Função para drill-down em custos
+  const handleCostsDrilldown = () => {
+    navigateWithMonth("/contas?tab=payable");
   };
 
   // Função para exportar dados
@@ -316,11 +330,12 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Tabs: Evolução Diária vs Trimestral */}
+      {/* Tabs: Evolução Diária vs Trimestral vs Previsão */}
       <Tabs defaultValue="daily" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="daily">Evolução Diária</TabsTrigger>
           <TabsTrigger value="trimestral">Comparação Trimestral</TabsTrigger>
+          <TabsTrigger value="forecast">Previsão 30 Dias</TabsTrigger>
         </TabsList>
 
         {/* Tab: Evolução Diária */}
@@ -414,6 +429,19 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
+          ) : null}
+        </TabsContent>
+
+        {/* Tab: Previsão de Fluxo de Caixa */}
+        <TabsContent value="forecast">
+          {cashFlowForecast.isLoading ? (
+            <div className="text-center text-gray-500">Carregando previsão...</div>
+          ) : cashFlowForecast.data ? (
+            <CashFlowForecast
+              historical={cashFlowForecast.data.historical}
+              forecast={cashFlowForecast.data.forecast}
+              summary={cashFlowForecast.data.summary}
+            />
           ) : null}
         </TabsContent>
       </Tabs>

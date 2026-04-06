@@ -15,6 +15,13 @@
       "when": 1775000000000,
       "tag": "0001_core_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775479704279,
+      "tag": "0002_keen_random",
+      "breakpoints": true
     }
   ]
 }

@@ -15,6 +15,7 @@ import { dashboardEnhancementsRouter } from "./routers/dashboard-enhancements";
 import { dashboardAdvancedRouter } from "./routers/dashboard-advanced";
 import { notificationsRouter } from "./routers/notifications";
 import { auditRouter } from "./routers/audit";
+import { fiscalRouter } from "./routers/fiscal";
 
 export const appRouter = router({
   system: systemRouter,
@@ -48,6 +49,7 @@ export const appRouter = router({
   // Relatórios
   relatorios: relatoriosRouter,
   dashboard: dashboardRouter,
+  fiscal: fiscalRouter,
   dashboardEnhancements: dashboardEnhancementsRouter,
   dashboardAdvanced: dashboardAdvancedRouter,
   reportGeneration: reportGenerationRouter,

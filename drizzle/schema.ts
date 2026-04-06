@@ -457,3 +457,30 @@ export const reportTemplates = mysqlTable("report_templates", {
 });
 export type ReportTemplate = typeof reportTemplates.$inferSelect;
 export type InsertReportTemplate = typeof reportTemplates.$inferInsert;
+
+// ============================================================
+// NOTAS FISCAIS RECEBIDAS (Focus NFe)
+// ============================================================
+/** Notas fiscais eletrônicas recebidas via Focus NFe */
+export const nfesReceived = mysqlTable("nfes_received", {
+  id: int("id").autoincrement().primaryKey(),
+  nfeNumber: varchar("nfeNumber", { length: 44 }).unique().notNull(), // Chave de acesso NFe
+  emitterCNPJ: varchar("emitterCNPJ", { length: 14 }).notNull(),
+  emitterName: varchar("emitterName", { length: 255 }).notNull(),
+  receiverCNPJ: varchar("receiverCNPJ", { length: 14 }).notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  issueDate: datetime("issueDate").notNull(),
+  dueDate: datetime("dueDate"),
+  description: text("description"),
+  status: mysqlEnum("status", ["received", "processed", "reconciled", "rejected"]).default("received").notNull(),
+  nfeType: mysqlEnum("nfeType", ["nfe", "nfce", "cte", "mde"]).default("nfe").notNull(),
+  xmlUrl: text("xmlUrl"), // URL do XML armazenado
+  focusNfeId: varchar("focusNfeId", { length: 255 }).unique(), // ID retornado pela Focus NFe
+  linkedAccountId: int("linkedAccountId"), // ID da conta a receber vinculada
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NfeReceived = typeof nfesReceived.$inferSelect;
+export type InsertNfeReceived = typeof nfesReceived.$inferInsert;

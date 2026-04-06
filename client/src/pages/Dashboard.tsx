@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { AlertCircle, TrendingUp, TrendingDown, FileText } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { AlertCircle, TrendingUp, TrendingDown, FileText, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "wouter";
+import { HealthScoreGauge } from "@/components/HealthScoreGauge";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -18,6 +20,9 @@ export default function Dashboard() {
   const dailyEvolution = trpc.dashboard.getDailyFinancialEvolution.useQuery({ year, month });
   const topClients = trpc.dashboard.getTopClients.useQuery({ year, month });
   const accountsSummary = trpc.dashboard.getAccountsSummary.useQuery({ year, month });
+  const healthScore = trpc.dashboardEnhancements.getHealthScore.useQuery({ year, month });
+  const trimestrialComparison = trpc.dashboardEnhancements.getTrimestrialComparison.useQuery({ year });
+  const exportData = trpc.dashboardEnhancements.getExportData.useMutation();
 
   // Navegação de mês
   const handlePrevMonth = () => {
@@ -57,6 +62,31 @@ export default function Dashboard() {
   // Função para navegar com filtro de mês
   const navigateWithMonth = (path: string) => {
     router(`${path}?month=${month}&year=${year}`);
+  };
+
+  // Função para exportar dados
+  const handleExport = async (format: 'csv' | 'json' | 'excel') => {
+    try {
+      const result = await exportData.mutateAsync({ year, month, format });
+      const element = document.createElement('a');
+      if (format === 'csv') {
+        element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(result.data as string));
+      } else if (format === 'excel') {
+        const isBase64 = (result as any).isBase64;
+        if (isBase64) {
+          element.setAttribute('href', 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.data);
+        }
+      } else {
+        element.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(result.data, null, 2)));
+      }
+      element.setAttribute('download', result.filename);
+      element.style.display = 'none';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+    }
   };
 
   return (
@@ -234,30 +264,159 @@ export default function Dashboard() {
         </Card>
       ) : null}
 
-      {/* Gráfico de Evolução Financeira Diária */}
-      {dailyEvolution.isLoading ? (
-        <div className="text-center text-gray-500">Carregando gráfico...</div>
-      ) : dailyEvolution.data ? (
+      {/* Saúde Financeira e Exportação */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Health Score */}
+        {healthScore.isLoading ? (
+          <div className="text-center text-gray-500">Carregando score...</div>
+        ) : healthScore.data ? (
+          <HealthScoreGauge
+            score={healthScore.data.score}
+            status={healthScore.data.status}
+            breakdown={healthScore.data.breakdown}
+          />
+        ) : null}
+
+        {/* Exportação */}
         <Card>
           <CardHeader>
-            <CardTitle>Evolução Financeira Diária</CardTitle>
+            <CardTitle className="text-sm font-medium">Exportar Dados</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={dailyEvolution.data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                <Legend />
-                <Line type="monotone" dataKey="revenue" stroke="#10b981" name="Receita" />
-                <Line type="monotone" dataKey="costs" stroke="#ef4444" name="Custos" />
-                <Line type="monotone" dataKey="margin" stroke="#3b82f6" name="Margem" />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent className="space-y-2">
+            <Button
+              className="w-full"
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('csv')}
+              disabled={exportData.isPending}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              className="w-full"
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('excel')}
+              >
+              <Download className="mr-2 h-4 w-4" />
+              Excel
+            </Button>
+            <Button
+              className="w-full"
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('json')}
+              disabled={exportData.isPending}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              JSON
+            </Button>
           </CardContent>
         </Card>
-      ) : null}
+      </div>
+
+      {/* Tabs: Evolução Diária vs Trimestral */}
+      <Tabs defaultValue="daily" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="daily">Evolução Diária</TabsTrigger>
+          <TabsTrigger value="trimestral">Comparação Trimestral</TabsTrigger>
+        </TabsList>
+
+        {/* Tab: Evolução Diária */}
+        <TabsContent value="daily">
+          {dailyEvolution.isLoading ? (
+            <div className="text-center text-gray-500">Carregando gráfico...</div>
+          ) : dailyEvolution.data ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Evolução Financeira Diária</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={dailyEvolution.data}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                    <Legend />
+                    <Line type="monotone" dataKey="revenue" stroke="#10b981" name="Receita" />
+                    <Line type="monotone" dataKey="costs" stroke="#ef4444" name="Custos" />
+                    <Line type="monotone" dataKey="margin" stroke="#3b82f6" name="Margem" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          ) : null}
+        </TabsContent>
+
+        {/* Tab: Comparação Trimestral */}
+        <TabsContent value="trimestral">
+          {trimestrialComparison.isLoading ? (
+            <div className="text-center text-gray-500">Carregando dados...</div>
+          ) : trimestrialComparison.data ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Comparação Trimestral {year}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Gráfico de Barras Trimestral */}
+                <div>
+                  <h3 className="text-sm font-semibold mb-4">Receita vs Custos vs Margem</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={trimestrialComparison.data.quarters}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="quarter" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                      <Legend />
+                      <Bar dataKey="revenue" fill="#10b981" name="Receita" />
+                      <Bar dataKey="costs" fill="#ef4444" name="Custos" />
+                      <Bar dataKey="margin" fill="#3b82f6" name="Margem" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Resumo YTD */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-600">Receita YTD</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">{formatCurrency(trimestrialComparison.data.ytd.revenue)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-600">Custos YTD</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-red-600">{formatCurrency(trimestrialComparison.data.ytd.costs)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-600">Margem YTD</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-blue-600">{formatCurrency(trimestrialComparison.data.ytd.margin)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-600">Margem %</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-purple-600">{trimestrialComparison.data.ytd.marginPercent.toFixed(1)}%</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </TabsContent>
+      </Tabs>
 
       {/* Ranking de Clientes e Resumo de Contas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -284,7 +443,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : null}
-
         {/* Resumo de Contas */}
         {accountsSummary.isLoading ? (
           <div className="text-center text-gray-500">Carregando resumo...</div>

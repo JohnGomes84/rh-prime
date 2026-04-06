@@ -139,10 +139,10 @@ export const dashboardEnhancementsRouter = router({
     }),
 
   /**
-   * Exportar dados para Excel (estrutura)
+   * Exportar dados para Excel/CSV/JSON
    */
   getExportData: protectedProcedure
-    .input(z.object({ year: z.number(), month: z.number(), format: z.enum(['csv', 'json']) }))
+    .input(z.object({ year: z.number(), month: z.number(), format: z.enum(['csv', 'json', 'excel']) }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
@@ -180,6 +180,62 @@ export const dashboardEnhancementsRouter = router({
           csv += `Pagar,${new Date(p.date).toLocaleDateString('pt-BR')},${p.amount},${p.status}\n`;
         });
         return { data: csv, filename: `export-${input.year}-${String(input.month).padStart(2, '0')}.csv` };
+      }
+
+      if (input.format === 'excel') {
+        // Exportação Excel com múltiplas abas
+        const ExcelJS = (await import('exceljs')).default;
+        const workbook = new ExcelJS.Workbook();
+        
+        // Aba: Contas a Receber
+        const recSheet = workbook.addWorksheet('Contas a Receber');
+        recSheet.columns = [
+          { header: 'Data', key: 'date', width: 12 },
+          { header: 'Valor', key: 'amount', width: 15 },
+          { header: 'Status', key: 'status', width: 12 },
+        ];
+        receivables.forEach((r) => {
+          recSheet.addRow({
+            date: new Date(r.date).toLocaleDateString('pt-BR'),
+            amount: r.amount,
+            status: r.status,
+          });
+        });
+        
+        // Aba: Contas a Pagar
+        const paySheet = workbook.addWorksheet('Contas a Pagar');
+        paySheet.columns = [
+          { header: 'Data', key: 'date', width: 12 },
+          { header: 'Valor', key: 'amount', width: 15 },
+          { header: 'Status', key: 'status', width: 12 },
+        ];
+        payables.forEach((p) => {
+          paySheet.addRow({
+            date: new Date(p.date).toLocaleDateString('pt-BR'),
+            amount: p.amount,
+            status: p.status,
+          });
+        });
+        
+        // Aba: Resumo
+        const summarySheet = workbook.addWorksheet('Resumo');
+        const totalReceivable = receivables.reduce((sum, r) => sum + r.amount, 0);
+        const totalPayable = payables.reduce((sum, p) => sum + p.amount, 0);
+        summarySheet.columns = [
+          { header: 'Métrica', key: 'metric', width: 25 },
+          { header: 'Valor', key: 'value', width: 15 },
+        ];
+        summarySheet.addRow({ metric: 'Total a Receber', value: totalReceivable });
+        summarySheet.addRow({ metric: 'Total a Pagar', value: totalPayable });
+        summarySheet.addRow({ metric: 'Saldo', value: totalReceivable - totalPayable });
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        const base64 = (buffer as Buffer).toString('base64');
+        return {
+          data: base64,
+          filename: `export-${input.year}-${String(input.month).padStart(2, '0')}.xlsx`,
+          isBase64: true,
+        };
       }
 
       return {

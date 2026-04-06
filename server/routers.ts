@@ -11,6 +11,7 @@ import { qrcodeRouter } from "./routers/qrcode";
 import { relatoriosRouter } from "./routers/relatorios";
 import { dashboardRouter } from "./routers/dashboard";
 import { reportGenerationRouter } from "./routers/report-generation";
+import { dashboardEnhancementsRouter } from "./routers/dashboard-enhancements";
 
 export const appRouter = router({
   system: systemRouter,
@@ -44,6 +45,7 @@ export const appRouter = router({
   // Relatórios
   relatorios: relatoriosRouter,
   dashboard: dashboardRouter,
+  dashboardEnhancements: dashboardEnhancementsRouter,
   reportGeneration: reportGenerationRouter,
 });
 

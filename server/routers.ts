@@ -13,6 +13,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { reportGenerationRouter } from "./routers/report-generation";
 import { dashboardEnhancementsRouter } from "./routers/dashboard-enhancements";
 import { dashboardAdvancedRouter } from "./routers/dashboard-advanced";
+import { notificationsRouter } from "./routers/notifications";
 
 export const appRouter = router({
   system: systemRouter,
@@ -49,6 +50,7 @@ export const appRouter = router({
   dashboardEnhancements: dashboardEnhancementsRouter,
   dashboardAdvanced: dashboardAdvancedRouter,
   reportGeneration: reportGenerationRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

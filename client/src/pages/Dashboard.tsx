@@ -78,6 +78,19 @@ export default function Dashboard() {
     navigateWithMonth("/contas?tab=payable");
   };
 
+  // Ações rápidas nos alertas
+  const handlePayOverdueAccounts = () => {
+    navigateWithMonth("/contas?tab=payable&status=overdue&action=pay");
+  };
+
+  const handleAddPixToEmployees = () => {
+    router("/funcionarios?filter=no-pix&action=add-pix");
+  };
+
+  const handleValidateSchedules = () => {
+    navigateWithMonth("/planejamentos?status=pending&action=validate");
+  };
+
   // Função para exportar dados
   const handleExport = async (format: 'csv' | 'json' | 'excel') => {
     try {
@@ -241,9 +254,14 @@ export default function Dashboard() {
                 <span className="text-yellow-800">
                   🟡 <strong>{alerts.data.overdueAccounts.count} conta(s) vencida(s)</strong> totalizando {formatCurrency(alerts.data.overdueAccounts.total)}
                 </span>
-                <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/contas?tab=payable&status=overdue")}>
-                  Ver contas
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/contas?tab=payable&status=overdue")}>
+                    Ver contas
+                  </Button>
+                  <Button size="sm" variant="default" onClick={handlePayOverdueAccounts} className="bg-yellow-600 hover:bg-yellow-700">
+                    Pagar Agora
+                  </Button>
+                </div>
               </div>
             ) : null}
 
@@ -252,9 +270,14 @@ export default function Dashboard() {
                 <span className="text-orange-800">
                   🟠 <strong>{alerts.data.employeesWithoutPix.count} diarista(s) sem chave PIX</strong> — não receberão pagamento
                 </span>
-                <Button size="sm" variant="outline" onClick={() => router("/funcionarios?filter=no-pix")}>
-                  Ver diaristas
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => router("/funcionarios?filter=no-pix")}>
+                    Ver diaristas
+                  </Button>
+                  <Button size="sm" variant="default" onClick={handleAddPixToEmployees} className="bg-orange-600 hover:bg-orange-700">
+                    Adicionar PIX
+                  </Button>
+                </div>
               </div>
             ) : null}
 
@@ -263,9 +286,14 @@ export default function Dashboard() {
                 <span className="text-blue-800">
                   🔵 <strong>{alerts.data.pendingSchedules.count} planejamento(s)</strong> aguardando validação
                 </span>
-                <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/planejamentos?status=pending")}>
-                  Validar
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/planejamentos?status=pending")}>
+                    Ver planejamentos
+                  </Button>
+                  <Button size="sm" variant="default" onClick={handleValidateSchedules} className="bg-blue-600 hover:bg-blue-700">
+                    Validar Agora
+                  </Button>
+                </div>
               </div>
             ) : null}
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ChangeEvent } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, Pencil, Copy, Trash2, Check, Loader2,
-  Users, Search, X, ChevronDown, ChevronUp, Lock,
+  Users, Search, X, ChevronDown, ChevronUp, Lock, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,6 +48,8 @@ export default function SchedulesPage() {
 
   // Mutations
   const createMut = trpc.planejamentos.create.useMutation({ onSuccess: () => { utils.planejamentos.list.invalidate(); toast.success("Planejamento criado!"); } });
+  const createRecurringMut = trpc.planejamentos.createRecurring.useMutation({ onSuccess: (result) => { utils.planejamentos.list.invalidate(); toast.success(`${result.created} planejamento(s) recorrente(s) criado(s)!`); } });
+  const importCsvMut = trpc.planejamentos.importCsv.useMutation({ onSuccess: (result) => { utils.planejamentos.list.invalidate(); toast.success(`Importacao concluida: ${result.imported} criado(s), ${result.skipped} ignorado(s)`); } });
   const updateMut = trpc.planejamentos.update.useMutation({ onSuccess: () => { utils.planejamentos.list.invalidate(); utils.planejamentos.getById.invalidate(); toast.success("Atualizado!"); } });
   const deleteMut = trpc.planejamentos.delete.useMutation({ onSuccess: () => { utils.planejamentos.list.invalidate(); toast.success("Excluído!"); } });
   const duplicateMut = trpc.planejamentos.duplicate.useMutation({ onSuccess: () => { utils.planejamentos.list.invalidate(); toast.success("Duplicado!"); } });
@@ -59,6 +62,7 @@ export default function SchedulesPage() {
 
   // Modais
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [allocFuncId, setAllocFuncId] = useState<number | null>(null);
   const [allocScheduleId, setAllocScheduleId] = useState<number | null>(null);
@@ -67,6 +71,18 @@ export default function SchedulesPage() {
   const [newDate, setNewDate] = useState("");
   const [newShift, setNewShift] = useState<string>("");
   const [newClient, setNewClient] = useState<string>("");
+  const [newUnit, setNewUnit] = useState<string>("");
+  const [newLeader, setNewLeader] = useState<string>("");
+  const [newNotes, setNewNotes] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<"weekly" | "biweekly" | "monthly">("weekly");
+  const [recurrenceOccurrences, setRecurrenceOccurrences] = useState("4");
+  const [importCsvContent, setImportCsvContent] = useState("");
+
+  const clientIdForCreateUnits = newClient ? parseInt(newClient) : 0;
+  const { data: createClientUnits } = trpc.planejamentos.unitsByClient.useQuery(clientIdForCreateUnits, {
+    enabled: !!clientIdForCreateUnits,
+  });
 
   // Filtrar por aba
   const filtered = useMemo(() => {
@@ -78,13 +94,48 @@ export default function SchedulesPage() {
 
   const handleCreate = async () => {
     if (!newDate || !newClient) { toast.error("Data e Cliente são obrigatórios"); return; }
-    await createMut.mutateAsync({
-      date: newDate,
-      shiftId: newShift ? parseInt(newShift) : undefined,
-      clientId: parseInt(newClient),
-    });
+    if (isRecurring) {
+      await createRecurringMut.mutateAsync({
+        date: newDate,
+        shiftId: newShift ? parseInt(newShift) : undefined,
+        clientId: parseInt(newClient),
+        clientUnitId: newUnit ? parseInt(newUnit) : undefined,
+        leaderId: newLeader ? parseInt(newLeader) : undefined,
+        notes: newNotes || undefined,
+        recurrence: {
+          frequency: recurrenceFrequency,
+          occurrences: parseInt(recurrenceOccurrences || "0"),
+        },
+      });
+    } else {
+      await createMut.mutateAsync({
+        date: newDate,
+        shiftId: newShift ? parseInt(newShift) : undefined,
+        clientId: parseInt(newClient),
+        clientUnitId: newUnit ? parseInt(newUnit) : undefined,
+        leaderId: newLeader ? parseInt(newLeader) : undefined,
+        notes: newNotes || undefined,
+      });
+    }
     setCreateOpen(false);
-    setNewDate(""); setNewShift(""); setNewClient("");
+    setNewDate(""); setNewShift(""); setNewClient(""); setNewUnit(""); setNewLeader(""); setNewNotes("");
+    setIsRecurring(false); setRecurrenceFrequency("weekly"); setRecurrenceOccurrences("4");
+  };
+
+  const handleImportCsv = async () => {
+    if (!importCsvContent.trim()) { toast.error("Cole o CSV ou carregue um arquivo"); return; }
+    const result = await importCsvMut.mutateAsync({ csvContent: importCsvContent });
+    if (result.errors.length > 0) {
+      toast.warning(`Importacao concluida com ${result.errors.length} linha(s) com erro`);
+    }
+    setImportOpen(false);
+    setImportCsvContent("");
+  };
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportCsvContent(await file.text());
   };
 
   const statusBadge = (s: string) => {
@@ -109,9 +160,14 @@ export default function SchedulesPage() {
           </div>
         </div>
         {canCreate("schedules") && (
-          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" /> Novo Planejamento
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-1.5">
+              <Upload className="h-4 w-4" /> Importar CSV
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" /> Novo Planejamento
+            </Button>
+          </div>
         )}
       </div>
 
@@ -243,14 +299,17 @@ export default function SchedulesPage() {
 
       {/* Modal Criar */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Novo Planejamento</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader className="space-y-1">
+            <DialogTitle>Novo Planejamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="min-w-0">
               <Label>Data *</Label>
               <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="mt-1" />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label>Turno</Label>
               <Select value={newShift} onValueChange={setNewShift}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o turno" /></SelectTrigger>
@@ -259,9 +318,9 @@ export default function SchedulesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0 md:col-span-2">
               <Label>Cliente *</Label>
-              <Select value={newClient} onValueChange={setNewClient}>
+              <Select value={newClient} onValueChange={(value) => { setNewClient(value); setNewUnit(""); }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                 <SelectContent>
                   {formData?.clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
@@ -269,10 +328,87 @@ export default function SchedulesPage() {
               </Select>
             </div>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="min-w-0">
+              <Label>Local</Label>
+              <Select value={newUnit} onValueChange={setNewUnit}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o local" /></SelectTrigger>
+                <SelectContent>
+                  {createClientUnits?.map(unit => <SelectItem key={unit.id} value={String(unit.id)}>{unit.name}</SelectItem>)}
+                  {(!createClientUnits || createClientUnits.length === 0) && <SelectItem value="none" disabled>Nenhuma unidade disponivel</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0">
+              <Label>Lider</Label>
+              <Select value={newLeader} onValueChange={setNewLeader}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o lider" /></SelectTrigger>
+                <SelectContent>
+                  {formData?.employees.map(employee => <SelectItem key={employee.id} value={String(employee.id)}>{employee.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label>Observacoes</Label>
+            <Textarea value={newNotes} onChange={e => setNewNotes(e.target.value)} className="mt-1" rows={3} />
+          </div>
+          <div className="rounded-lg border border-border/50 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Checkbox checked={isRecurring} onCheckedChange={(checked) => setIsRecurring(Boolean(checked))} />
+              <Label>Criar como planejamento recorrente</Label>
+            </div>
+            {isRecurring && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Frequencia</Label>
+                  <Select value={recurrenceFrequency} onValueChange={(value: "weekly" | "biweekly" | "monthly") => setRecurrenceFrequency(value)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="weekly">Semanal</SelectItem>
+                      <SelectItem value="biweekly">Quinzenal</SelectItem>
+                      <SelectItem value="monthly">Mensal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Ocorrencias</Label>
+                  <Input type="number" min={2} max={52} value={recurrenceOccurrences} onChange={e => setRecurrenceOccurrences(e.target.value)} className="mt-1" />
+                </div>
+              </div>
+            )}
+          </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createMut.isPending}>
-              {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Criar
+            <Button onClick={handleCreate} disabled={createMut.isPending || createRecurringMut.isPending}>
+              {createMut.isPending || createRecurringMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {isRecurring ? "Criar recorrencia" : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Importar Planejamentos por CSV</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              Use as colunas: <span className="font-mono">data,cliente,turno,unidade,lider,observacoes</span>.
+              Cliente e data sao obrigatorios.
+            </div>
+            <Input type="file" accept=".csv,text/csv" onChange={handleImportFile} />
+            <Textarea
+              value={importCsvContent}
+              onChange={e => setImportCsvContent(e.target.value)}
+              rows={12}
+              placeholder={"data,cliente,turno,unidade,lider,observacoes\n2026-04-10,Logistica Aurora,MLT-1,Base Sul,Carlos Lima,Operacao especial"}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportOpen(false)}>Cancelar</Button>
+            <Button onClick={handleImportCsv} disabled={importCsvMut.isPending}>
+              {importCsvMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Importar
             </Button>
           </DialogFooter>
         </DialogContent>

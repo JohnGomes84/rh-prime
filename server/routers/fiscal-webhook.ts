@@ -1,7 +1,8 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db";
 import { nfesReceived, InsertNfeReceived } from "../../drizzle/schema";
-import { emitDashboardUpdate, broadcastEvent } from "../_core/websocket";
+import { eq } from "drizzle-orm";
+import { broadcastEvent } from "../_core/websocket";
 
 /**
  * Webhook handler para receber notificações de NFes da Focus NFe
@@ -44,7 +45,10 @@ fiscalWebhookRouter.post("/focus-nfe", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Payload inválido" });
     }
 
-    const db = getDb();
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: "Banco indisponivel" });
+    }
 
     // Preparar dados para inserção
     const nfeData: InsertNfeReceived = {
@@ -52,7 +56,7 @@ fiscalWebhookRouter.post("/focus-nfe", async (req: Request, res: Response) => {
       emitterCNPJ: payload.emitente.cnpj,
       emitterName: payload.emitente.nome || "Desconhecido",
       receiverCNPJ: payload.destinatario?.cnpj || "",
-      amount: parseFloat(payload.valor_total || "0"),
+      amount: String(parseFloat(payload.valor_total || "0")),
       issueDate: new Date(payload.data_emissao),
       dueDate: payload.data_vencimento ? new Date(payload.data_vencimento) : null,
       description: payload.descricao_operacao || "Nota Fiscal Eletrônica",
@@ -104,7 +108,10 @@ fiscalWebhookRouter.post("/focus-nfe-status", async (req: Request, res: Response
       return res.status(400).json({ error: "Chave de acesso ausente" });
     }
 
-    const db = getDb();
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: "Banco indisponivel" });
+    }
 
     // Mapear status da Focus para nosso status
     let nfeStatus: "received" | "processed" | "reconciled" | "rejected" = "received";
@@ -119,7 +126,7 @@ fiscalWebhookRouter.post("/focus-nfe-status", async (req: Request, res: Response
         notes: motivo ? `Status: ${status} - ${motivo}` : `Status: ${status}`,
         updatedAt: new Date(),
       })
-      .where((t) => t.nfeNumber.eq(chave_acesso));
+      .where(eq(nfesReceived.nfeNumber, chave_acesso));
 
     console.log(`[Webhook] Status da NFe atualizado: ${chave_acesso} -> ${status}`);
 

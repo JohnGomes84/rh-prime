@@ -1,7 +1,14 @@
-import { describe, it, expect } from "vitest";
+import "../_core/load-env";
+
+import { beforeAll, describe, it, expect } from "vitest";
+import { runDashboardDemoSeed } from "./seed-dashboard-demo";
 import { validateScheduleRules, validateScheduleAtomic } from "./schedule-validation";
 
 describe("Schedule Validation", () => {
+  beforeAll(async () => {
+    await runDashboardDemoSeed();
+  }, 30000);
+
   describe("validateScheduleRules", () => {
     it("deve retornar erro para planejamento não encontrado", async () => {
       const result = await validateScheduleRules(99999);

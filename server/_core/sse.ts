@@ -1,5 +1,6 @@
 import { Express, Request, Response } from "express";
 import { sdk } from "./sdk";
+import { notificationEmitter, type Notification } from "../routers/notifications";
 
 type SSEClient = {
   userId: number;
@@ -8,8 +9,64 @@ type SSEClient = {
 };
 
 const clients = new Map<number, SSEClient[]>();
+let notificationBridgeInitialized = false;
+
+function writeEvent(res: Response, event: unknown) {
+  res.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+
+function dispatchEvent(targetUserId: number | "all", event: Record<string, unknown>) {
+  if (targetUserId === "all") {
+    clients.forEach((userClients) => {
+      userClients.forEach((client) => {
+        if (client.connected) {
+          try {
+            writeEvent(client.res, event);
+          } catch (error) {
+            console.error("[SSE] Error sending to client:", error);
+            client.connected = false;
+          }
+        }
+      });
+    });
+    return;
+  }
+
+  const userClients = clients.get(targetUserId);
+  if (!userClients) return;
+
+  userClients.forEach((client) => {
+    if (client.connected) {
+      try {
+        writeEvent(client.res, event);
+      } catch (error) {
+        console.error("[SSE] Error sending to client:", error);
+        client.connected = false;
+      }
+    }
+  });
+}
+
+function initializeNotificationBridge() {
+  if (notificationBridgeInitialized) return;
+
+  notificationEmitter.on("notification", (notification: Notification) => {
+    dispatchEvent(notification.userId, {
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      actionUrl: notification.actionUrl,
+      timestamp: notification.timestamp.toISOString(),
+      data: {},
+    });
+  });
+
+  notificationBridgeInitialized = true;
+}
 
 export function setupSSE(app: Express) {
+  initializeNotificationBridge();
+
   app.get("/api/notifications/stream", async (req: Request, res: Response) => {
     try {
       let user;
@@ -37,7 +94,7 @@ export function setupSSE(app: Express) {
       clients.get(user.id)!.push(client);
 
       // Send initial connection message
-      res.write("data: {\"type\": \"connected\"}\n\n");
+      writeEvent(res, { type: "connected" });
 
       // Send ping every 30s to keep connection alive
       const pingInterval = setInterval(() => {
@@ -66,39 +123,23 @@ export function setupSSE(app: Express) {
 }
 
 export function notifyAdmins(event: {
-  type: "pix_request_created" | "pix_request_reviewed" | "leader_closed_attendance";
+  type:
+    | "pix_request_created"
+    | "pix_request_reviewed"
+    | "attendance_closed"
+    | "duplicate_allocation_detected"
+    | "alert"
+    | "success"
+    | "warning"
+    | "error";
   data: Record<string, any>;
 }) {
-  // Broadcast to all admin clients
-  clients.forEach((userClients) => {
-    userClients.forEach((client) => {
-      if (client.connected) {
-        try {
-          client.res.write(`data: ${JSON.stringify(event)}\n\n`);
-        } catch (error) {
-          console.error("[SSE] Error sending to client:", error);
-          client.connected = false;
-        }
-      }
-    });
-  });
+  dispatchEvent("all", { ...event, timestamp: new Date().toISOString() });
 }
 
 export function notifyUser(userId: number, event: {
   type: string;
   data: Record<string, any>;
 }) {
-  const userClients = clients.get(userId);
-  if (!userClients) return;
-
-  userClients.forEach((client) => {
-    if (client.connected) {
-      try {
-        client.res.write(`data: ${JSON.stringify(event)}\n\n`);
-      } catch (error) {
-        console.error("[SSE] Error sending to client:", error);
-        client.connected = false;
-      }
-    }
-  });
+  dispatchEvent(userId, { ...event, timestamp: new Date().toISOString() });
 }

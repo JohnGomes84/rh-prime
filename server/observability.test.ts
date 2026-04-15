@@ -3,6 +3,7 @@ import {
   createRateLimitMiddleware,
   getCorrelationId,
   healthHandler,
+  logError,
   metricsHandler,
   readinessHandler,
 } from "./_core/observability";
@@ -61,5 +62,19 @@ describe("observability - fase 3", () => {
     } as any;
     metricsHandler({} as any, metricsRes);
     expect(metricsRes.status).toHaveBeenCalledWith(200);
+  });
+
+  it("logError emite payload estruturado", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    logError("process.uncaughtException", {
+      error: { message: "boom" },
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[0]).toContain('"level":"error"');
+    expect(spy.mock.calls[0]?.[0]).toContain('"event":"process.uncaughtException"');
+
+    spy.mockRestore();
   });
 });

@@ -1,6 +1,10 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
+import {
+  assertAllowedEmailDomain,
+  getAllowedEmailDomainsLabel,
+} from "./auth-domain";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 
@@ -27,6 +31,10 @@ export function registerOAuthRoutes(app: Express) {
         res.status(400).json({ error: "openId missing from user info" });
         return;
       }
+      assertAllowedEmailDomain(
+        userInfo.email,
+        `Use seu e-mail corporativo (${getAllowedEmailDomainsLabel()}).`
+      );
 
       await db.upsertUser({
         openId: userInfo.openId,

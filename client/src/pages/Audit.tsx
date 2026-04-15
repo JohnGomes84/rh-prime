@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Download, Filter } from 'lucide-react';
+import type { inferRouterOutputs } from '@trpc/server';
+import type { AppRouter } from '../../../server/routers';
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type AuditLog = RouterOutputs['audit']['getLogs']['logs'][number];
 
 const ACTION_LABELS: Record<string, string> = {
   payment_created: '💳 Pagamento Criado',
@@ -58,12 +63,11 @@ export function Audit() {
     endDate,
   });
 
-  // Exportar logs
-  const exportMutation = trpc.audit.exportLogs.useMutation();
+  const trpcUtils = trpc.useUtils();
 
   const handleExport = async () => {
     try {
-      const result = await exportMutation.mutateAsync({
+      const result = await trpcUtils.audit.exportLogs.fetch({
         startDate,
         endDate,
         action: filterAction || undefined,
@@ -85,11 +89,11 @@ export function Audit() {
   };
 
   const uniqueActions = useMemo(() => {
-    return Array.from(new Set(logsData?.logs?.map(log => log.action) || []));
+    return Array.from(new Set((logsData?.logs?.map((log: AuditLog) => log.action) || []) as string[]));
   }, [logsData]);
 
   const uniqueEntities = useMemo(() => {
-    return Array.from(new Set(logsData?.logs?.map(log => log.entityType) || []));
+    return Array.from(new Set((logsData?.logs?.map((log: AuditLog) => log.entityType) || []) as string[]));
   }, [logsData]);
 
   return (
@@ -186,7 +190,7 @@ export function Audit() {
             <Button onClick={() => setPage(1)} variant="outline">
               Limpar Filtros
             </Button>
-            <Button onClick={handleExport} disabled={exportMutation.isPending}>
+            <Button onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
               Exportar CSV
             </Button>

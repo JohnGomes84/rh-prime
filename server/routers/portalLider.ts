@@ -1,19 +1,50 @@
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
-import { eq, and, inArray } from "drizzle-orm";
+import { desc, eq, and, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   workSchedules,
   scheduleAllocations,
+  scheduleFunctions,
   employees,
   pixChangeRequests,
   users,
   clients,
   shifts,
+  clientUnits,
+  jobFunctions,
+  scheduleOccurrences,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
 import { notifyPixRequestCreated, notifyPixRequestReviewed } from "../lib/sse-notifications";
+import {
+  OCCURRENCE_TYPES,
+  buildShiftWindow,
+  createAutomaticOccurrenceIfNeeded,
+  getOccurrenceSeverity,
+  getOccurrenceTypeLabel,
+  getShiftDurationHours,
+} from "../lib/schedule-occurrences";
+
+type PortalUserContext = {
+  user: {
+    id: number;
+    role: string;
+    email?: string | null;
+  };
+};
+
+type ScheduleRow = typeof workSchedules.$inferSelect;
+type OccurrenceRow = typeof scheduleOccurrences.$inferSelect;
+
+type LeaderScheduleSummary = ScheduleRow & {
+  clientName: string;
+  shiftName: string;
+  unitName: string;
+  allocationsCount: number;
+  occurrencesCount: number;
+};
 
 // Helper: verificar se usuário é líder de um planejamento
 async function isLeaderOfSchedule(
@@ -53,7 +84,320 @@ async function isLeaderOfSchedule(
   return user?.email === leaderEmp.email || false;
 }
 
+async function getScheduleWithShift(scheduleId: number) {
+  const db = await getDb();
+  if (!db) return { schedule: null, shift: null };
+
+  const [schedule] = await db
+    .select()
+    .from(workSchedules)
+    .where(eq(workSchedules.id, scheduleId))
+    .limit(1);
+
+  if (!schedule || !schedule.shiftId) {
+    return { schedule: schedule || null, shift: null };
+  }
+
+  const [shift] = await db
+    .select()
+    .from(shifts)
+    .where(eq(shifts.id, schedule.shiftId))
+    .limit(1);
+
+  return { schedule, shift: shift || null };
+}
+
+async function loadLeaderSchedules(
+  ctx: PortalUserContext,
+  input?: { dateStart?: string; dateEnd?: string }
+): Promise<LeaderScheduleSummary[]> {
+  const db = await getDb();
+  if (!db) return [];
+  if (!ctx.user.email && ctx.user.role !== "admin") return [];
+
+  const [myEmp] = ctx.user.email
+    ? await db.select().from(employees).where(eq(employees.email, ctx.user.email)).limit(1)
+    : [];
+
+  if (!myEmp && ctx.user.role !== "admin") return [];
+
+  const schedules = ctx.user.role === "admin"
+    ? await db.select().from(workSchedules)
+    : await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.leaderId, myEmp!.id));
+
+  let filteredSchedules = schedules;
+  let dateStart = input?.dateStart;
+  let dateEnd = input?.dateEnd;
+
+  if (!dateStart && !dateEnd) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dateStart = today.toISOString();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    dateEnd = tomorrow.toISOString();
+  }
+
+  if (dateStart) {
+    const ds = new Date(dateStart);
+    filteredSchedules = filteredSchedules.filter(schedule => new Date(schedule.date) >= ds);
+  }
+
+  if (dateEnd) {
+    const de = new Date(dateEnd);
+    de.setHours(23, 59, 59, 999);
+    filteredSchedules = filteredSchedules.filter(schedule => new Date(schedule.date) <= de);
+  }
+
+  const scheduleIds = filteredSchedules.map(schedule => schedule.id);
+  const [allClients, allShifts, allUnits, allocations, unresolvedOccurrences] = await Promise.all([
+    db.select().from(clients),
+    db.select().from(shifts),
+    db.select().from(clientUnits),
+    scheduleIds.length > 0
+      ? db.select().from(scheduleAllocations).where(inArray(scheduleAllocations.scheduleId, scheduleIds))
+      : Promise.resolve([]),
+    scheduleIds.length > 0
+      ? db
+          .select()
+          .from(scheduleOccurrences)
+          .where(
+            and(
+              inArray(scheduleOccurrences.scheduleId, scheduleIds),
+              eq(scheduleOccurrences.resolved, false)
+            )
+          )
+      : Promise.resolve([]),
+  ]);
+
+  const clientMap = Object.fromEntries(allClients.map(item => [item.id, item]));
+  const shiftMap = Object.fromEntries(allShifts.map(item => [item.id, item]));
+  const unitMap = Object.fromEntries(allUnits.map(item => [item.id, item]));
+  const allocationsCountMap = allocations.reduce<Record<number, number>>((acc, allocation) => {
+    acc[allocation.scheduleId] = (acc[allocation.scheduleId] || 0) + 1;
+    return acc;
+  }, {});
+  const occurrencesCountMap = unresolvedOccurrences.reduce<Record<number, number>>(
+    (acc, occurrence) => {
+      acc[occurrence.scheduleId] = (acc[occurrence.scheduleId] || 0) + 1;
+      return acc;
+    },
+    {}
+  );
+
+  return filteredSchedules.map(schedule => ({
+    ...schedule,
+    clientName: clientMap[schedule.clientId]?.name || "—",
+    shiftName: schedule.shiftId ? shiftMap[schedule.shiftId]?.name || "—" : "—",
+    unitName: schedule.clientUnitId ? unitMap[schedule.clientUnitId]?.name || "—" : "—",
+    allocationsCount: allocationsCountMap[schedule.id] || 0,
+    occurrencesCount: occurrencesCountMap[schedule.id] || 0,
+  }));
+}
+
 export const portalLiderRouter = router({
+  operationFormOptions: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { clients: [], shifts: [] };
+    if (!ctx.user.email && ctx.user.role !== "admin") {
+      return { clients: [], shifts: [] };
+    }
+
+    const [allClients, allShifts] = await Promise.all([
+      db.select().from(clients),
+      db.select().from(shifts),
+    ]);
+
+    return { clients: allClients, shifts: allShifts };
+  }),
+
+  unitsByClient: protectedProcedure
+    .input(z.number())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      return db
+        .select()
+        .from(clientUnits)
+        .where(and(eq(clientUnits.clientId, input), eq(clientUnits.isActive, true)));
+    }),
+
+  createOperation: protectedProcedure
+    .input(
+      z.object({
+        date: z.string(),
+        shiftId: z.number().optional(),
+        clientId: z.number(),
+        clientUnitId: z.number().optional(),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!ctx.user.email && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const [myEmp] = ctx.user.email
+        ? await db
+            .select()
+            .from(employees)
+            .where(eq(employees.email, ctx.user.email))
+            .limit(1)
+        : [];
+
+
+      if (!myEmp && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      const schedulesForClient = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.clientId, input.clientId));
+
+      const targetDate = new Date(input.date);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const duplicate = schedulesForClient.find(schedule => {
+        const scheduleDate = new Date(schedule.date);
+        scheduleDate.setHours(0, 0, 0, 0);
+        return (
+          scheduleDate.getTime() === targetDate.getTime() &&
+          (schedule.shiftId ?? null) === (input.shiftId ?? null) &&
+          (schedule.clientUnitId ?? null) === (input.clientUnitId ?? null)
+        );
+      });
+
+      if (duplicate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Ja existe operacao para este cliente, turno e local nesta data",
+        });
+      }
+
+      const result = await db.insert(workSchedules).values({
+        date: new Date(input.date),
+        shiftId: input.shiftId ?? null,
+        clientId: input.clientId,
+        clientUnitId: input.clientUnitId ?? null,
+        leaderId: myEmp?.id ?? null,
+        status: "pendente",
+        notes: input.notes ?? null,
+      });
+
+      return { id: Number(result[0].insertId) };
+    }),
+  myScheduleCards: protectedProcedure
+    .input(
+      z
+        .object({
+          dateStart: z.string().optional(),
+          dateEnd: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const baseSchedules = await loadLeaderSchedules(ctx, input);
+
+      const db = await getDb();
+      if (!db) return [];
+
+      const clientIds: number[] = Array.from(
+        new Set(baseSchedules.map(schedule => schedule.clientId))
+      );
+      const shiftIds: number[] = Array.from(
+        new Set(
+          baseSchedules
+            .map(schedule => schedule.shiftId)
+            .filter((id): id is number => typeof id === "number")
+        )
+      );
+      const unitIds: number[] = Array.from(
+        new Set(
+          baseSchedules
+            .map(schedule => schedule.clientUnitId)
+            .filter((id): id is number => typeof id === "number")
+        )
+      );
+      const scheduleIds: number[] = baseSchedules.map(schedule => schedule.id);
+
+      const [allClients, allShifts, allUnits, allAllocations, unresolvedOccurrences] = await Promise.all([
+        clientIds.length > 0
+          ? db.select().from(clients).where(inArray(clients.id, clientIds))
+          : Promise.resolve([]),
+        shiftIds.length > 0
+          ? db.select().from(shifts).where(inArray(shifts.id, shiftIds))
+          : Promise.resolve([]),
+        unitIds.length > 0
+          ? db.select().from(clientUnits).where(inArray(clientUnits.id, unitIds))
+          : Promise.resolve([]),
+        scheduleIds.length > 0
+          ? db
+              .select()
+              .from(scheduleAllocations)
+              .where(inArray(scheduleAllocations.scheduleId, scheduleIds))
+          : Promise.resolve([]),
+        scheduleIds.length > 0
+          ? db
+              .select()
+              .from(scheduleOccurrences)
+              .where(
+                and(
+                  inArray(scheduleOccurrences.scheduleId, scheduleIds),
+                  eq(scheduleOccurrences.resolved, false)
+                )
+              )
+          : Promise.resolve([]),
+      ]);
+
+      const clientMap = Object.fromEntries(allClients.map(item => [item.id, item]));
+      const shiftMap = Object.fromEntries(allShifts.map(item => [item.id, item]));
+      const unitMap = Object.fromEntries(allUnits.map(item => [item.id, item]));
+      const allocationsCountMap = allAllocations.reduce<Record<number, number>>(
+        (acc, allocation) => {
+          acc[allocation.scheduleId] = (acc[allocation.scheduleId] || 0) + 1;
+          return acc;
+        },
+        {}
+      );
+      const occurrencesBySchedule = unresolvedOccurrences.reduce<Record<number, OccurrenceRow[]>>((acc, occurrence) => {
+        if (!acc[occurrence.scheduleId]) {
+          acc[occurrence.scheduleId] = [];
+        }
+        acc[occurrence.scheduleId].push(occurrence);
+        return acc;
+      }, {});
+
+      return baseSchedules.map(schedule => ({
+        id: schedule.id,
+        date: schedule.date,
+        status: schedule.status,
+        clientName: clientMap[schedule.clientId]?.name || "—",
+        unitName: schedule.clientUnitId
+          ? unitMap[schedule.clientUnitId]?.name || "—"
+          : "—",
+        shiftName: schedule.shiftId
+          ? shiftMap[schedule.shiftId]?.name || "—"
+          : "—",
+        allocationsCount: allocationsCountMap[schedule.id] || 0,
+        occurrencesCount: (occurrencesBySchedule[schedule.id] || []).length,
+        unresolvedOccurrencesCount:
+          (occurrencesBySchedule[schedule.id] || []).length,
+        occurrenceSeverity: getOccurrenceSeverity(
+          occurrencesBySchedule[schedule.id] || []
+        ),
+        occurrenceTooltip: `${(occurrencesBySchedule[schedule.id] || []).length} ocorrências não resolvidas`,
+      }));
+    }),
   // ============ MEUS PLANEJAMENTOS (filtrado por líder) ============
   mySchedules: protectedProcedure
     .input(
@@ -65,58 +409,9 @@ export const portalLiderRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) return [];
-      if (!ctx.user.email && ctx.user.role !== "admin") return [];
-
-      // Buscar funcionário do usuário logado
-      const [myEmp] = ctx.user.email
-        ? await db
-            .select()
-            .from(employees)
-            .where(eq(employees.email, ctx.user.email))
-            .limit(1)
-        : [];
-
-      // Se não for funcionário e não for admin, não vê nada
-      if (!myEmp && ctx.user.role !== "admin") return [];
-
-      // Buscar planejamentos onde sou líder (ou todos se for admin)
-      let query = db.select().from(workSchedules);
-
-      if (ctx.user.role !== "admin") {
-        // @ts-ignore - drizzle-orm type issue with where
-        query = query.where(eq(workSchedules.leaderId, myEmp.id));
-      }
-
-      let schedules = await query;
-
-      // Filtros por data
-      let dateStart = input?.dateStart;
-      let dateEnd = input?.dateEnd;
-
-      // Se nao houver filtros, padrao e hoje
-      if (!dateStart && !dateEnd) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateStart = today.toISOString();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        dateEnd = tomorrow.toISOString();
-      }
-
-      if (dateStart) {
-        const ds = new Date(dateStart);
-        schedules = schedules.filter(s => new Date(s.date) >= ds);
-      }
-      if (dateEnd) {
-        const de = new Date(dateEnd);
-        de.setHours(23, 59, 59);
-        schedules = schedules.filter(s => new Date(s.date) <= de);
-      }
-
-      return schedules;
+      return loadLeaderSchedules(ctx, input);
     }),
+
 
   // ============ DETALHES DE UM PLANEJAMENTO (com alocações) ============
   getScheduleDetail: protectedProcedure
@@ -126,7 +421,7 @@ export const portalLiderRouter = router({
       if (!isLeader) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Você não é o líder deste planejamento",
+          message: "Voce nao e o lider deste planejamento",
         });
       }
 
@@ -152,6 +447,18 @@ export const portalLiderRouter = router({
             .where(eq(shifts.id, schedule.shiftId))
             .limit(1)
         : [null];
+      const [unitData] = schedule.clientUnitId
+        ? await db
+            .select()
+            .from(clientUnits)
+            .where(eq(clientUnits.id, schedule.clientUnitId))
+            .limit(1)
+        : [null];
+      const occurrences = await db
+        .select()
+        .from(scheduleOccurrences)
+        .where(eq(scheduleOccurrences.scheduleId, input))
+        .orderBy(desc(scheduleOccurrences.createdAt));
 
       // Buscar alocações
       const allocs = await db
@@ -175,17 +482,246 @@ export const portalLiderRouter = router({
       return {
         ...schedule,
         clientName: clientData?.name || "—",
-        shiftName: shiftData?.name || "—",
+        shiftName: shiftData?.name || "-",
         shiftTime: shiftData
           ? `${shiftData.startTime || ""} - ${shiftData.endTime || ""}`
           : "",
+        unitName: unitData?.name || "-",
         allocations: allocs.map(a => ({
           ...a,
           employeeName: empMap[a.employeeId]?.name || "—",
           employeeCpf: empMap[a.employeeId]?.cpf || "",
           employeePixKey: empMap[a.employeeId]?.pixKey || "",
         })),
+        occurrences,
       };
+    }),
+
+  listOccurrences: protectedProcedure
+    .input(z.number())
+    .query(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não é o líder deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) return [];
+
+      const occurrences = await db
+        .select()
+        .from(scheduleOccurrences)
+        .where(eq(scheduleOccurrences.scheduleId, input))
+        .orderBy(desc(scheduleOccurrences.createdAt));
+
+      const employeeIds = Array.from(
+        new Set(
+          occurrences
+            .map(item => item.employeeId)
+            .filter((id): id is number => typeof id === "number")
+        )
+      );
+      const createdByIds = Array.from(
+        new Set(
+          occurrences
+            .map(item => item.createdBy)
+            .filter((id): id is number => typeof id === "number")
+        )
+      );
+
+      const [employeesList, usersList] = await Promise.all([
+        employeeIds.length > 0
+          ? db.select().from(employees).where(inArray(employees.id, employeeIds))
+          : Promise.resolve([]),
+        createdByIds.length > 0
+          ? db.select().from(users).where(inArray(users.id, createdByIds))
+          : Promise.resolve([]),
+      ]);
+
+      const employeeMap = Object.fromEntries(
+        employeesList.map(item => [item.id, item])
+      );
+      const userMap = Object.fromEntries(usersList.map(item => [item.id, item]));
+
+      return occurrences.map(item => ({
+        ...item,
+        employeeName: item.employeeId ? employeeMap[item.employeeId]?.name || "—" : "Operação",
+        createdByName:
+          typeof item.createdBy === "number"
+            ? userMap[item.createdBy]?.name || "Sistema"
+            : "Sistema",
+        typeLabel: getOccurrenceTypeLabel(item.type),
+      }));
+    }),
+
+  addOccurrence: protectedProcedure
+    .input(
+      z.object({
+        scheduleId: z.number(),
+        employeeId: z.number().optional(),
+        type: z.enum(OCCURRENCE_TYPES),
+        description: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [result] = await db.insert(scheduleOccurrences).values({
+        scheduleId: input.scheduleId,
+        employeeId: input.employeeId ?? null,
+        type: input.type,
+        description: input.description?.trim() || null,
+        autoGenerated: false,
+        resolved: false,
+        createdBy: ctx.user.id,
+      });
+
+      return { id: Number(result.insertId), success: true };
+    }),
+
+  updateOccurrence: protectedProcedure
+    .input(
+      z.object({
+        occurrenceId: z.number(),
+        scheduleId: z.number(),
+        employeeId: z.number().optional(),
+        type: z.enum(OCCURRENCE_TYPES),
+        description: z.string().min(3),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não é o líder deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(scheduleOccurrences)
+        .set({
+          employeeId: input.employeeId ?? null,
+          type: input.type,
+          description: input.description.trim(),
+        })
+        .where(
+          and(
+            eq(scheduleOccurrences.id, input.occurrenceId),
+            eq(scheduleOccurrences.scheduleId, input.scheduleId)
+          )
+        );
+
+      return { success: true };
+    }),
+
+  deleteOccurrence: protectedProcedure
+    .input(
+      z.object({
+        occurrenceId: z.number(),
+        scheduleId: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não é o líder deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .delete(scheduleOccurrences)
+        .where(
+          and(
+            eq(scheduleOccurrences.id, input.occurrenceId),
+            eq(scheduleOccurrences.scheduleId, input.scheduleId)
+          )
+        );
+
+      return { success: true };
+    }),
+
+  resolveOccurrence: protectedProcedure
+    .input(
+      z.object({
+        occurrenceId: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [occurrence] = await db
+        .select()
+        .from(scheduleOccurrences)
+        .where(eq(scheduleOccurrences.id, input.occurrenceId))
+        .limit(1);
+      if (!occurrence) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Ocorrencia nao encontrada",
+        });
+      }
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, occurrence.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não é o líder deste planejamento",
+        });
+      }
+      await db
+        .update(scheduleOccurrences)
+        .set({ resolved: true })
+        .where(eq(scheduleOccurrences.id, input.occurrenceId));
+
+      return { success: true };
+    }),
+
+  resolveAllOccurrences: protectedProcedure
+    .input(z.number())
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não é o líder deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(scheduleOccurrences)
+        .set({ resolved: true })
+        .where(
+          and(
+            eq(scheduleOccurrences.scheduleId, input),
+            eq(scheduleOccurrences.resolved, false)
+          )
+        );
+
+      return { success: true };
     }),
 
   // ============ CHECK-IN ============
@@ -202,13 +738,42 @@ export const portalLiderRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const now = new Date();
+
+      const [allocation] = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.id, input.allocationId))
+        .limit(1);
+      if (!allocation) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Alocação não encontrada",
+        });
+      }
 
       await db
         .update(scheduleAllocations)
         .set({
-          checkInTime: new Date(),
+          checkInTime: now,
         })
         .where(eq(scheduleAllocations.id, input.allocationId));
+
+      const { schedule, shift } = await getScheduleWithShift(input.scheduleId);
+      if (schedule && allocation.employeeId) {
+        const { start } = buildShiftWindow(new Date(schedule.date), shift);
+        const diffMinutes = (now.getTime() - start.getTime()) / (1000 * 60);
+        if (diffMinutes > 15) {
+          await createAutomaticOccurrenceIfNeeded({
+            db,
+            scheduleId: input.scheduleId,
+            employeeId: allocation.employeeId,
+            type: "late",
+            description: "Atraso no check-in",
+            createdBy: ctx.user.id,
+          });
+        }
+      }
 
       return { success: true };
     }),
@@ -227,13 +792,42 @@ export const portalLiderRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const now = new Date();
+
+      const [allocation] = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.id, input.allocationId))
+        .limit(1);
+      if (!allocation) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Alocação não encontrada",
+        });
+      }
 
       await db
         .update(scheduleAllocations)
         .set({
-          checkOutTime: new Date(),
+          checkOutTime: now,
         })
         .where(eq(scheduleAllocations.id, input.allocationId));
+
+      const { schedule, shift } = await getScheduleWithShift(input.scheduleId);
+      if (schedule && allocation.employeeId) {
+        const { end } = buildShiftWindow(new Date(schedule.date), shift);
+        const minutesBeforeEnd = (end.getTime() - now.getTime()) / (1000 * 60);
+        if (minutesBeforeEnd > 60) {
+          await createAutomaticOccurrenceIfNeeded({
+            db,
+            scheduleId: input.scheduleId,
+            employeeId: allocation.employeeId,
+            type: "early_exit",
+            description: "Saída antecipada",
+            createdBy: ctx.user.id,
+          });
+        }
+      }
 
       return { success: true };
     }),
@@ -287,6 +881,15 @@ export const portalLiderRouter = router({
         });
       }
 
+      const [shiftForAttendance] = schedule.shiftId
+        ? await db
+            .select()
+            .from(shifts)
+            .where(eq(shifts.id, schedule.shiftId))
+            .limit(1)
+        : [null];
+      const computedShiftHours = getShiftDurationHours(shiftForAttendance);
+
       // Buscar turno para calcular horas totais
       let totalShiftHours = 8; // padrão
       if (schedule.shiftId) {
@@ -307,7 +910,7 @@ export const portalLiderRouter = router({
       let partialPayValue = alloc.payValue;
       if (input.status === "parcial" && input.partialHours) {
         const payValueNum = parseFloat(String(alloc.payValue || 0));
-        partialPayValue = (payValueNum * input.partialHours) / totalShiftHours;
+        partialPayValue = ((payValueNum * input.partialHours) / computedShiftHours).toFixed(2);
       }
 
       await db
@@ -318,6 +921,32 @@ export const portalLiderRouter = router({
           payValue: input.status === "parcial" && input.partialHours ? partialPayValue : alloc.payValue,
         })
         .where(eq(scheduleAllocations.id, input.allocationId));
+
+      if (input.status === "faltou") {
+        await createAutomaticOccurrenceIfNeeded({
+          db,
+          scheduleId: input.scheduleId,
+          employeeId: alloc.employeeId,
+          type: "absence",
+          description: input.notes?.trim() || "Falta registrada pelo líder.",
+          createdBy: ctx.user.id,
+        });
+      }
+
+      if (
+        input.status === "parcial" &&
+        input.partialHours &&
+        input.partialHours < computedShiftHours / 2
+      ) {
+        await createAutomaticOccurrenceIfNeeded({
+          db,
+          scheduleId: input.scheduleId,
+          employeeId: alloc.employeeId,
+          type: "other",
+          description: "Meio período não justificado",
+          createdBy: ctx.user.id,
+        });
+      }
 
       return { success: true };
     }),
@@ -557,6 +1186,9 @@ export const portalLiderRouter = router({
         .where(eq(workSchedules.id, input))
         .limit(1);
       const schedule = sched[0];
+      const [client] = schedule
+        ? await db.select().from(clients).where(eq(clients.id, schedule.clientId)).limit(1)
+        : [null];
 
       await db
         .update(workSchedules)
@@ -567,7 +1199,7 @@ export const portalLiderRouter = router({
       const { notifyAttendanceClosed } = await import("../lib/sse-notifications");
       notifyAttendanceClosed({
         scheduleId: input,
-        clientName: schedule?.clientName || "Sem nome",
+        clientName: client?.name || "Sem nome",
         totalPeople: allocs.length,
         leaderId: ctx.user.id,
       });
@@ -629,26 +1261,85 @@ export const portalLiderRouter = router({
         .limit(1);
       let funcId = funcs[0]?.id;
       if (!funcId) {
-        const result = await db.insert(scheduleFunctions).values({
+        const result = await db.insert(scheduleFunctions).values([{
           scheduleId: input.scheduleId,
           jobFunctionId: input.jobFunctionId,
-          payValue: input.payValue,
-          receiveValue: input.receiveValue,
-        });
+          payValue: input.payValue.toFixed(2),
+          receiveValue: input.receiveValue.toFixed(2),
+        }]);
         funcId = Number(result[0].insertId);
       }
 
       // Criar alocacao
-      const result = await db.insert(scheduleAllocations).values({
+      const result = await db.insert(scheduleAllocations).values([{
         scheduleId: input.scheduleId,
         scheduleFunctionId: funcId,
         employeeId: input.employeeId,
-        payValue: input.payValue,
-        receiveValue: input.receiveValue,
-      });
+        payValue: input.payValue.toFixed(2),
+        receiveValue: input.receiveValue.toFixed(2),
+      }]);
 
       return { success: true, allocationId: Number(result[0].insertId) };
     }),
+
+  removeAllocation: protectedProcedure
+    .input(
+      z.object({
+        scheduleId: z.number(),
+        allocationId: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [schedule] = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input.scheduleId))
+        .limit(1);
+      if (!schedule) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Planejamento nao encontrado",
+        });
+      }
+      if (schedule.status === "validado") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nao e possivel remover diaristas de operacoes validadas",
+        });
+      }
+
+      await db
+        .delete(scheduleAllocations)
+        .where(
+          and(
+            eq(scheduleAllocations.id, input.allocationId),
+            eq(scheduleAllocations.scheduleId, input.scheduleId)
+          )
+        );
+
+      return { success: true };
+    }),
+
+  allocationOptions: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    return db
+      .select()
+      .from(jobFunctions)
+      .where(eq(jobFunctions.isActive, true));
+  }),
 
   // ============ SOLICITAR ALTERACAO DE PIX ============
   requestPixChange: protectedProcedure
@@ -665,7 +1356,7 @@ export const portalLiderRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       // Buscar funcionario por ID ou CPF
-      let emp;
+      let emp: typeof employees.$inferSelect | undefined;
       if (input.employeeId) {
         const result = await db
           .select()
@@ -688,12 +1379,13 @@ export const portalLiderRouter = router({
           message: "Funcionario nao encontrado",
         });
       }
+      const targetEmployeeId = emp.id;
       const existingPending = await db
         .select()
         .from(pixChangeRequests)
         .where(
           and(
-            eq(pixChangeRequests.employeeId, input.employeeId),
+            eq(pixChangeRequests.employeeId, targetEmployeeId),
             eq(pixChangeRequests.status, "pendente")
           )
         )
@@ -706,13 +1398,13 @@ export const portalLiderRouter = router({
       }
 
       // Criar solicitacao
-      const result = await db.insert(pixChangeRequests).values({
-        employeeId: input.employeeId,
+      const result = await db.insert(pixChangeRequests).values([{
+        employeeId: targetEmployeeId,
         requestedByUserId: ctx.user.id,
         oldPixKey: emp.pixKey || null,
         newPixKey: input.newPixKey,
         status: "pendente",
-      });
+      }]);
 
       // Notificar admins sobre nova solicitacao PIX
       const { notifyAdmins } = await import("../_core/sse");
@@ -745,14 +1437,12 @@ export const portalLiderRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-
-      let query = db.select().from(pixChangeRequests);
-      if (input?.status) {
-        // @ts-ignore
-        query = query.where(eq(pixChangeRequests.status, input.status));
-      }
-
-      const requests = await query;
+      const requests = input?.status
+        ? await db
+            .select()
+            .from(pixChangeRequests)
+            .where(eq(pixChangeRequests.status, input.status))
+        : await db.select().from(pixChangeRequests);
 
       // Enriquecer com dados do funcionário
       const empIds = Array.from(new Set(requests.map(r => r.employeeId)));
@@ -776,7 +1466,7 @@ export const portalLiderRouter = router({
       }));
     }),
 
-  // ============ APROVAR/REJEITAR ALTERAÇÃO PIX (admin only) ============
+  // ============ APROVAR/REJEITAR ALTERACAO PIX (admin only) ============
   reviewPixRequest: adminProcedure
     .input(
       z.object({

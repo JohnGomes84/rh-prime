@@ -16,6 +16,7 @@ export function usePermissions() {
   );
 
   const can = (module: string, action: "canView" | "canCreate" | "canEdit" | "canDelete"): boolean => {
+    if (user?.role === "admin") return true;
     if (!permissions) return false;
     const perm = permissions[module as keyof typeof permissions] as ModulePermission | undefined;
     return perm?.[action] === true;

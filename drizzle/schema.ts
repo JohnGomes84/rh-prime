@@ -10,6 +10,7 @@ import {
   datetime,
   longtext,
   time,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 // ============================================================
@@ -339,6 +340,149 @@ export const userPermissions = mysqlTable("user_permissions", {
 export type UserPermission = typeof userPermissions.$inferSelect;
 export type InsertUserPermission = typeof userPermissions.$inferInsert;
 
+/** Documentos */
+export const documents = mysqlTable("documents", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  documentType: varchar("documentType", { length: 50 }).notNull(),
+  purpose: varchar("purpose", { length: 50 }).notNull(),
+  retentionPolicy: varchar("retentionPolicy", { length: 30 }).notNull(),
+  visibility: mysqlEnum("visibility", ["private", "internal", "public"])
+    .default("internal")
+    .notNull(),
+  status: mysqlEnum("status", ["ativo", "arquivado"])
+    .default("ativo")
+    .notNull(),
+  ownerUserId: int("ownerUserId").notNull(),
+  createdByUserId: int("createdByUserId").notNull(),
+  currentVersionId: varchar("currentVersionId", { length: 36 }),
+  latestVersionNumber: int("latestVersionNumber").default(1).notNull(),
+  storageBackend: mysqlEnum("storageBackend", ["local", "s3"]).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = typeof documents.$inferInsert;
+
+/** Versões dos documentos */
+export const documentVersions = mysqlTable(
+  "document_versions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    documentId: varchar("documentId", { length: 36 }).notNull(),
+    versionNumber: int("versionNumber").notNull(),
+    fileName: varchar("fileName", { length: 255 }).notNull(),
+    mimeType: varchar("mimeType", { length: 120 }).notNull(),
+    fileSize: int("fileSize").notNull(),
+    storageKey: varchar("storageKey", { length: 500 }).notNull(),
+    fileHash: varchar("fileHash", { length: 64 }).notNull(),
+    uploadedByUserId: int("uploadedByUserId").notNull(),
+    changeNotes: text("changeNotes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    uniqDocumentVersion: uniqueIndex("uniq_document_version").on(
+      table.documentId,
+      table.versionNumber
+    ),
+    uniqDocumentStorageKey: uniqueIndex("uniq_document_storage_key").on(
+      table.storageKey
+    ),
+  })
+);
+
+export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type InsertDocumentVersion = typeof documentVersions.$inferInsert;
+
+/** Auditoria específica de documentos */
+export const documentAuditLogs = mysqlTable("document_audit_logs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  documentId: varchar("documentId", { length: 36 }).notNull(),
+  targetVersionId: varchar("targetVersionId", { length: 36 }),
+  action: varchar("action", { length: 80 }).notNull(),
+  userId: int("userId").notNull(),
+  ipAddress: varchar("ipAddress", { length: 64 }).notNull(),
+  userAgent: text("userAgent"),
+  correlationId: varchar("correlationId", { length: 36 }).notNull(),
+  metadata: longtext("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DocumentAuditLog = typeof documentAuditLogs.$inferSelect;
+export type InsertDocumentAuditLog = typeof documentAuditLogs.$inferInsert;
+
+/** Tags de documentos */
+export const documentTags = mysqlTable("document_tags", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+});
+
+export type DocumentTag = typeof documentTags.$inferSelect;
+export type InsertDocumentTag = typeof documentTags.$inferInsert;
+
+/** Ligações entre documentos e tags */
+export const documentTagLinks = mysqlTable(
+  "document_tag_links",
+  {
+    documentId: varchar("documentId", { length: 36 }).notNull(),
+    tagId: varchar("tagId", { length: 36 }).notNull(),
+  },
+  table => ({
+    uniqDocumentTag: uniqueIndex("uniq_document_tag").on(
+      table.documentId,
+      table.tagId
+    ),
+  })
+);
+
+export type DocumentTagLink = typeof documentTagLinks.$inferSelect;
+export type InsertDocumentTagLink = typeof documentTagLinks.$inferInsert;
+
+/** Vinculos entre documentos e entidades do sistema */
+export const documentLinks = mysqlTable(
+  "document_links",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    documentId: varchar("documentId", { length: 36 }).notNull(),
+    entityType: varchar("entityType", { length: 50 }).notNull(),
+    entityId: varchar("entityId", { length: 50 }).notNull(),
+    label: varchar("label", { length: 255 }),
+    createdByUserId: int("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    uniqDocumentLink: uniqueIndex("uniq_document_link").on(
+      table.documentId,
+      table.entityType,
+      table.entityId
+    ),
+  })
+);
+
+export type DocumentLink = typeof documentLinks.$inferSelect;
+export type InsertDocumentLink = typeof documentLinks.$inferInsert;
+
+/** Jobs de limpeza de storage */
+export const storageCleanupJobs = mysqlTable("storage_cleanup_jobs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  storageKey: varchar("storageKey", { length: 500 }).notNull(),
+  backend: mysqlEnum("backend", ["local", "s3"]).notNull(),
+  status: mysqlEnum("status", ["pending", "completed", "failed"])
+    .default("pending")
+    .notNull(),
+  reason: varchar("reason", { length: 120 }).notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  lastError: text("lastError"),
+  notBefore: timestamp("notBefore").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StorageCleanupJob = typeof storageCleanupJobs.$inferSelect;
+export type InsertStorageCleanupJob = typeof storageCleanupJobs.$inferInsert;
+
 /** Módulos disponíveis no sistema */
 // ============================================================
 // PLANEJAMENTOS - Escalas de Trabalho
@@ -400,6 +544,34 @@ export const scheduleAllocations = mysqlTable("schedule_allocations", {
 
 export type ScheduleAllocation = typeof scheduleAllocations.$inferSelect;
 export type InsertScheduleAllocation = typeof scheduleAllocations.$inferInsert;
+
+/** Ocorrencias registradas durante a operacao */
+export const scheduleOccurrences = mysqlTable("schedule_occurrences", {
+  id: int("id").autoincrement().primaryKey(),
+  scheduleId: int("schedule_id")
+    .notNull()
+    .references(() => workSchedules.id, { onDelete: "cascade" }),
+  employeeId: int("employee_id").references(() => employees.id, {
+    onDelete: "set null",
+  }),
+  type: mysqlEnum("type", [
+    "late",
+    "early_exit",
+    "absence",
+    "client_issue",
+    "other",
+    "critical",
+  ])
+    .notNull(),
+  description: text("description"),
+  autoGenerated: boolean("auto_generated").default(false).notNull(),
+  resolved: boolean("resolved").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdBy: int("created_by"),
+});
+
+export type ScheduleOccurrence = typeof scheduleOccurrences.$inferSelect;
+export type InsertScheduleOccurrence = typeof scheduleOccurrences.$inferInsert;
 
 export const SYSTEM_MODULES = [
   "dashboard",

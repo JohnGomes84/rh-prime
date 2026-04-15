@@ -159,7 +159,7 @@ export default function RelatoriosPage() {
                   <Button
                     key={key}
                     variant="outline"
-                    size="xs"
+                    size="sm"
                     className="text-xs"
                     onClick={() => handlePeriodShortcut(key as keyof typeof PERIOD_SHORTCUTS)}
                   >

@@ -5,6 +5,28 @@ import { sql, and, gte, lt, eq } from "drizzle-orm";
 import { accountsReceivable, accountsPayable } from "../../drizzle/schema";
 import { cacheGet, cacheSet, getDashboardCacheKey } from "../cache";
 
+const toNumber = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const emptyRevenueDetails = { byStatus: [], byClient: [] };
+const emptyCostsDetails = { byStatus: [] };
+const emptyCashFlowForecast = {
+  historical: [],
+  forecast: [],
+  summary: {
+    avgRevenue: 0,
+    avgCosts: 0,
+    avgMargin: 0,
+    confidence: 0,
+  },
+};
+
 /**
  * Drill-down nos KPIs com filtros contextuais
  */
@@ -20,7 +42,7 @@ export const dashboardAdvancedRouter = router({
       if (cached) return cached;
 
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyRevenueDetails;
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -49,7 +71,18 @@ export const dashboardAdvancedRouter = router({
         .orderBy(sql`SUM(${accountsReceivable.amount}) DESC`)
         .limit(10);
 
-      const result = { byStatus, byClient };
+      const result = {
+        byStatus: byStatus.map((item) => ({
+          ...item,
+          total: toNumber(item.total),
+          count: toNumber(item.count),
+        })),
+        byClient: byClient.map((item) => ({
+          ...item,
+          total: toNumber(item.total),
+          count: toNumber(item.count),
+        })),
+      };
       await cacheSet(cacheKey, result, 600);
       return result;
     }),
@@ -65,7 +98,7 @@ export const dashboardAdvancedRouter = router({
       if (cached) return cached;
 
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyCostsDetails;
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -81,7 +114,13 @@ export const dashboardAdvancedRouter = router({
         .where(and(gte(accountsPayable.dueDate, startDate), lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000))))
         .groupBy(accountsPayable.status);
 
-      const result = { byStatus };
+      const result = {
+        byStatus: byStatus.map((item) => ({
+          ...item,
+          total: toNumber(item.total),
+          count: toNumber(item.count),
+        })),
+      };
       await cacheSet(cacheKey, result, 600);
       return result;
     }),
@@ -98,7 +137,7 @@ export const dashboardAdvancedRouter = router({
       if (cached) return cached;
 
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyCashFlowForecast;
 
       // Coletar dados dos últimos 3 meses
       const months = [];
@@ -125,8 +164,8 @@ export const dashboardAdvancedRouter = router({
 
         historicalData.push({
           month: `${m.month}/${m.year}`,
-          revenue: revResult[0]?.total || 0,
-          costs: costResult[0]?.total || 0,
+          revenue: toNumber(revResult[0]?.total),
+          costs: toNumber(costResult[0]?.total),
         });
       }
 

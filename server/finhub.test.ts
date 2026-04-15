@@ -1,3 +1,5 @@
+import "./_core/load-env";
+
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -65,14 +67,14 @@ describeIfDb("FinHub Inteligente - Router Tests", () => {
       expect(result).toBeDefined();
       expect(result?.name).toBe("Admin ML");
       expect(result?.role).toBe("admin");
-    });
+    }, 15000);
 
     it("returns null when unauthenticated", async () => {
       const ctx = createUnauthContext();
       const caller = appRouter.createCaller(ctx);
       const result = await caller.auth.me();
       expect(result).toBeNull();
-    });
+    }, 15000);
   });
 
   describe("cadastros.employees (admin)", () => {

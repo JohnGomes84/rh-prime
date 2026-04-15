@@ -15,6 +15,12 @@ export async function validateScheduleRules(scheduleId: number): Promise<{
   errors: string[];
 }> {
   const db = await getDb();
+  if (!db) {
+    return {
+      isValid: false,
+      errors: ["Database not available"],
+    };
+  }
   
   // Buscar planejamento
   const schedule = await db
@@ -33,7 +39,7 @@ export async function validateScheduleRules(scheduleId: number): Promise<{
   const errors: string[] = [];
 
   // Verificar se está cancelado
-  if (schedule[0].status === "canceled") {
+  if (schedule[0].status === "cancelado") {
     errors.push("Planejamento está cancelado");
   }
 
@@ -82,6 +88,12 @@ export async function validateScheduleAtomic(
   accountsReceivableCreated?: number;
 }> {
   const db = await getDb();
+  if (!db) {
+    return {
+      success: false,
+      error: "Database not available",
+    };
+  }
 
   try {
     // 1. Validar regras

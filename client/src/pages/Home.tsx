@@ -1,7 +1,11 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { getLoginUrl } from "@/const";
+import {
+  COMPANY_EMAIL_DOMAINS_LABEL,
+  getLoginUrl,
+  isOAuthConfigured,
+} from "@/const";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
@@ -12,6 +16,8 @@ import { useEffect } from "react";
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const loginUrl = getLoginUrl();
+  const oauthConfigured = isOAuthConfigured();
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -58,11 +64,24 @@ export default function Home() {
           </div>
         </div>
 
-        <a href={getLoginUrl()}>
-          <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg">
+        <a href={loginUrl}>
+          <Button
+            size="lg"
+            disabled={!oauthConfigured}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg disabled:opacity-60"
+          >
             Entrar com Manus
           </Button>
         </a>
+        <p className="text-gray-600 mt-4 text-sm">
+          Acesso permitido apenas com e-mail corporativo ({COMPANY_EMAIL_DOMAINS_LABEL}).
+        </p>
+
+        {!oauthConfigured && (
+          <p className="text-amber-700 mt-4 text-sm">
+            Login OAuth local nao configurado. Defina `VITE_OAUTH_PORTAL_URL` e `VITE_APP_ID`.
+          </p>
+        )}
 
         <p className="text-gray-500 mt-6 text-sm">
           Sua segurança é nossa prioridade. Autenticação segura com OAuth e criptografia de dados.

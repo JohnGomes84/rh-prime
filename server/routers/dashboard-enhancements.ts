@@ -4,6 +4,35 @@ import { getDb } from "../db";
 import { sql, and, gte, lt, eq } from "drizzle-orm";
 import { accountsReceivable, accountsPayable, employees } from "../../drizzle/schema";
 
+const toNumber = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const emptyHealthScore = {
+  score: 0,
+  status: 'critical' as const,
+  breakdown: {
+    margin: { score: 0, percentage: 0 },
+    delinquency: { score: 0, percentage: 0 },
+    cashDays: { score: 0, days: 0 },
+  },
+};
+
+const emptyQuarterComparison = {
+  quarters: [
+    { quarter: 'Q1', revenue: 0, costs: 0, margin: 0, marginPercent: 0 },
+    { quarter: 'Q2', revenue: 0, costs: 0, margin: 0, marginPercent: 0 },
+    { quarter: 'Q3', revenue: 0, costs: 0, margin: 0, marginPercent: 0 },
+    { quarter: 'Q4', revenue: 0, costs: 0, margin: 0, marginPercent: 0 },
+  ],
+  ytd: { revenue: 0, costs: 0, margin: 0, marginPercent: 0 },
+};
+
 /**
  * Score de Saúde Financeira (0-100)
  * Baseado em: margem%, dias de caixa, taxa de inadimplência
@@ -13,7 +42,7 @@ export const dashboardEnhancementsRouter = router({
     .input(z.object({ year: z.number(), month: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyHealthScore;
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -29,9 +58,9 @@ export const dashboardEnhancementsRouter = router({
         .from(accountsPayable)
         .where(and(gte(accountsPayable.dueDate, startDate), lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000))));
 
-      const revenue = revenueResult[0]?.total || 1;
-      const costs = costsResult[0]?.total || 0;
-      const margin = ((revenue - costs) / revenue) * 100;
+      const revenue = toNumber(revenueResult[0]?.total);
+      const costs = toNumber(costsResult[0]?.total);
+      const margin = revenue > 0 ? ((revenue - costs) / revenue) * 100 : 0;
       const marginScore = Math.max(0, Math.min(40, (margin / 50) * 40)); // 50% margin = 40 pontos
 
       // 2. Inadimplência (30% do score)
@@ -43,13 +72,13 @@ export const dashboardEnhancementsRouter = router({
         .from(accountsPayable)
         .where(and(lt(accountsPayable.dueDate, new Date()), eq(accountsPayable.status, 'pendente')));
 
-      const overdueAmount = overdueResult[0]?.overdueAmount || 0;
+      const overdueAmount = toNumber(overdueResult[0]?.overdueAmount);
       const delinquencyRate = revenue > 0 ? (overdueAmount / revenue) * 100 : 0;
       const delinquencyScore = Math.max(0, 30 - (delinquencyRate * 0.3)); // Cada 1% de atraso = -0.3 pontos
 
       // 3. Dias de Caixa (30% do score)
       const dailyAvgCosts = costs / Math.max(1, endDate.getDate());
-      const daysOfCash = revenue > 0 ? revenue / Math.max(1, dailyAvgCosts) : 0;
+      const daysOfCash = dailyAvgCosts > 0 ? revenue / dailyAvgCosts : 0;
       const cashScore = Math.max(0, Math.min(30, (daysOfCash / 30) * 30)); // 30 dias = 30 pontos
 
       const totalScore = Math.round(marginScore + delinquencyScore + cashScore);
@@ -73,7 +102,7 @@ export const dashboardEnhancementsRouter = router({
     .input(z.object({ year: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyQuarterComparison;
 
       const quarters = [
         { name: 'Q1', months: [1, 2, 3] },
@@ -98,8 +127,8 @@ export const dashboardEnhancementsRouter = router({
           .from(accountsPayable)
           .where(and(gte(accountsPayable.dueDate, qStart), lt(accountsPayable.dueDate, new Date(qEnd.getTime() + 86400000))));
 
-        const revenue = revResult[0]?.total || 0;
-        const costs = costResult[0]?.total || 0;
+        const revenue = toNumber(revResult[0]?.total);
+        const costs = toNumber(costResult[0]?.total);
 
         results.push({
           quarter: q.name,
@@ -124,8 +153,8 @@ export const dashboardEnhancementsRouter = router({
         .from(accountsPayable)
         .where(and(gte(accountsPayable.dueDate, ytdStart), lt(accountsPayable.dueDate, new Date(ytdEnd.getTime() + 86400000))));
 
-      const ytdRevenue = ytdRevResult[0]?.total || 0;
-      const ytdCosts = ytdCostResult[0]?.total || 0;
+      const ytdRevenue = toNumber(ytdRevResult[0]?.total);
+      const ytdCosts = toNumber(ytdCostResult[0]?.total);
 
       return {
         quarters: results,
@@ -143,9 +172,24 @@ export const dashboardEnhancementsRouter = router({
    */
   getExportData: protectedProcedure
     .input(z.object({ year: z.number(), month: z.number(), format: z.enum(['csv', 'json', 'excel']) }))
-    .query(async ({ input }) => {
+    .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) {
+        if (input.format === 'csv') {
+          return { data: 'Tipo,Data,Valor,Status\n', filename: `export-${input.year}-${String(input.month).padStart(2, '0')}.csv` };
+        }
+        if (input.format === 'excel') {
+          return {
+            data: '',
+            filename: `export-${input.year}-${String(input.month).padStart(2, '0')}.xlsx`,
+            isBase64: true,
+          };
+        }
+        return {
+          data: { receivables: [], payables: [] },
+          filename: `export-${input.year}-${String(input.month).padStart(2, '0')}.json`,
+        };
+      }
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -219,8 +263,8 @@ export const dashboardEnhancementsRouter = router({
         
         // Aba: Resumo
         const summarySheet = workbook.addWorksheet('Resumo');
-        const totalReceivable = receivables.reduce((sum, r) => sum + r.amount, 0);
-        const totalPayable = payables.reduce((sum, p) => sum + p.amount, 0);
+        const totalReceivable = receivables.reduce((sum, r) => sum + toNumber(r.amount), 0);
+        const totalPayable = payables.reduce((sum, p) => sum + toNumber(p.amount), 0);
         summarySheet.columns = [
           { header: 'Métrica', key: 'metric', width: 25 },
           { header: 'Valor', key: 'value', width: 15 },
@@ -230,7 +274,7 @@ export const dashboardEnhancementsRouter = router({
         summarySheet.addRow({ metric: 'Saldo', value: totalReceivable - totalPayable });
         
         const buffer = await workbook.xlsx.writeBuffer();
-        const base64 = (buffer as Buffer).toString('base64');
+        const base64 = Buffer.from(buffer).toString('base64');
         return {
           data: base64,
           filename: `export-${input.year}-${String(input.month).padStart(2, '0')}.xlsx`,

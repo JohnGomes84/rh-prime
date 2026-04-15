@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../\_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { nfesReceived } from "../../drizzle/schema";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 
 /**
  * Router para gerenciar notas fiscais recebidas via Focus NFe
@@ -23,7 +23,15 @@ export const fiscalRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) {
+        return {
+          data: [],
+          total: 0,
+          page: input.page,
+          limit: input.limit,
+        };
+      }
       const offset = (input.page - 1) * input.limit;
 
       // Construir filtros
@@ -44,7 +52,7 @@ export const fiscalRouter = router({
 
       // Contar total
       const countResult = await db
-        .select({ count: nfesReceived.id })
+        .select({ count: sql<number>`count(*)` })
         .from(nfesReceived)
         .where(filters.length > 0 ? and(...filters) : undefined);
 
@@ -62,7 +70,8 @@ export const fiscalRouter = router({
   getNfeDetalhes: protectedProcedure
     .input(z.object({ nfeNumber: z.string() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) return null;
       const result = await db
         .select()
         .from(nfesReceived)
@@ -83,7 +92,8 @@ export const fiscalRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
       await db
         .update(nfesReceived)
         .set({
@@ -102,7 +112,8 @@ export const fiscalRouter = router({
   markAsReconciled: protectedProcedure
     .input(z.object({ nfeNumber: z.string() }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
       await db
         .update(nfesReceived)
         .set({
@@ -125,7 +136,8 @@ export const fiscalRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
       await db
         .update(nfesReceived)
         .set({
@@ -149,7 +161,15 @@ export const fiscalRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) {
+        return {
+          received: { count: 0, totalAmount: 0 },
+          processed: { count: 0, totalAmount: 0 },
+          reconciled: { count: 0, totalAmount: 0 },
+          rejected: { count: 0, totalAmount: 0 },
+        };
+      }
 
       // Construir filtros
       const filters = [];
@@ -160,8 +180,8 @@ export const fiscalRouter = router({
       const result = await db
         .select({
           status: nfesReceived.status,
-          count: nfesReceived.id,
-          totalAmount: nfesReceived.amount,
+          count: sql<number>`count(*)`,
+          totalAmount: sql<number>`coalesce(sum(${nfesReceived.amount}), 0)`,
         })
         .from(nfesReceived)
         .where(filters.length > 0 ? and(...filters) : undefined)

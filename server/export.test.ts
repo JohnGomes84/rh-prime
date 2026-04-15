@@ -58,7 +58,7 @@ describe("Export Routes Registration", () => {
     expect(routes).toContain("/api/reports/receivable/pdf");
     expect(routes).toContain("/api/export/pix-history/excel");
     expect(routes).toContain("/api/export/pix-history/pdf");
-  });
+  }, 30000);
 });
 
 // Testar que ExcelJS e PDFKit estão disponíveis

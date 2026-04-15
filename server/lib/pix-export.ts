@@ -20,7 +20,7 @@ export async function exportPixHistoryExcel() {
       requestedByUserId: pixChangeRequests.requestedByUserId,
       createdAt: pixChangeRequests.createdAt,
       reviewedByUserId: pixChangeRequests.reviewedByUserId,
-      reviewedAt: pixChangeRequests.reviewedAt,
+      reviewedAt: pixChangeRequests.updatedAt,
       reviewNotes: pixChangeRequests.reviewNotes,
     })
     .from(pixChangeRequests)
@@ -95,7 +95,7 @@ export async function exportPixHistoryPdf() {
       requestedByUserId: pixChangeRequests.requestedByUserId,
       createdAt: pixChangeRequests.createdAt,
       reviewedByUserId: pixChangeRequests.reviewedByUserId,
-      reviewedAt: pixChangeRequests.reviewedAt,
+      reviewedAt: pixChangeRequests.updatedAt,
       reviewNotes: pixChangeRequests.reviewNotes,
     })
     .from(pixChangeRequests)

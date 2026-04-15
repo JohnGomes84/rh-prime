@@ -11,11 +11,14 @@ import {
   clientUnits,
   shifts,
   jobFunctions,
+  auditLogs,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "../controle/permissionControl";
 import type { SystemModule } from "../../drizzle/schema";
 import { assertScheduleTransition } from "../_core/stateGuards";
+import { buildRecurringDates } from "../lib/schedule-recurring";
+import { parseScheduleCsv } from "../lib/schedule-csv";
 import {
   assertScheduleEditable,
   filterNewEmployeesWithoutDuplicate,
@@ -78,6 +81,62 @@ async function getScheduleOrThrow(scheduleId: number) {
       message: "Planejamento não encontrado",
     });
   return { db, schedule };
+}
+
+type ScheduleCreatePayload = {
+  date: string | Date;
+  shiftId?: number | null;
+  clientId: number;
+  clientUnitId?: number | null;
+  leaderId?: number | null;
+  notes?: string | null;
+};
+
+async function createScheduleRecord(
+  payload: ScheduleCreatePayload,
+  options?: { skipIfExists?: boolean }
+) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+  const scheduleDate = payload.date instanceof Date ? payload.date : new Date(payload.date);
+  const normalizedDate = new Date(scheduleDate);
+  normalizedDate.setHours(0, 0, 0, 0);
+
+  const existing = await db.select().from(workSchedules);
+  const conflict = existing.find((schedule) => {
+    const existingDate = new Date(schedule.date);
+    existingDate.setHours(0, 0, 0, 0);
+
+    return (
+      existingDate.getTime() === normalizedDate.getTime() &&
+      schedule.clientId === payload.clientId &&
+      (schedule.shiftId ?? null) === (payload.shiftId ?? null) &&
+      (schedule.clientUnitId ?? null) === (payload.clientUnitId ?? null)
+    );
+  });
+
+  if (conflict) {
+    if (options?.skipIfExists) {
+      return { id: conflict.id, skipped: true };
+    }
+
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Ja existe planejamento para este cliente/turno/local nesta data",
+    });
+  }
+
+  const result = await db.insert(workSchedules).values({
+    date: normalizedDate,
+    shiftId: payload.shiftId ?? null,
+    clientId: payload.clientId,
+    clientUnitId: payload.clientUnitId ?? null,
+    leaderId: payload.leaderId ?? null,
+    notes: payload.notes ?? null,
+  });
+
+  return { id: Number(result[0].insertId), skipped: false };
 }
 
 export const planejamentosRouter = router({
@@ -150,16 +209,17 @@ export const planejamentosRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       // Registrar na auditoria
-      await db.insert(auditLog).values({
+      await db.insert(auditLogs).values({
         userId: ctx.user.id,
         action: "duplicate_allocation_exception",
-        module: "schedules",
-        details: JSON.stringify({
+        entityType: "schedule",
+        entityId: input.scheduleId,
+        newValues: JSON.stringify({
           scheduleId: input.scheduleId,
           employeeId: input.employeeId,
           justification: input.justification,
         }),
-        createdAt: new Date(),
+        status: "success",
       });
 
       // Criar alocacao
@@ -385,17 +445,170 @@ export const planejamentosRouter = router({
         "schedules",
         "canCreate"
       );
+      const result = await createScheduleRecord({
+        date: new Date(input.date),
+        shiftId: input.shiftId ?? null,
+        clientId: input.clientId,
+        clientUnitId: input.clientUnitId ?? null,
+        leaderId: input.leaderId ?? null,
+        notes: input.notes ?? null,
+      });
+      return { id: result.id };
+    }),
+
+  createRecurring: protectedProcedure
+    .input(
+      z.object({
+        date: z.string(),
+        shiftId: z.number().optional(),
+        clientId: z.number(),
+        clientUnitId: z.number().optional(),
+        leaderId: z.number().optional(),
+        notes: z.string().optional(),
+        recurrence: z.object({
+          frequency: z.enum(["weekly", "biweekly", "monthly"]),
+          occurrences: z.number().min(2).max(52),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canCreate"
+      );
+
+      const dates = buildRecurringDates(
+        new Date(input.date),
+        input.recurrence.frequency,
+        input.recurrence.occurrences
+      );
+
+      const createdIds: number[] = [];
+      const skippedDates: string[] = [];
+
+      for (const date of dates) {
+        const result = await createScheduleRecord(
+          {
+            date,
+            shiftId: input.shiftId ?? null,
+            clientId: input.clientId,
+            clientUnitId: input.clientUnitId ?? null,
+            leaderId: input.leaderId ?? null,
+            notes: input.notes ?? null,
+          },
+          { skipIfExists: true }
+        );
+
+        if (result.skipped) {
+          skippedDates.push(date.toISOString().slice(0, 10));
+        } else {
+          createdIds.push(result.id);
+        }
+      }
+
+      return {
+        created: createdIds.length,
+        createdIds,
+        skipped: skippedDates.length,
+        skippedDates,
+      };
+    }),
+
+  importCsv: protectedProcedure
+    .input(
+      z.object({
+        csvContent: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canCreate"
+      );
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const result = await db.insert(workSchedules).values({
-        date: new Date(input.date),
-        shiftId: input.shiftId || null,
-        clientId: input.clientId,
-        clientUnitId: input.clientUnitId || null,
-        leaderId: input.leaderId || null,
-        notes: input.notes || null,
-      });
-      return { id: Number(result[0].insertId) };
+
+      const rows = parseScheduleCsv(input.csvContent);
+      const [allClients, allShifts, allUnits, allEmployees] = await Promise.all([
+        db.select().from(clients),
+        db.select().from(shifts),
+        db.select().from(clientUnits),
+        db.select().from(employees),
+      ]);
+
+      const createdIds: number[] = [];
+      const errors: string[] = [];
+      let skipped = 0;
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const client = allClients.find(
+          (item) => item.name.trim().toLowerCase() === row.client.trim().toLowerCase()
+        );
+
+        if (!client) {
+          errors.push(`Linha ${index + 2}: cliente "${row.client}" nao encontrado`);
+          continue;
+        }
+
+        const shift = row.shift
+          ? allShifts.find((item) => item.name.trim().toLowerCase() === row.shift?.trim().toLowerCase())
+          : null;
+        if (row.shift && !shift) {
+          errors.push(`Linha ${index + 2}: turno "${row.shift}" nao encontrado`);
+          continue;
+        }
+
+        const unit = row.unit
+          ? allUnits.find(
+              (item) =>
+                item.clientId === client.id &&
+                item.name.trim().toLowerCase() === row.unit?.trim().toLowerCase()
+            )
+          : null;
+        if (row.unit && !unit) {
+          errors.push(`Linha ${index + 2}: unidade "${row.unit}" nao encontrada para ${client.name}`);
+          continue;
+        }
+
+        const leader = row.leader
+          ? allEmployees.find((item) => item.name.trim().toLowerCase() === row.leader?.trim().toLowerCase())
+          : null;
+        if (row.leader && !leader) {
+          errors.push(`Linha ${index + 2}: lider "${row.leader}" nao encontrado`);
+          continue;
+        }
+
+        const result = await createScheduleRecord(
+          {
+            date: row.date,
+            shiftId: shift?.id ?? null,
+            clientId: client.id,
+            clientUnitId: unit?.id ?? null,
+            leaderId: leader?.id ?? null,
+            notes: row.notes ?? null,
+          },
+          { skipIfExists: true }
+        );
+
+        if (result.skipped) {
+          skipped += 1;
+        } else {
+          createdIds.push(result.id);
+        }
+      }
+
+      return {
+        imported: createdIds.length,
+        createdIds,
+        skipped,
+        errors,
+      };
     }),
 
   // ============ ATUALIZAR PLANEJAMENTO ============

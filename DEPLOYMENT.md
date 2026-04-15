@@ -1,374 +1,103 @@
-# FinHub Inteligente - Deployment & Infrastructure Guide
+# Deployment e Homologacao
 
-## 🚀 Deployment no Manus
+## Ambientes
 
-### Status Atual
+- Local: usa `.env.local` e banco `finhub`
+- Homologacao local: usa `.env.homolog` e banco `finhub_homolog`
 
-- **URL**: https://finhubapp-bwutngty.manus.space
-- **Status**: ✅ Ativo
-- **Versão**: 3.9
-- **Última Deploy**: 2026-04-05
+## Arquivos de ambiente
 
-### Como Fazer Deploy
+- `.env.local`
+- `.env.homolog`
 
-#### 1. Criar Checkpoint
+O ambiente de homologacao local ja esta configurado para:
 
-```bash
-# No Manus Management UI, após fazer alterações:
-1. Ir para "Dashboard" → "Checkpoints"
-2. Clicar "Save Checkpoint"
-3. Adicionar descrição das mudanças
-4. Confirmar
-```
+- `NODE_ENV=homologation`
+- `PORT=3001`
+- `DATABASE_URL=mysql://root:password@127.0.0.1:3306/finhub_homolog`
 
-#### 2. Publicar
+## Provisionar homologacao local
+
+1. Criar o banco MySQL `finhub_homolog`
+2. Aplicar schema:
 
 ```bash
-# No Manus Management UI:
-1. Ir para "Dashboard" → "Checkpoints"
-2. Selecionar o checkpoint mais recente
-3. Clicar "Publish"
-4. Aguardar build (2-3 minutos)
-5. Confirmar quando status = "Published"
+pnpm db:push:homolog
 ```
 
-#### 3. Verificar Deploy
+3. Popular com seed demo:
 
 ```bash
-# Acessar URL pública
-https://finhubapp-bwutngty.manus.space
-
-# Ou verificar logs
-pnpm logs
+pnpm db:seed:demo:homolog
 ```
 
----
-
-## 🗄️ Banco de Dados
-
-### Conexão
-
-```
-Host: Gerenciado pelo Manus
-Database: finhub_prod
-User: Injetado via env
-Password: Injetado via env
-```
-
-### Variáveis de Ambiente
-
-```env
-DATABASE_URL=mysql://user:pass@host/finhub_prod
-JWT_SECRET=seu-secret-jwt
-VITE_APP_ID=seu-app-id
-OAUTH_SERVER_URL=https://api.manus.im
-```
-
-### Backups
-
-- Automáticos: Diários (gerenciado pelo Manus)
-- Manual: Solicitar via Management UI
-
-### Migrations
-
-#### Aplicar Migration
+4. Subir a aplicacao:
 
 ```bash
-# 1. Editar schema em drizzle/schema.ts
-# 2. Gerar migration
-pnpm drizzle-kit generate
-
-# 3. Executar via Manus Management UI → Database
-# Ou via CLI:
-pnpm drizzle-kit migrate
+pnpm dev:homolog
 ```
 
-#### Exemplo: Adicionar Coluna
-
-```typescript
-// drizzle/schema.ts
-export const accountsReceivable = mysqlTable('accounts_receivable', {
-  id: int().primaryKey().autoincrement(),
-  clientId: int().references(() => clients.id),
-  amount: decimal({ precision: 15, scale: 2 }).notNull(),
-  dueDate: datetime().notNull(),
-  status: mysqlEnum('status', ['pendente', 'recebido', 'cancelado']).default('pendente'),
-  description: text(),
-  // NOVA COLUNA:
-  invoiceNumber: varchar({ length: 50 }).unique(), // ← Adicionar aqui
-  createdAt: datetime().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: datetime().onUpdateNow(),
-});
-```
+Para validar build publicada em homologacao local:
 
 ```bash
-# Gerar migration
-pnpm drizzle-kit generate
-
-# Arquivo gerado: drizzle/0001_add_invoice_number.sql
-# Executar no banco
+pnpm build
+pnpm start:homolog
 ```
 
----
-
-## 🔐 Segurança
-
-### Secrets Management
-
-Todas as secrets são gerenciadas via Manus Management UI → Settings → Secrets
-
-**Secrets Obrigatórios**:
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `VITE_APP_ID`
-- `OAUTH_SERVER_URL`
-- `BUILT_IN_FORGE_API_KEY`
-
-**Nunca commitar** `.env` ou arquivos com secrets no Git.
-
-### CORS
-
-```typescript
-// Configurado automaticamente pelo Manus
-// Permite requisições de: https://finhubapp-bwutngty.manus.space
-```
-
-### Rate Limiting
-
-Não implementado atualmente. Para adicionar:
-
-```typescript
-// server/_core/middleware.ts
-import rateLimit from 'express-rate-limit';
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // 100 requisições por IP
-});
-
-app.use('/api/trpc', limiter);
-```
-
-### HTTPS
-
-✅ Automático via Manus (SSL/TLS)
-
----
-
-## 📊 Monitoramento
-
-### Logs
+Para execucao publicada com reinicio automatico simples do processo:
 
 ```bash
-# Ver logs em tempo real
-pnpm logs
-
-# Ou via Management UI → Dashboard → Logs
+pnpm build
+pnpm start
 ```
 
-### Métricas
+## Supervisor nativo no Windows
 
-Via Management UI → Dashboard → Analytics
+Para manter a aplicacao subindo no boot do Windows com restart automatico por `Scheduled Task`:
 
-- **UV** (Unique Visitors)
-- **PV** (Page Views)
-- **Tempo de Resposta**
-- **Taxa de Erro**
-
-### Alertas
-
-Configurar notificações:
-1. Management UI → Settings → Notifications
-2. Adicionar email/webhook
-3. Configurar triggers (erro 500, downtime, etc)
-
----
-
-## 🌐 Domínios
-
-### Domínio Padrão
-
-```
-https://finhubapp-bwutngty.manus.space
+```bash
+pnpm build
+pnpm ops:win:install-supervisor
 ```
 
-### Domínio Customizado
+Consultar status:
 
-#### Adicionar Domínio
-
-1. Management UI → Settings → Domains
-2. Clicar "Add Domain"
-3. Opções:
-   - **Comprar novo**: Pagar via Manus
-   - **Usar existente**: Configurar DNS
-
-#### Configurar DNS (Domínio Existente)
-
-```
-Tipo: CNAME
-Nome: www
-Valor: finhubapp-bwutngty.manus.space
-TTL: 3600
+```bash
+pnpm ops:win:status-supervisor
 ```
 
-Ou:
+Remover supervisor:
 
-```
-Tipo: A
-Nome: @
-Valor: IP fornecido pelo Manus
-TTL: 3600
+```bash
+pnpm ops:win:uninstall-supervisor
 ```
 
----
+Observacoes:
 
-## 🔄 CI/CD
+- o task criado chama `pnpm start`, entao reutiliza o supervisor interno do projeto
+- o nome da task e `FinhubSupervisor`
+- os logs ficam em `C:\Finhub\logs\finhub-supervisor.log`
+- a instalacao precisa de PowerShell com permissao para registrar `Scheduled Task` como `SYSTEM`
 
-### GitHub Actions (Opcional)
+Variaveis opcionais do supervisor:
 
-Para automatizar deploys via GitHub:
+- `MAX_RESTARTS` (padrao `5`)
+- `RESTART_DELAY_MS` (padrao `2000`)
+- `STABLE_UPTIME_MS` (padrao `15000`)
 
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy to Manus
+## Acesso
 
-on:
-  push:
-    branches: [main]
+- App: `http://127.0.0.1:3001`
+- Healthcheck: `http://127.0.0.1:3001/health`
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: pnpm/action-setup@v2
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-      
-      - run: pnpm install
-      - run: pnpm build
-      - run: pnpm test
-      
-      # Deploy via Manus CLI (se disponível)
-      - run: |
-          echo "Deploy manual via Management UI"
-```
+## Validacao recomendada
 
----
+- abrir `/dashboard`
+- confirmar cards com dados reais
+- confirmar resposta `ok` em `/health`
+- confirmar que o banco ativo e `finhub_homolog`
 
-## 📈 Performance
+## Observacoes
 
-### Otimizações Implementadas
-
-- ✅ Vite com tree-shaking
-- ✅ Tailwind CSS purge
-- ✅ Drizzle ORM com índices
-- ✅ Caching de queries (parcial)
-- ✅ Code splitting por route
-
-### Melhorias Futuras
-
-- [ ] Redis caching
-- [ ] CDN para assets estáticos
-- [ ] Database query optimization
-- [ ] Image optimization
-- [ ] Lazy loading de componentes
-
-### Benchmark Atual
-
-```
-Homepage: ~1.2s
-Dashboard: ~1.5s
-API Response: ~200ms
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Deploy Falha
-
-1. Verificar logs: Management UI → Logs
-2. Verificar build: `pnpm build`
-3. Verificar TypeScript: `pnpm tsc --noEmit`
-4. Rollback para versão anterior: Management UI → Checkpoints → Rollback
-
-### Banco de Dados Indisponível
-
-1. Verificar `DATABASE_URL` em Secrets
-2. Verificar conexão: `mysql -u user -p -h host -D db`
-3. Contatar suporte Manus
-
-### Usuário Não Consegue Fazer Login
-
-1. Verificar `OAUTH_SERVER_URL`
-2. Verificar `VITE_APP_ID`
-3. Limpar cookies do browser
-4. Testar em navegador privado
-
-### Relatório PDF Não Gera
-
-1. Verificar se KPIs carregam no dashboard
-2. Verificar logs de erro
-3. Testar endpoint `/api/trpc/reportGeneration.generateMonthlyReport`
-
----
-
-## 📋 Checklist de Deploy
-
-- [ ] Código testado localmente (`pnpm test`)
-- [ ] Build bem-sucedido (`pnpm build`)
-- [ ] Sem erros TypeScript (`pnpm tsc --noEmit`)
-- [ ] Migrations aplicadas (se houver)
-- [ ] Secrets atualizadas (se necessário)
-- [ ] Checkpoint criado no Manus
-- [ ] Deploy publicado
-- [ ] URL pública acessível
-- [ ] Dashboard carrega corretamente
-- [ ] Alertas funcionando
-
----
-
-## 🔄 Rollback
-
-Se algo der errado após deploy:
-
-1. Management UI → Dashboard → Checkpoints
-2. Selecionar checkpoint anterior
-3. Clicar "Rollback"
-4. Confirmar
-5. Aguardar redeploy (~2 minutos)
-
----
-
-## 📞 Suporte
-
-- **Manus Docs**: https://help.manus.im
-- **GitHub Issues**: https://github.com/JohnGomes84/finhub-inteligente/issues
-- **Email**: support@manus.im
-
----
-
-## 📝 Versioning
-
-### Semântica de Versão
-
-```
-MAJOR.MINOR.PATCH
-
-3.9.0
-│ │ └─ Patch: Bug fixes
-│ └─── Minor: Novas features
-└───── Major: Breaking changes
-```
-
-### Changelog
-
-Ver `DOCUMENTATION.md` → Changelog
-
----
-
-**Deployment Guide - FinHub Inteligente v3.9**  
-*Última atualização: 2026-04-05*
+- O seed de homologacao usa o mesmo conjunto demo do ambiente local, mas em banco separado.
+- O ambiente de homologacao local nao substitui um servidor remoto; ele existe para validar schema, seed e comportamento da app com isolamento de dados.

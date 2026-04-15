@@ -19,7 +19,11 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getLoginUrl } from "@/const";
+import {
+  COMPANY_EMAIL_DOMAINS_LABEL,
+  getLoginUrl,
+  isOAuthConfigured,
+} from "@/const";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
@@ -27,7 +31,7 @@ import {
   LayoutDashboard, Users, Building2, Truck, Clock, Briefcase,
   Landmark, CreditCard, Receipt, Wallet, BarChart3, Shield,
   LogOut, PanelLeft, ChevronDown, CircleDollarSign, Settings,
-  CalendarDays, UserCheck, Key, Sparkles,
+  CalendarDays, UserCheck, Key, Sparkles, FolderOpen,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -46,6 +50,7 @@ type MenuItem = {
 const allMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", module: "dashboard", group: "Principal" },
   { icon: BarChart3, label: "Analytics", path: "/analytics", module: "analytics", group: "Principal" },
+  { icon: FolderOpen, label: "Documentos", path: "/documents", module: "documents", group: "Principal" },
   { icon: Users, label: "Funcionários", path: "/employees", module: "employees", group: "Cadastros" },
   { icon: Building2, label: "Clientes", path: "/clients", module: "clients", group: "Cadastros" },
   { icon: Truck, label: "Fornecedores", path: "/suppliers", module: "suppliers", group: "Cadastros" },
@@ -56,6 +61,7 @@ const allMenuItems: MenuItem[] = [
   { icon: CalendarDays, label: "Planejamentos", path: "/schedules", module: "schedules", group: "Operações" },
   { icon: UserCheck, label: "Portal do Líder", path: "/portal-lider", module: "schedules", group: "Operações" },
   { icon: Key, label: "Aprovação PIX", path: "/pix-approvals", module: "users", group: "Admin" },
+  { icon: Shield, label: "Ocorrências", path: "/admin/occurrences", module: "users", group: "Admin" },
   { icon: CreditCard, label: "Contas a Pagar", path: "/accounts-payable", module: "accounts_payable", group: "Financeiro" },
   { icon: Receipt, label: "Contas a Receber", path: "/accounts-receivable", module: "accounts_receivable", group: "Financeiro" },
   { icon: Wallet, label: "Lotes de Pagamento", path: "/payment-batches", module: "payment_batches", group: "Financeiro" },
@@ -73,6 +79,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const loginUrl = getLoginUrl();
+  const oauthConfigured = isOAuthConfigured();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -98,10 +106,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <p className="text-sm text-muted-foreground text-center max-w-sm mt-4">
               Sistema de Gestão Financeira Premium. Faça login para acessar.
             </p>
+            <p className="text-xs text-muted-foreground text-center max-w-sm">
+              Acesso restrito a e-mails corporativos ({COMPANY_EMAIL_DOMAINS_LABEL}).
+            </p>
           </div>
           <Button
-            onClick={() => { window.location.href = getLoginUrl(); }}
+            onClick={() => {
+              if (!oauthConfigured) return;
+              window.location.href = loginUrl;
+            }}
             size="lg"
+            disabled={!oauthConfigured}
             className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground font-semibold h-12 rounded-lg"
           >
             <Sparkles className="h-4 w-4 mr-2" />
@@ -179,7 +194,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <DropdownMenuSeparator className="bg-border/50" />
                   <DropdownMenuItem
                     onClick={() => {
-                      const logoutUrl = `${getLoginUrl()}?logout=true`;
+                      if (!oauthConfigured) return;
+                      const logoutUrl = `${loginUrl}?logout=true`;
                       window.location.href = logoutUrl;
                     }}
                     className="cursor-pointer text-destructive hover:bg-destructive/10"

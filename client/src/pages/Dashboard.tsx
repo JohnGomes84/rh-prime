@@ -2,15 +2,28 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { AlertCircle, TrendingUp, TrendingDown, FileText, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useRouter } from "wouter";
+import { useLocation } from "wouter";
 import { HealthScoreGauge } from "@/components/HealthScoreGauge";
 import { CashFlowForecast } from "@/components/CashFlowForecast";
+import { DailyEvolutionChartJs, QuarterlyComparisonChartJs } from "@/components/DashboardChartJs";
+
+type HealthStatus = "excellent" | "good" | "warning" | "critical";
+
+type CashFlowForecastData = {
+  historical: Array<{ month: string; revenue: number; costs: number }>;
+  forecast: Array<{ week: string; revenue: number; costs: number; margin: number }>;
+  summary: {
+    avgRevenue: number;
+    avgCosts: number;
+    avgMargin: number;
+    confidence: number;
+  };
+};
 
 export default function Dashboard() {
-  const router = useRouter();
+  const [, setLocation] = useLocation();
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
@@ -27,6 +40,7 @@ export default function Dashboard() {
   const revenueDetails = trpc.dashboardAdvanced.getRevenueDetails.useQuery({ year, month });
   const costsDetails = trpc.dashboardAdvanced.getCostsDetails.useQuery({ year, month });
   const cashFlowForecast = trpc.dashboardAdvanced.getCashFlowForecast.useQuery({ year, month });
+  const cashFlowForecastData = cashFlowForecast.data as CashFlowForecastData | undefined;
 
   // Navegação de mês
   const handlePrevMonth = () => {
@@ -65,30 +79,30 @@ export default function Dashboard() {
 
   // Função para navegar com filtro de mês
   const navigateWithMonth = (path: string) => {
-    router(`${path}?month=${month}&year=${year}`);
+    setLocation(`${path}?month=${month}&year=${year}`);
   };
 
   // Função para drill-down em receita
   const handleRevenueDrilldown = () => {
-    navigateWithMonth("/contas?tab=receivable");
+    navigateWithMonth("/accounts-receivable");
   };
 
   // Função para drill-down em custos
   const handleCostsDrilldown = () => {
-    navigateWithMonth("/contas?tab=payable");
+    navigateWithMonth("/accounts-payable");
   };
 
   // Ações rápidas nos alertas
   const handlePayOverdueAccounts = () => {
-    navigateWithMonth("/contas?tab=payable&status=overdue&action=pay");
+    navigateWithMonth("/accounts-payable?status=overdue&action=pay");
   };
 
   const handleAddPixToEmployees = () => {
-    router("/funcionarios?filter=no-pix&action=add-pix");
+    setLocation("/employees?filter=no-pix&action=add-pix");
   };
 
   const handleValidateSchedules = () => {
-    navigateWithMonth("/planejamentos?status=pending&action=validate");
+    navigateWithMonth("/schedules?status=pending&action=validate");
   };
 
   // Função para exportar dados
@@ -144,7 +158,7 @@ export default function Dashboard() {
           {/* Faturamento */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigateWithMonth("/contas?tab=receivable")}
+            onClick={handleRevenueDrilldown}
           >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Faturamento do Mês</CardTitle>
@@ -165,7 +179,7 @@ export default function Dashboard() {
           {/* Custos Operacionais */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigateWithMonth("/contas?tab=payable")}
+            onClick={handleCostsDrilldown}
           >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Custos Operacionais</CardTitle>
@@ -209,7 +223,7 @@ export default function Dashboard() {
           {/* Total de Trabalhos */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigateWithMonth("/planejamentos")}
+            onClick={() => navigateWithMonth("/schedules")}
           >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Total de Trabalhos</CardTitle>
@@ -255,7 +269,7 @@ export default function Dashboard() {
                   🟡 <strong>{alerts.data.overdueAccounts.count} conta(s) vencida(s)</strong> totalizando {formatCurrency(alerts.data.overdueAccounts.total)}
                 </span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/contas?tab=payable&status=overdue")}>
+                  <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/accounts-payable?status=overdue")}>
                     Ver contas
                   </Button>
                   <Button size="sm" variant="default" onClick={handlePayOverdueAccounts} className="bg-yellow-600 hover:bg-yellow-700">
@@ -271,7 +285,7 @@ export default function Dashboard() {
                   🟠 <strong>{alerts.data.employeesWithoutPix.count} diarista(s) sem chave PIX</strong> — não receberão pagamento
                 </span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => router("/funcionarios?filter=no-pix")}>
+                  <Button size="sm" variant="outline" onClick={() => setLocation("/employees?filter=no-pix")}>
                     Ver diaristas
                   </Button>
                   <Button size="sm" variant="default" onClick={handleAddPixToEmployees} className="bg-orange-600 hover:bg-orange-700">
@@ -287,7 +301,7 @@ export default function Dashboard() {
                   🔵 <strong>{alerts.data.pendingSchedules.count} planejamento(s)</strong> aguardando validação
                 </span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/planejamentos?status=pending")}>
+                  <Button size="sm" variant="outline" onClick={() => navigateWithMonth("/schedules?status=pending")}>
                     Ver planejamentos
                   </Button>
                   <Button size="sm" variant="default" onClick={handleValidateSchedules} className="bg-blue-600 hover:bg-blue-700">
@@ -314,7 +328,7 @@ export default function Dashboard() {
         ) : healthScore.data ? (
           <HealthScoreGauge
             score={healthScore.data.score}
-            status={healthScore.data.status}
+            status={healthScore.data.status as HealthStatus}
             breakdown={healthScore.data.breakdown}
           />
         ) : null}
@@ -376,18 +390,9 @@ export default function Dashboard() {
                 <CardTitle>Evolução Financeira Diária</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dailyEvolution.data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                    <Legend />
-                    <Line type="monotone" dataKey="revenue" stroke="#10b981" name="Receita" />
-                    <Line type="monotone" dataKey="costs" stroke="#ef4444" name="Custos" />
-                    <Line type="monotone" dataKey="margin" stroke="#3b82f6" name="Margem" />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div className="h-[320px]">
+                  <DailyEvolutionChartJs data={dailyEvolution.data} />
+                </div>
               </CardContent>
             </Card>
           ) : null}
@@ -406,18 +411,9 @@ export default function Dashboard() {
                 {/* Gráfico de Barras Trimestral */}
                 <div>
                   <h3 className="text-sm font-semibold mb-4">Receita vs Custos vs Margem</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={trimestrialComparison.data.quarters}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="quarter" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                      <Legend />
-                      <Bar dataKey="revenue" fill="#10b981" name="Receita" />
-                      <Bar dataKey="costs" fill="#ef4444" name="Custos" />
-                      <Bar dataKey="margin" fill="#3b82f6" name="Margem" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="h-[320px]">
+                    <QuarterlyComparisonChartJs data={trimestrialComparison.data.quarters} />
+                  </div>
                 </div>
 
                 {/* Resumo YTD */}
@@ -464,11 +460,11 @@ export default function Dashboard() {
         <TabsContent value="forecast">
           {cashFlowForecast.isLoading ? (
             <div className="text-center text-gray-500">Carregando previsão...</div>
-          ) : cashFlowForecast.data ? (
+          ) : cashFlowForecastData ? (
             <CashFlowForecast
-              historical={cashFlowForecast.data.historical}
-              forecast={cashFlowForecast.data.forecast}
-              summary={cashFlowForecast.data.summary}
+              historical={cashFlowForecastData.historical}
+              forecast={cashFlowForecastData.forecast}
+              summary={cashFlowForecastData.summary}
             />
           ) : null}
         </TabsContent>

@@ -16,6 +16,8 @@ import { dashboardAdvancedRouter } from "./routers/dashboard-advanced";
 import { notificationsRouter } from "./routers/notifications";
 import { auditRouter } from "./routers/audit";
 import { fiscalRouter } from "./routers/fiscal";
+import { adminRouter } from "./routers/admin";
+import { documentsRouter } from "./routers/documents";
 
 export const appRouter = router({
   system: systemRouter,
@@ -55,6 +57,8 @@ export const appRouter = router({
   reportGeneration: reportGenerationRouter,
   notifications: notificationsRouter,
   audit: auditRouter,
+  admin: adminRouter,
+  documents: documentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

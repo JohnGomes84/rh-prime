@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/usePermissions";
 import CrudPage, { type FieldDef } from "@/components/CrudPage";
+import { EntityAttachments } from "@/components/EntityAttachments";
 import { Truck } from "lucide-react";
 
 const fields: FieldDef[] = [
@@ -40,6 +41,18 @@ export default function SuppliersPage() {
       onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
       onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
       searchPlaceholder="Buscar por nome ou CNPJ..."
+      renderEditExtra={(item) => (
+        <EntityAttachments
+          entityType="supplier"
+          entityId={String(item.id)}
+          defaultMetadata={{
+            documentType: "financeiro",
+            purpose: "administrativo",
+            retentionPolicy: "5anos",
+            visibility: "internal",
+          }}
+        />
+      )}
     />
   );
 }

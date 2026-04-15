@@ -1,24 +1,28 @@
-import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import "./load-env";
 import { registerOAuthRoutes } from "./oauth";
 import { registerExportRoutes } from "../routers/exportRoutes";
+import { registerDocumentUploadRoutes } from "../routers/documentUploadRoutes";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { registerSSESubscriber } from "../lib/sse-notifications";
 import { setupSSE } from "./sse";
 import { runSeeds } from "../lib/seed";
 import { serveStatic, setupVite } from "./vite";
 import {
   createRateLimitMiddleware,
   healthHandler,
+  installGlobalErrorHandlers,
+  logError,
   metricsHandler,
   readinessHandler,
   requestLogger,
   withCorrelationId,
 } from "./observability";
+
+installGlobalErrorHandlers();
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -37,6 +41,46 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
     }
   }
   throw new Error(`No available port found starting from ${startPort}`);
+}
+
+async function listenWithPortRetry(
+  server: ReturnType<typeof createServer>,
+  preferredPort: number,
+  host: string
+): Promise<number> {
+  let port = await findAvailablePort(preferredPort);
+
+  while (true) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: NodeJS.ErrnoException) => {
+          server.off("listening", onListening);
+          reject(error);
+        };
+
+        const onListening = () => {
+          server.off("error", onError);
+          resolve();
+        };
+
+        server.once("error", onError);
+        server.once("listening", onListening);
+        server.listen(port, host);
+      });
+
+      return port;
+    } catch (error) {
+      const listenError = error as NodeJS.ErrnoException;
+      if (listenError.code !== "EADDRINUSE") {
+        throw listenError;
+      }
+
+      port += 1;
+      if (port >= preferredPort + 20) {
+        throw new Error(`No available port found starting from ${preferredPort}`);
+      }
+    }
+  }
 }
 
 async function startServer() {
@@ -60,6 +104,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Export routes (Excel/PDF) under /api/reports/*
   registerExportRoutes(app);
+  registerDocumentUploadRoutes(app);
   // SSE notifications under /api/notifications/stream
   setupSSE(app);
   // tRPC API
@@ -79,18 +124,28 @@ async function startServer() {
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const host = process.env.SERVER_HOST || "0.0.0.0";
-  const port = await findAvailablePort(preferredPort);
+  const port = await listenWithPortRetry(server, preferredPort, host);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, host, () => {
-    const baseUrl =
-      process.env.PUBLIC_BASE_URL ||
-      (host === "0.0.0.0" || host === "::" ? `http://localhost:${port}` : `http://${host}:${port}`);
-    console.log(`Server running on ${baseUrl}/`);
-  });
+  const baseUrl =
+    process.env.PUBLIC_BASE_URL ||
+    (host === "0.0.0.0" || host === "::" ? `http://localhost:${port}` : `http://${host}:${port}`);
+  console.log(`Server running on ${baseUrl}/`);
 }
 
-startServer().catch(console.error);
+startServer().catch(error => {
+  logError("server.startupFailed", {
+    error:
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          }
+        : { message: String(error) },
+  });
+  process.exitCode = 1;
+});

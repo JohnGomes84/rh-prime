@@ -4,6 +4,37 @@ import { getDb } from "../db";
 import { sql, and, gte, lt, eq } from "drizzle-orm";
 import { accountsReceivable, accountsPayable, workSchedules, clients, employees } from "../../drizzle/schema";
 
+const toNumber = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const emptyKpis = {
+  revenue: { current: 0, previous: 0, variation: 0 },
+  costs: { current: 0, previous: 0, variation: 0 },
+  margin: { current: 0, previous: 0, variation: 0, isNegative: false },
+  works: { current: 0, previous: 0, variation: 0 },
+};
+
+const emptyAlerts = {
+  loss: { exists: false, amount: 0, month: "" },
+  overdueAccounts: { count: 0, total: 0 },
+  employeesWithoutPix: { count: 0 },
+  pendingSchedules: { count: 0 },
+};
+
+const emptyAccountsSummary = {
+  payablePending: 0,
+  payablePaid: 0,
+  receivablePending: 0,
+  receivablePaid: 0,
+  forecastedBalance: 0,
+};
+
 export const dashboardRouter = router({
   /**
    * Busca KPIs principais do mês (faturamento, custos, margem, trabalhos)
@@ -17,7 +48,7 @@ export const dashboardRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyKpis;
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -51,8 +82,8 @@ export const dashboardRouter = router({
           )
         );
 
-      const currentRevenue = currentRevenueResult[0]?.total || 0;
-      const prevRevenue = prevRevenueResult[0]?.total || 0;
+      const currentRevenue = toNumber(currentRevenueResult[0]?.total);
+      const prevRevenue = toNumber(prevRevenueResult[0]?.total);
       const revenueVariation = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
 
       // Custos operacionais (contas a pagar)
@@ -82,8 +113,8 @@ export const dashboardRouter = router({
           )
         );
 
-      const currentCosts = currentCostsResult[0]?.total || 0;
-      const prevCosts = prevCostsResult[0]?.total || 0;
+      const currentCosts = toNumber(currentCostsResult[0]?.total);
+      const prevCosts = toNumber(prevCostsResult[0]?.total);
       const costsVariation = prevCosts > 0 ? ((currentCosts - prevCosts) / prevCosts) * 100 : 0;
 
       // Margem de lucro
@@ -116,8 +147,8 @@ export const dashboardRouter = router({
           )
         );
 
-      const currentWorks = currentWorksResult[0]?.count || 0;
-      const prevWorks = prevWorksResult[0]?.count || 0;
+      const currentWorks = toNumber(currentWorksResult[0]?.count);
+      const prevWorks = toNumber(prevWorksResult[0]?.count);
       const worksVariation = prevWorks > 0 ? ((currentWorks - prevWorks) / prevWorks) * 100 : 0;
 
       return {
@@ -157,7 +188,15 @@ export const dashboardRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) {
+        return {
+          ...emptyAlerts,
+          loss: {
+            ...emptyAlerts.loss,
+            month: new Date(input.year, input.month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }),
+          },
+        };
+      }
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -188,8 +227,8 @@ export const dashboardRouter = router({
           )
         );
 
-      const revenue = revenueResult[0]?.total || 0;
-      const costs = costsResult[0]?.total || 0;
+      const revenue = toNumber(revenueResult[0]?.total);
+      const costs = toNumber(costsResult[0]?.total);
       const lossAmount = costs - revenue;
       const lossExists = lossAmount > 0;
 
@@ -207,8 +246,8 @@ export const dashboardRouter = router({
           )
         );
 
-      const overdueCount = overdueResult[0]?.count || 0;
-      const overdueTotal = overdueResult[0]?.total || 0;
+      const overdueCount = toNumber(overdueResult[0]?.count);
+      const overdueTotal = toNumber(overdueResult[0]?.total);
 
       // Diaristas sem PIX
       const employeesWithoutPixResult = await db
@@ -218,12 +257,12 @@ export const dashboardRouter = router({
         .from(employees)
         .where(
           and(
-            eq(employees.status, 'ativo'),
+            eq(employees.status, 'diarista'),
             sql`${employees.pixKey} IS NULL OR ${employees.pixKey} = ''`
           )
         );
 
-      const employeesWithoutPixCount = employeesWithoutPixResult[0]?.count || 0;
+      const employeesWithoutPixCount = toNumber(employeesWithoutPixResult[0]?.count);
 
       // Planejamentos pendentes (mais antigos que 2 dias)
       const pendingSchedulesResult = await db
@@ -233,11 +272,12 @@ export const dashboardRouter = router({
         .from(workSchedules)
         .where(
           and(
-            lt(workSchedules.date, new Date(today.getTime() - 2 * 86400000))
+            lt(workSchedules.date, new Date(today.getTime() - 2 * 86400000)),
+            eq(workSchedules.status, 'pendente')
           )
         );
 
-      const pendingSchedulesCount = pendingSchedulesResult[0]?.count || 0;
+      const pendingSchedulesCount = toNumber(pendingSchedulesResult[0]?.count);
 
       return {
         loss: {
@@ -270,7 +310,7 @@ export const dashboardRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return [];
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -295,14 +335,27 @@ export const dashboardRouter = router({
             )
           );
 
+        const costsResult = await db
+          .select({
+            total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
+          })
+          .from(accountsPayable)
+          .where(
+            and(
+              gte(accountsPayable.dueDate, dayStart),
+              lt(accountsPayable.dueDate, dayEnd)
+            )
+          );
+
         const dateStr = `${input.year}-${String(input.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const revenue = revenueResult[0]?.total || 0;
+        const revenue = toNumber(revenueResult[0]?.total);
+        const costs = toNumber(costsResult[0]?.total);
 
         data.push({
           date: dateStr,
-          revenue: revenue,
-          costs: 0,
-          margin: revenue - 0,
+          revenue,
+          costs,
+          margin: revenue - costs,
         });
       }
 
@@ -321,7 +374,7 @@ export const dashboardRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return [];
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -352,8 +405,8 @@ export const dashboardRouter = router({
       return results.map((r) => ({
         clientId: r.clientId,
         clientName: r.clientName || 'Desconhecido',
-        totalRevenue: r.totalRevenue || 0,
-        workCount: r.workCount || 0,
+          totalRevenue: toNumber(r.totalRevenue),
+          workCount: toNumber(r.workCount),
       }));
     }),
 
@@ -369,7 +422,7 @@ export const dashboardRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) return emptyAccountsSummary;
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -426,10 +479,10 @@ export const dashboardRouter = router({
           )
         );
 
-      const payablePending = payablePendingResult[0]?.total || 0;
-      const payablePaid = payablePaidResult[0]?.total || 0;
-      const receivablePending = receivablePendingResult[0]?.total || 0;
-      const receivablePaid = receivablePaidResult[0]?.total || 0;
+      const payablePending = toNumber(payablePendingResult[0]?.total);
+      const payablePaid = toNumber(payablePaidResult[0]?.total);
+      const receivablePending = toNumber(receivablePendingResult[0]?.total);
+      const receivablePaid = toNumber(receivablePaidResult[0]?.total);
 
       return {
         payablePending,

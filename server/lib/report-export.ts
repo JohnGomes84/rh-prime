@@ -1,5 +1,5 @@
 import { Workbook } from "exceljs";
-import { PDFDocument } from "pdfkit";
+import PDFDocument from "pdfkit";
 
 export async function exportReportToExcel(report: Record<string, any>) {
   const workbook = new Workbook();
@@ -75,7 +75,7 @@ export async function exportReportToPdf(report: Record<string, any>) {
     const doc = new PDFDocument({ margin: 40 });
     const chunks: Buffer[] = [];
 
-    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 

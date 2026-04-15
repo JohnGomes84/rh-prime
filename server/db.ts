@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { assertAllowedEmailDomain } from "./_core/auth-domain";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -21,6 +22,12 @@ export async function getDb() {
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
+  }
+  if (user.email !== undefined && user.email !== null) {
+    assertAllowedEmailDomain(
+      user.email,
+      "Use seu e-mail corporativo (@mlservicoseco.com.br)."
+    );
   }
 
   const db = await getDb();

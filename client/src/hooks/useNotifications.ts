@@ -10,6 +10,43 @@ export interface SSENotification {
   actionUrl?: string;
 }
 
+type LocalNotification = Pick<SSENotification, "type" | "title" | "message" | "actionUrl"> & {
+  data?: Record<string, any>;
+};
+
+function emitToast(notification: SSENotification | LocalNotification) {
+  switch (notification.type) {
+    case "pix_request_created":
+      toast.info(`Nova solicitacao de PIX: ${notification.data?.employeeName}`);
+      break;
+    case "attendance_closed":
+      toast.info(`Presenca fechada: ${notification.data?.totalPeople} diaristas em ${notification.data?.clientName}`);
+      break;
+    case "pix_request_reviewed":
+      if (notification.data?.status === "aprovado") {
+        toast.success(`PIX de ${notification.data?.employeeName} foi aprovado`);
+      } else {
+        toast.error(`PIX de ${notification.data?.employeeName} foi rejeitado`);
+      }
+      break;
+    case "duplicate_allocation_detected":
+      toast.warning(`Alocacao duplicada detectada: ${notification.data?.employeeName}`);
+      break;
+    case "success":
+      toast.success(notification.title || notification.message);
+      break;
+    case "warning":
+      toast.warning(notification.title || notification.message);
+      break;
+    case "error":
+      toast.error(notification.title || notification.message);
+      break;
+    case "alert":
+      toast.info(notification.title || notification.message);
+      break;
+  }
+}
+
 export function useNotifications(onNotification?: (notif: SSENotification) => void) {
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -33,37 +70,7 @@ export function useNotifications(onNotification?: (notif: SSENotification) => vo
             onNotification(notification);
           }
 
-          // Mostrar toast baseado no tipo
-          switch (notification.type) {
-            case "pix_request_created":
-              toast.info(`Nova solicitacao de PIX: ${notification.data.employeeName}`);
-              break;
-            case "attendance_closed":
-              toast.info(`Presenca fechada: ${notification.data.totalPeople} diaristas em ${notification.data.clientName}`);
-              break;
-            case "pix_request_reviewed":
-              if (notification.data.status === "aprovado") {
-                toast.success(`PIX de ${notification.data.employeeName} foi aprovado`);
-              } else {
-                toast.error(`PIX de ${notification.data.employeeName} foi rejeitado`);
-              }
-              break;
-            case "duplicate_allocation_detected":
-              toast.warning(`Alocacao duplicada detectada: ${notification.data.employeeName}`);
-              break;
-            case "success":
-              toast.success(notification.title || notification.message);
-              break;
-            case "warning":
-              toast.warning(notification.title || notification.message);
-              break;
-            case "error":
-              toast.error(notification.title || notification.message);
-              break;
-            case "alert":
-              toast.info(notification.title || notification.message);
-              break;
-          }
+          emitToast(notification);
         } catch (error) {
           console.error("Erro ao processar notificacao:", error);
         }
@@ -90,6 +97,10 @@ export function useNotifications(onNotification?: (notif: SSENotification) => vo
     }
   }, []);
 
+  const notify = useCallback((notification: LocalNotification) => {
+    emitToast(notification);
+  }, []);
+
   useEffect(() => {
     connect();
 
@@ -98,5 +109,5 @@ export function useNotifications(onNotification?: (notif: SSENotification) => vo
     };
   }, [connect, disconnect]);
 
-  return { connect, disconnect };
+  return { connect, disconnect, notify };
 }

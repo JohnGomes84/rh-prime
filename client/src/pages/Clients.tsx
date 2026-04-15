@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/usePermissions";
 import CrudPage, { type FieldDef } from "@/components/CrudPage";
+import { EntityAttachments } from "@/components/EntityAttachments";
 import { Building2 } from "lucide-react";
 
 const fields: FieldDef[] = [
@@ -41,6 +42,18 @@ export default function ClientsPage() {
       onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
       onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
       searchPlaceholder="Buscar por nome ou CNPJ..."
+      renderEditExtra={(item) => (
+        <EntityAttachments
+          entityType="client"
+          entityId={String(item.id)}
+          defaultMetadata={{
+            documentType: "contrato",
+            purpose: "comercial",
+            retentionPolicy: "5anos",
+            visibility: "internal",
+          }}
+        />
+      )}
     />
   );
 }

@@ -51,6 +51,45 @@ export function logInfo(event: string, payload: Record<string, unknown>) {
   );
 }
 
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
+export function logError(event: string, payload: Record<string, unknown>) {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      event,
+      timestamp: new Date().toISOString(),
+      ...payload,
+    })
+  );
+}
+
+export function installGlobalErrorHandlers() {
+  process.on("uncaughtException", error => {
+    logError("process.uncaughtException", {
+      error: serializeError(error),
+    });
+  });
+
+  process.on("unhandledRejection", reason => {
+    logError("process.unhandledRejection", {
+      error: serializeError(reason),
+    });
+  });
+}
+
 export function requestLogger(req: Request, res: Response, next: NextFunction) {
   const startTime = Date.now();
   metricsState.requestsTotal += 1;

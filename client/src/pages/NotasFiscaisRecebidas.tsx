@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, FileText, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../server/routers";
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type NfeRecebida = RouterOutputs["fiscal"]["getNfesRecebidas"]["data"][number];
 
 export default function NotasFiscaisRecebidas() {
   const [page, setPage] = useState(1);
@@ -246,13 +251,13 @@ export default function NotasFiscaisRecebidas() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {nfesData.data.map((nfe) => (
+                  {nfesData.data.map((nfe: NfeRecebida) => (
                     <TableRow key={nfe.id}>
                       <TableCell className="font-mono text-xs">{nfe.nfeNumber}</TableCell>
                       <TableCell>{nfe.emitterName}</TableCell>
                       <TableCell>{new Date(nfe.issueDate).toLocaleDateString("pt-BR")}</TableCell>
                       <TableCell className="font-semibold">
-                        R$ {nfe.amount.toFixed(2)}
+                        R$ {Number(nfe.amount).toFixed(2)}
                       </TableCell>
                       <TableCell>{getStatusBadge(nfe.status)}</TableCell>
                       <TableCell>

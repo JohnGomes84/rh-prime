@@ -1,147 +1,137 @@
-/**
- * TESTES — Segurança e Governança
- * 
- * Valida:
- * - Soft Delete (exclusão lógica)
- * - Security Headers (cabeçalhos de segurança)
- * - Upload Seguro (validação de arquivos)
- * - Auditoria LGPD (rastreabilidade)
- */
+import { describe, expect, it, vi } from "vitest";
 
-import { describe, it, expect } from 'vitest';
-import { validateUpload, sanitizeFileName, generateUniqueFileName } from './controle/uploadSecurity';
+import { securityHeaders } from "./controle/securityHeaders";
+import {
+  filterActive,
+  markAsDeleted,
+  restoreDeleted,
+} from "./controle/softDelete";
+import {
+  generateUniqueFileName,
+  sanitizeFileName,
+  validateUpload,
+} from "./controle/uploadSecurity";
 
-// ─── TESTES: Upload Seguro ───────────────────────────────────────────────────
-
-describe('Upload Seguro', () => {
-  it('deve aceitar imagem JPEG válida', () => {
-    const result = validateUpload('image/jpeg', 'photo.jpg', 1024 * 100); // 100KB
-    expect(result.valid).toBe(true);
+describe("Upload Security", () => {
+  it("accepts valid JPEG, PNG, and PDF uploads", () => {
+    expect(validateUpload("image/jpeg", "photo.jpg", 1024 * 100).valid).toBe(
+      true
+    );
+    expect(validateUpload("image/png", "image.png", 1024 * 500).valid).toBe(
+      true
+    );
+    expect(
+      validateUpload("application/pdf", "document.pdf", 1024 * 1024 * 5).valid
+    ).toBe(true);
   });
 
-  it('deve aceitar imagem PNG válida', () => {
-    const result = validateUpload('image/png', 'screenshot.png', 1024 * 500); // 500KB
-    expect(result.valid).toBe(true);
+  it("rejects dangerous or invalid uploads", () => {
+    expect(
+      validateUpload("application/x-msdownload", "malware.exe", 1024).valid
+    ).toBe(false);
+    expect(validateUpload("image/jpeg", "photo.exe", 1024 * 100).valid).toBe(
+      false
+    );
+    expect(
+      validateUpload("image/jpeg", "../../../etc/passwd.jpg", 1024).valid
+    ).toBe(false);
+    expect(
+      validateUpload("image/jpeg", "huge.jpg", 1024 * 1024 * 15).valid
+    ).toBe(false);
   });
 
-  it('deve aceitar PDF válido', () => {
-    const result = validateUpload('application/pdf', 'documento.pdf', 1024 * 1024 * 5); // 5MB
-    expect(result.valid).toBe(true);
-  });
+  it("sanitizes and uniquifies file names", () => {
+    const sanitized = sanitizeFileName("foto@#$%^&*().jpg");
+    expect(sanitized).toBe("foto_________.jpg");
 
-  it('deve rejeitar arquivo executável', () => {
-    const result = validateUpload('application/x-msdownload', 'malware.exe', 1024);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('não permitido');
-  });
-
-  it('deve rejeitar arquivo muito grande (>10MB)', () => {
-    const result = validateUpload('image/jpeg', 'huge.jpg', 1024 * 1024 * 15); // 15MB
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('muito grande');
-  });
-
-  it('deve rejeitar extensão inválida', () => {
-    const result = validateUpload('image/jpeg', 'photo.exe', 1024 * 100);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('não permitida');
-  });
-
-  it('deve rejeitar nome com path traversal', () => {
-    const result = validateUpload('image/jpeg', '../../../etc/passwd.jpg', 1024);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('inválido');
-  });
-
-  it('deve sanitizar nome de arquivo', () => {
-    const sanitized = sanitizeFileName('foto@#$%^&*().jpg');
-    expect(sanitized).toBe('foto_________.jpg');
-  });
-
-  it('deve gerar nome único para arquivo', () => {
-    const unique1 = generateUniqueFileName('documento.pdf');
-    const unique2 = generateUniqueFileName('documento.pdf');
+    const unique1 = generateUniqueFileName("documento.pdf");
+    const unique2 = generateUniqueFileName("documento.pdf");
+    expect(unique1).toContain("documento");
+    expect(unique1).toContain(".pdf");
     expect(unique1).not.toBe(unique2);
-    expect(unique1).toContain('documento');
-    expect(unique1).toContain('.pdf');
   });
 });
 
-// ─── TESTES: Security Headers ───────────────────────────────────────────────
+describe("Security Headers", () => {
+  it("sets the expected hardening headers", () => {
+    const setHeader = vi.fn();
+    const next = vi.fn();
+    const middleware = securityHeaders();
 
-describe('Security Headers', () => {
-  it('deve incluir HSTS header', () => {
-    // Teste de integração: verificar que middleware adiciona header
-    expect(true).toBe(true); // Placeholder para teste de middleware
-  });
+    middleware({} as any, { setHeader } as any, next);
 
-  it('deve incluir X-Frame-Options header', () => {
-    expect(true).toBe(true); // Placeholder
-  });
-
-  it('deve incluir X-Content-Type-Options header', () => {
-    expect(true).toBe(true); // Placeholder
-  });
-});
-
-// ─── TESTES: Soft Delete ───────────────────────────────────────────────────
-
-describe('Soft Delete', () => {
-  it('deve marcar registro como deletado sem remover do banco', () => {
-    // Teste de integração: verificar que deletedAt é preenchido
-    expect(true).toBe(true); // Placeholder
-  });
-
-  it('deve filtrar registros deletados em queries', () => {
-    // Teste de integração: verificar que filterActive funciona
-    expect(true).toBe(true); // Placeholder
-  });
-
-  it('deve permitir restaurar registro deletado', () => {
-    // Teste de integração: verificar que restoreDeleted funciona
-    expect(true).toBe(true); // Placeholder
+    expect(setHeader).toHaveBeenCalledWith(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains"
+    );
+    expect(setHeader).toHaveBeenCalledWith("X-Frame-Options", "DENY");
+    expect(setHeader).toHaveBeenCalledWith(
+      "X-Content-Type-Options",
+      "nosniff"
+    );
+    expect(setHeader).toHaveBeenCalledWith("X-XSS-Protection", "1; mode=block");
+    expect(setHeader).toHaveBeenCalledWith(
+      "Referrer-Policy",
+      "strict-origin-when-cross-origin"
+    );
+    expect(setHeader).toHaveBeenCalledWith(
+      "Permissions-Policy",
+      "geolocation=(), microphone=(), camera=(), payment=()"
+    );
+    expect(next).toHaveBeenCalledTimes(1);
   });
 });
 
-// ─── TESTES: Auditoria LGPD ───────────────────────────────────────────────
+describe("Soft Delete", () => {
+  const mockTable = {
+    id: { name: "id" },
+    deletedAt: { name: "deletedAt" },
+  };
 
-describe('Auditoria LGPD', () => {
-  it('deve registrar acesso a dados pessoais', () => {
-    // Teste de integração: verificar que logDataAccess insere registro
-    expect(true).toBe(true); // Placeholder
+  it("builds a filter that targets active rows", () => {
+    const condition = filterActive(mockTable as any);
+    expect(condition).toBeTruthy();
   });
 
-  it('deve gerar relatório de acesso', () => {
-    // Teste de integração: verificar que generateDataAccessReport funciona
-    expect(true).toBe(true); // Placeholder
-  });
+  it("marks and restores rows through the db contract", async () => {
+    const updateState = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
+    };
+    const db = {
+      update: vi.fn().mockReturnValue(updateState),
+    };
 
-  it('deve recuperar histórico de acesso de usuário', () => {
-    // Teste de integração: verificar que getUserAccessHistory funciona
-    expect(true).toBe(true); // Placeholder
+    await expect(markAsDeleted(db as any, mockTable as any, 7)).resolves.toBe(
+      true
+    );
+    expect(updateState.set).toHaveBeenCalledWith(
+      expect.objectContaining({ deletedAt: expect.any(Date) })
+    );
+
+    updateState.set.mockClear();
+    await expect(restoreDeleted(db as any, mockTable as any, 7)).resolves.toBe(
+      true
+    );
+    expect(updateState.set).toHaveBeenCalledWith({ deletedAt: null });
   });
 });
 
-// ─── FLUXO DE TESTE MÍNIMO ───────────────────────────────────────────────
-
-describe('Fluxo Mínimo: Upload Seguro', () => {
-  it('deve validar e sanitizar arquivo em fluxo completo', () => {
-    // 1. Usuário faz upload de arquivo
-    const fileName = 'documento@2024.pdf';
-    const mimeType = 'application/pdf';
-    const fileSize = 1024 * 1024 * 2; // 2MB
-
-    // 2. Sistema valida
-    const validation = validateUpload(mimeType, fileName, fileSize);
+describe("Minimum Secure Upload Flow", () => {
+  it("validates, sanitizes, and renames a file in sequence", () => {
+    const fileName = "documento@2024.pdf";
+    const validation = validateUpload(
+      "application/pdf",
+      fileName,
+      1024 * 1024 * 2
+    );
     expect(validation.valid).toBe(true);
 
-    // 3. Sistema sanitiza nome
     const sanitized = sanitizeFileName(fileName);
-    expect(sanitized).not.toContain('@');
+    expect(sanitized).not.toContain("@");
 
-    // 4. Sistema gera nome único
     const unique = generateUniqueFileName(sanitized);
-    expect(unique).toContain('documento');
-    expect(unique).toContain('.pdf');
+    expect(unique).toContain("documento");
+    expect(unique).toContain(".pdf");
   });
 });

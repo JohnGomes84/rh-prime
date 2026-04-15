@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/usePermissions";
 import CrudPage, { type FieldDef } from "@/components/CrudPage";
 import { ImportExcel } from "@/components/ImportExcel";
+import { EntityAttachments } from "@/components/EntityAttachments";
 import { Users, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
@@ -91,6 +92,18 @@ export default function EmployeesPage() {
       onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
       searchPlaceholder="Buscar por nome, CPF ou cidade..."
       headerExtra={importButton}
+      renderEditExtra={(item) => (
+        <EntityAttachments
+          entityType="employee"
+          entityId={String(item.id)}
+          defaultMetadata={{
+            documentType: "outro",
+            purpose: "pessoal",
+            retentionPolicy: "5anos",
+            visibility: "internal",
+          }}
+        />
+      )}
     />
   );
 }

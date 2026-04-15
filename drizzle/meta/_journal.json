@@ -13,14 +13,35 @@
       "idx": 1,
       "version": "5",
       "when": 1775000000000,
-      "tag": "0001_core_hardening",
+      "tag": "0002_keen_random",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "5",
+      "when": 1775000001000,
+      "tag": "0001_core_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
       "when": 1775479704279,
-      "tag": "0002_keen_random",
+      "tag": "0002_partial_hours",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1775748836827,
+      "tag": "0004_sleepy_clea",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1776190000000,
+      "tag": "0005_documents_module",
       "breakpoints": true
     }
   ]

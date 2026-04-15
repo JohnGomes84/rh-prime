@@ -2,6 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
+import type { RowDataPacket } from "mysql2";
 
 // Tipos de ações auditadas
 export type AuditAction = 
@@ -40,6 +41,13 @@ export async function logAudit(
     console.error('Erro ao registrar auditoria:', error);
   }
 }
+
+const escapeSqlValue = (value: unknown) => {
+  if (value === null || value === undefined) return "NULL";
+  if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace("T", " ")}'`;
+  if (typeof value === "number") return String(value);
+  return `'${String(value).replace(/'/g, "''")}'`;
+};
 
 export const auditRouter = router({
   /**
@@ -108,15 +116,27 @@ export const auditRouter = router({
 
       // Contar total
       const countQuery = `SELECT COUNT(*) as total FROM (${query}) as t`;
-      const countResult = await db.execute(sql.raw(countQuery, params));
-      const total = (countResult[0] as any).total || 0;
+      const resolvedCountQuery = params.reduce(
+        (current, value) => current.replace("?", escapeSqlValue(value)),
+        countQuery
+      );
+      const [countRows] = (await db.$client.execute(
+        resolvedCountQuery
+      )) as unknown as [RowDataPacket[], unknown];
+      const total = Number(countRows[0]?.total || 0);
 
       // Buscar logs com paginação
       const offset = (input.page - 1) * input.limit;
       query += ` ORDER BY al.createdAt DESC LIMIT ? OFFSET ?`;
       params.push(input.limit, offset);
 
-      const logs = await db.execute(sql.raw(query, params));
+      const resolvedLogsQuery = params.reduce(
+        (current, value) => current.replace("?", escapeSqlValue(value)),
+        query
+      );
+      const [logs] = (await db.$client.execute(
+        resolvedLogsQuery
+      )) as unknown as [RowDataPacket[], unknown];
 
       return {
         logs: logs.map((log: any) => ({
@@ -157,9 +177,13 @@ export const auditRouter = router({
         ORDER BY count DESC
       `;
 
-      const results = await db.execute(
-        sql.raw(query, [input.startDate, input.endDate])
+      const resolvedQuery = [input.startDate, input.endDate].reduce(
+        (current, value) => current.replace("?", escapeSqlValue(value)),
+        query
       );
+      const [results] = (await db.$client.execute(
+        resolvedQuery
+      )) as unknown as [RowDataPacket[], unknown];
 
       return results;
     }),
@@ -201,7 +225,13 @@ export const auditRouter = router({
 
       query += ` ORDER BY al.createdAt DESC`;
 
-      const logs = await db.execute(sql.raw(query, params));
+      const resolvedQuery = params.reduce(
+        (current, value) => current.replace("?", escapeSqlValue(value)),
+        query
+      );
+      const [logs] = (await db.$client.execute(
+        resolvedQuery
+      )) as unknown as [RowDataPacket[], unknown];
 
       // Converter para CSV
       const headers = ['Data/Hora', 'Usuário', 'Ação', 'Tipo de Entidade', 'ID da Entidade', 'Mudanças'];
@@ -216,7 +246,7 @@ export const auditRouter = router({
 
       const csv = [
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+        ...rows.map((row: any[]) => row.map((cell: unknown) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
       ].join('\n');
 
       return { csv, filename: `auditoria-${new Date().toISOString().split('T')[0]}.csv` };

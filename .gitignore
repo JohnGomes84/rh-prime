@@ -9,6 +9,7 @@ build/
 
 # Environment variables
 .env
+.env.homolog
 .env.local
 .env.development.local
 .env.test.local
@@ -100,6 +101,13 @@ jspm_packages/
 # Temporary folders
 tmp/
 temp/
+storage/
+.edge-headless-*/
+admin-occurrences-headless.html
+homolog-dashboard-headless.html
+portal-lider-occurrences-headless.html
+portal-lider-occurrences.png
+tmp-smoke-document.txt
 
 # Database
 *.db

@@ -57,6 +57,7 @@ type CrudPageProps = {
   onDelete?: (id: number) => Promise<void>;
   searchPlaceholder?: string;
   headerExtra?: React.ReactNode;
+  renderEditExtra?: (item: any) => React.ReactNode;
 };
 
 export default function CrudPage({
@@ -74,6 +75,7 @@ export default function CrudPage({
   onDelete,
   searchPlaceholder = "Buscar...",
   headerExtra,
+  renderEditExtra,
 }: CrudPageProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -274,6 +276,11 @@ export default function CrudPage({
                 )}
               </div>
             ))}
+            {editItem && renderEditExtra ? (
+              <div className="pt-3">
+                {renderEditExtra(editItem)}
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>

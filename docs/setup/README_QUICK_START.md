@@ -341,7 +341,7 @@ pnpm tsc --noEmit
 
 ## 📚 Documentação Completa
 
-Ver `DOCUMENTATION.md` para guia detalhado de:
+Ver `../reference/DOCUMENTATION.md` para guia detalhado de:
 - Arquitetura completa
 - Todas as tabelas do banco
 - Todos os endpoints

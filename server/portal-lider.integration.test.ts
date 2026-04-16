@@ -388,6 +388,188 @@ describeIfDb("Portal Lider Integration", () => {
     expect(allocated.allocationId).toBeGreaterThan(0);
   });
 
+  it("approves a pending PIX change request and updates the employee key", async () => {
+    const fixture = await createPortalFixture();
+    const leaderCaller = appRouter.createCaller(createLeaderContext());
+    const adminCaller = appRouter.createCaller(createAdminContext());
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const [jobFunction] = await db.select().from(jobFunctions).limit(1);
+    if (!jobFunction) throw new Error("Missing job function");
+
+    const suffix = Date.now();
+    const employee = await leaderCaller.portalLider.quickRegisterEmployee({
+      name: `Pix Approval ${suffix}`,
+      cpf: `903.000.${String(suffix).slice(-3)}-00`,
+      rg: `RG-APP-${suffix}`,
+      pixKey: `pix-antigo-${suffix}@old.local`,
+      pixKeyType: "email",
+    });
+
+    await leaderCaller.portalLider.allocateNewEmployee({
+      scheduleId: fixture.scheduleId,
+      employeeId: employee.id,
+      jobFunctionId: jobFunction.id,
+      payValue: 180,
+      receiveValue: 320,
+    });
+
+    await leaderCaller.portalLider.requestPixChange({
+      employeeId: employee.id,
+      newPixKey: `pix-novo-${suffix}@new.local`,
+      reason: "Atualizacao de conta",
+    });
+
+    const pendingRequests = await adminCaller.portalLider.listPixRequests({
+      status: "pendente",
+    });
+    const createdRequest = pendingRequests.find(item => item.employeeId === employee.id);
+
+    expect(createdRequest).toBeTruthy();
+
+    await adminCaller.portalLider.reviewPixRequest({
+      requestId: createdRequest!.id,
+      approved: true,
+      reviewNotes: "Validado pelo financeiro",
+    });
+
+    const [updatedEmployee] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, employee.id))
+      .limit(1);
+    const [updatedRequest] = await db
+      .select()
+      .from(pixChangeRequests)
+      .where(eq(pixChangeRequests.id, createdRequest!.id))
+      .limit(1);
+
+    expect(updatedEmployee?.pixKey).toBe(`pix-novo-${suffix}@new.local`);
+    expect(updatedRequest?.status).toBe("aprovado");
+    expect(updatedRequest?.reviewedByUserId).toBe(adminUserId);
+    expect(updatedRequest?.reviewNotes).toBe("Validado pelo financeiro");
+  });
+
+  it("rejects a pending PIX change request without changing the employee key", async () => {
+    const fixture = await createPortalFixture();
+    const leaderCaller = appRouter.createCaller(createLeaderContext());
+    const adminCaller = appRouter.createCaller(createAdminContext());
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const [jobFunction] = await db.select().from(jobFunctions).limit(1);
+    if (!jobFunction) throw new Error("Missing job function");
+
+    const suffix = Date.now();
+    const originalPixKey = `pix-original-${suffix}@old.local`;
+    const employee = await leaderCaller.portalLider.quickRegisterEmployee({
+      name: `Pix Reject ${suffix}`,
+      cpf: `904.000.${String(suffix).slice(-3)}-00`,
+      rg: `RG-REJ-${suffix}`,
+      pixKey: originalPixKey,
+      pixKeyType: "email",
+    });
+
+    await leaderCaller.portalLider.allocateNewEmployee({
+      scheduleId: fixture.scheduleId,
+      employeeId: employee.id,
+      jobFunctionId: jobFunction.id,
+      payValue: 180,
+      receiveValue: 320,
+    });
+
+    await leaderCaller.portalLider.requestPixChange({
+      employeeId: employee.id,
+      newPixKey: `pix-rejeitado-${suffix}@new.local`,
+      reason: "Tentativa de troca",
+    });
+
+    const pendingRequests = await adminCaller.portalLider.listPixRequests({
+      status: "pendente",
+    });
+    const createdRequest = pendingRequests.find(item => item.employeeId === employee.id);
+
+    expect(createdRequest).toBeTruthy();
+
+    await adminCaller.portalLider.reviewPixRequest({
+      requestId: createdRequest!.id,
+      approved: false,
+      reviewNotes: "Dados bancarios divergentes",
+    });
+
+    const [updatedEmployee] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, employee.id))
+      .limit(1);
+    const [updatedRequest] = await db
+      .select()
+      .from(pixChangeRequests)
+      .where(eq(pixChangeRequests.id, createdRequest!.id))
+      .limit(1);
+
+    expect(updatedEmployee?.pixKey).toBe(originalPixKey);
+    expect(updatedRequest?.status).toBe("rejeitado");
+    expect(updatedRequest?.reviewedByUserId).toBe(adminUserId);
+    expect(updatedRequest?.reviewNotes).toBe("Dados bancarios divergentes");
+  });
+
+  it("does not allow reviewing the same PIX request twice", async () => {
+    const fixture = await createPortalFixture();
+    const leaderCaller = appRouter.createCaller(createLeaderContext());
+    const adminCaller = appRouter.createCaller(createAdminContext());
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const [jobFunction] = await db.select().from(jobFunctions).limit(1);
+    if (!jobFunction) throw new Error("Missing job function");
+
+    const suffix = Date.now();
+    const employee = await leaderCaller.portalLider.quickRegisterEmployee({
+      name: `Pix Double ${suffix}`,
+      cpf: `905.000.${String(suffix).slice(-3)}-00`,
+      rg: `RG-DBL-${suffix}`,
+      pixKey: `pix-double-${suffix}@old.local`,
+      pixKeyType: "email",
+    });
+
+    await leaderCaller.portalLider.allocateNewEmployee({
+      scheduleId: fixture.scheduleId,
+      employeeId: employee.id,
+      jobFunctionId: jobFunction.id,
+      payValue: 180,
+      receiveValue: 320,
+    });
+
+    await leaderCaller.portalLider.requestPixChange({
+      employeeId: employee.id,
+      newPixKey: `pix-double-${suffix}@new.local`,
+      reason: "Primeira solicitacao",
+    });
+
+    const pendingRequests = await adminCaller.portalLider.listPixRequests({
+      status: "pendente",
+    });
+    const createdRequest = pendingRequests.find(item => item.employeeId === employee.id);
+
+    expect(createdRequest).toBeTruthy();
+
+    await adminCaller.portalLider.reviewPixRequest({
+      requestId: createdRequest!.id,
+      approved: true,
+      reviewNotes: "Primeira revisao",
+    });
+
+    await expect(
+      adminCaller.portalLider.reviewPixRequest({
+        requestId: createdRequest!.id,
+        approved: false,
+        reviewNotes: "Segunda revisao indevida",
+      })
+    ).rejects.toThrow("Solicitação já revisada");
+  });
+
   it("quick registers and allocates a new employee to the schedule", async () => {
     const fixture = await createPortalFixture();
     const caller = appRouter.createCaller(createLeaderContext());

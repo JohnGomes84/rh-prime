@@ -763,8 +763,8 @@ Não há rate limiting implementado atualmente. Para produção, considerar adic
 ## 📞 Suporte
 
 - GitHub Issues: https://github.com/JohnGomes84/finhub-inteligente/issues
-- Documentação: DOCUMENTATION.md
-- Quick Start: README_QUICK_START.md
+- Documentação: ../reference/DOCUMENTATION.md
+- Quick Start: ../setup/README_QUICK_START.md
 
 ---
 

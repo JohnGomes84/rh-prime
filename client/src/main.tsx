@@ -5,7 +5,6 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl, isOAuthConfigured } from "./const";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -16,9 +15,9 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
 
-  if (!isUnauthorized || !isOAuthConfigured()) return;
+  if (!isUnauthorized) return;
 
-  window.location.href = getLoginUrl();
+  console.warn("[Auth] Request returned unauthorized in local mode.");
 };
 
 queryClient.getQueryCache().subscribe(event => {

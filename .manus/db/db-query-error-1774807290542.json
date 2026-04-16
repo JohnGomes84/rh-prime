@@ -1,8 +1,0 @@
-{
-  "query": "ALTER TABLE schedule_allocations ADD COLUMN attendance_status VARCHAR(20) DEFAULT 'presente';\nALTER TABLE schedule_allocations ADD COLUMN alloc_notes TEXT DEFAULT NULL;\nALTER TABLE work_schedules ADD COLUMN notes TEXT DEFAULT NULL;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3w6LaRB3GVsYroF.daaf6b78da21 --database BWuTNGTydyoLqQj2QWvbPP --execute ALTER TABLE schedule_allocations ADD COLUMN attendance_status VARCHAR(20) DEFAULT 'presente';\nALTER TABLE schedule_allocations ADD COLUMN alloc_notes TEXT DEFAULT NULL;\nALTER TABLE work_schedules ADD COLUMN notes TEXT DEFAULT NULL;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1060 (42S21) at line 3: Duplicate column name 'notes'"
-  ]
-}

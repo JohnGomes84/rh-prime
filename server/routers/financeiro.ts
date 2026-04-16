@@ -11,6 +11,8 @@ import {
   clients,
   suppliers,
   bankAccounts,
+  scheduleAllocations,
+  workSchedules,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "../controle/permissionControl";
@@ -470,6 +472,77 @@ export const financeiroRouter = router({
           .where(eq(accountsReceivable.id, input));
         return { success: true };
       }),
+  }),
+
+  // ============ PAYMENT RECORDS ============
+  payments: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "payment_batches",
+        "canView"
+      );
+
+      const db = await getDb();
+      if (!db) return [];
+
+      const [allocations, schedules, employeeList, clientList] = await Promise.all([
+        db.select().from(scheduleAllocations),
+        db.select().from(workSchedules),
+        db.select().from(employees),
+        db.select().from(clients),
+      ]);
+
+      const scheduleMap = new Map(schedules.map(item => [item.id, item]));
+      const employeeMap = new Map(employeeList.map(item => [item.id, item]));
+      const clientMap = new Map(clientList.map(item => [item.id, item]));
+
+      return allocations
+        .map(allocation => {
+          const schedule = scheduleMap.get(allocation.scheduleId);
+          const employee = employeeMap.get(allocation.employeeId);
+          const client = schedule ? clientMap.get(schedule.clientId) : null;
+          if (!schedule || !employee) return null;
+          if (schedule.status !== "validado") return null;
+
+          const baseValue = Number(allocation.payValue || 0);
+          const mealAllowance = Number(allocation.mealAllowance || 0);
+          const voucher = Number(allocation.voucher || 0);
+          const bonus = Number(allocation.bonus || 0);
+          const totalToPay = baseValue - mealAllowance - voucher + bonus;
+          const scheduleDate = new Date(schedule.date);
+          const period = `${scheduleDate.getFullYear()}-${String(
+            scheduleDate.getMonth() + 1
+          ).padStart(2, "0")}`;
+
+          return {
+            id: allocation.id,
+            employeeId: employee.id,
+            employeeName: employee.name,
+            employeeCpf: employee.cpf || "",
+            clientId: schedule.clientId,
+            clientName: client?.name || "—",
+            scheduleId: schedule.id,
+            scheduleDate: schedule.date,
+            period,
+            daysWorked: 1,
+            baseValue,
+            mealAllowance,
+            voucher,
+            bonus,
+            totalToPay,
+            pixKey: employee.pixKey || "",
+            pixType: employee.pixKeyType || null,
+            status: allocation.paymentBatchId ? "paid" : employee.pixKey ? "pending" : "no_pix",
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .sort(
+          (a, b) =>
+            new Date(b.scheduleDate).getTime() - new Date(a.scheduleDate).getTime()
+        );
+    }),
   }),
 
   // ============ PAYMENT BATCHES ============

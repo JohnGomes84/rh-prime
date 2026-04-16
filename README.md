@@ -64,9 +64,11 @@ pnpm db:seed:demo:homolog
 pnpm dev:homolog
 ```
 
-Documentacao completa:
+Documentacao principal:
 
-- [DEPLOYMENT.md](/C:/Finhub/DEPLOYMENT.md)
+- [Guia de deployment](/C:/Finhub/docs/setup/DEPLOYMENT.md)
+- [Quick start](/C:/Finhub/docs/setup/README_QUICK_START.md)
+- [Indice da documentacao](/C:/Finhub/docs/README.md)
 
 Rodar testes:
 

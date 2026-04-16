@@ -1,12 +1,11 @@
 import { Suspense, lazy } from "react";
-import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import DashboardLayout from "./components/DashboardLayout";
 
 const Home = lazy(() => import("./pages/Home"));
+const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const EmployeesPage = lazy(() => import("./pages/Employees"));
 const ClientsPage = lazy(() => import("./pages/Clients"));
@@ -118,7 +117,6 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
-          <Toaster />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

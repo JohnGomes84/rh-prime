@@ -1,5 +1,5 @@
-import { getLoginUrl, isOAuthConfigured } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { isOAuthConfigured } from "@/const";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 
@@ -8,9 +8,22 @@ type UseAuthOptions = {
   redirectPath?: string;
 };
 
+const LOCAL_FALLBACK_USER = {
+  id: 1,
+  openId: "local-admin",
+  name: "Administrador Local",
+  email: "adm@mlservicoseco.com.br",
+  loginMethod: "local",
+  role: "admin",
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  lastSignedIn: new Date(0),
+};
+
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
-    options ?? {};
+  const redirectOnUnauthenticated =
+    options?.redirectOnUnauthenticated ?? false;
+  const redirectPath = options?.redirectPath;
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -42,15 +55,22 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
+    const localMode = !isOAuthConfigured();
+    const user =
+      meQuery.data ??
+      (localMode && !meQuery.isLoading ? LOCAL_FALLBACK_USER : null);
+    const error = localMode ? null : meQuery.error ?? logoutMutation.error ?? null;
+
     localStorage.setItem(
       "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
+      JSON.stringify(user)
     );
+
     return {
-      user: meQuery.data ?? null,
+      user,
       loading: meQuery.isLoading || logoutMutation.isPending,
-      error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      error,
+      isAuthenticated: Boolean(user),
     };
   }, [
     meQuery.data,
@@ -65,10 +85,12 @@ export function useAuth(options?: UseAuthOptions) {
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
-    if (!isOAuthConfigured()) return;
-    if (window.location.pathname === redirectPath) return;
+    const targetPath = redirectPath;
+    if (targetPath === "#") return;
+    if (!targetPath) return;
+    if (window.location.pathname === targetPath) return;
 
-    window.location.href = redirectPath
+    window.location.href = targetPath;
   }, [
     redirectOnUnauthenticated,
     redirectPath,

@@ -308,6 +308,20 @@ describeIfDb("FinHub Inteligente - Router Tests", () => {
     });
   });
 
+  describe("financeiro.payments (admin)", () => {
+    it("admin can list payment records", async () => {
+      const ctx = createAdminContext();
+      const caller = appRouter.createCaller(ctx);
+      const result = await caller.financeiro.payments.list();
+      expect(Array.isArray(result)).toBe(true);
+      if (result.length > 0) {
+        expect(result[0]).toHaveProperty("employeeName");
+        expect(result[0]).toHaveProperty("totalToPay");
+        expect(result[0]).toHaveProperty("status");
+      }
+    });
+  });
+
   describe("usuarios (admin)", () => {
     it("admin can list users", async () => {
       const ctx = createAdminContext();

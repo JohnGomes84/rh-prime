@@ -58,6 +58,16 @@ export function convertEmployeeInput(input: EmployeeInput): Record<string, unkno
 /**
  * Converte dados de atualização para tipos do banco de dados
  */
+/** Converte string para Date */
+export function toDate(val: string): Date {
+  return new Date(val);
+}
+
+/** Converte string opcional para Date ou undefined */
+export function toDateOpt(val?: string | null): Date | undefined {
+  return val ? new Date(val) : undefined;
+}
+
 export function convertUpdateData(data: Record<string, unknown>): Record<string, unknown> {
   const converted = { ...data };
 

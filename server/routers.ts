@@ -16,9 +16,9 @@ import { auditRouter } from "./routers/audit";
 import { timesheetRouter } from './routers/timesheet';
 import { reportsRouter } from './routers/reports';
 import { TRPCError } from '@trpc/server';
-import { convertEmployeeInput, convertUpdateData } from "./utils/type-converters";
+import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
-import { z } from 'zod';
+
 
 // ============================================================
 // ROUTERS
@@ -224,7 +224,7 @@ export const appRouter = router({
         salary: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createContract(input);
+        return db.createContract({ ...input, hireDate: toDate(input.hireDate), experienceEndDate: toDateOpt(input.experienceEndDate) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -253,7 +253,7 @@ export const appRouter = router({
         changeReason: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createEmployeePosition(input);
+        return db.createEmployeePosition({ ...input, startDate: toDate(input.startDate), endDate: toDateOpt(input.endDate) });
       }),
   }),
 
@@ -280,7 +280,7 @@ export const appRouter = router({
         daysEntitled: z.number().default(30),
       }))
       .mutation(async ({ input }) => {
-        return db.createVacation(input);
+        return db.createVacation({ ...input, acquisitionStart: toDate(input.acquisitionStart), acquisitionEnd: toDate(input.acquisitionEnd), concessionLimit: toDate(input.concessionLimit) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -324,7 +324,7 @@ export const appRouter = router({
         noticeDate: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createVacationPeriod(input);
+        return db.createVacationPeriod({ ...input, startDate: toDate(input.startDate), endDate: toDate(input.endDate), noticeDate: toDateOpt(input.noticeDate) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -357,7 +357,7 @@ export const appRouter = router({
         documentUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createMedicalExam(input);
+        return db.createMedicalExam({ ...input, examDate: toDate(input.examDate), expiryDate: toDate(input.expiryDate) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -395,7 +395,7 @@ export const appRouter = router({
         documentUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createLeave(input);
+        return db.createLeave({ ...input, startDate: toDate(input.startDate), expectedReturnDate: toDateOpt(input.expectedReturnDate) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -423,7 +423,7 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createTimeBankEntry(input);
+        return db.createTimeBankEntry({ ...input, expiryDate: toDate(input.expiryDate), referenceMonth: toDate(input.referenceMonth) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -460,7 +460,7 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createBenefit(input);
+        return db.createBenefit({ ...input, startDate: toDate(input.startDate) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -492,7 +492,8 @@ export const appRouter = router({
         observations: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createDocument(input);
+        const employee = await db.getEmployee(input.employeeId);
+        return db.createDocument({ ...input, expiryDate: toDateOpt(input.expiryDate), cpf: employee?.cpf || "" });
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -515,6 +516,7 @@ export const appRouter = router({
         const buffer = Buffer.from(input.fileBase64, "base64");
         const fileKey = `documents/${input.employeeId}/${nanoid()}-${input.fileName}`;
         const { url } = await storagePut(fileKey, buffer, input.fileType);
+        const employee = await db.getEmployee(input.employeeId);
         return db.createDocument({
           employeeId: input.employeeId,
           category: input.category,
@@ -523,7 +525,8 @@ export const appRouter = router({
           fileKey,
           fileType: input.fileType.split("/").pop() ?? input.fileType,
           fileSize: input.fileSize,
-          expiryDate: input.expiryDate,
+          expiryDate: toDateOpt(input.expiryDate),
+          cpf: employee?.cpf || "",
         });
       }),
   }),
@@ -598,7 +601,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         // Mark equipment as emprestado
         await db.updateEquipmentItem(input.equipmentId, { status: "Emprestado" });
-        return db.createEquipmentLoan(input);
+        return db.createEquipmentLoan({ ...input, loanDate: toDate(input.loanDate) });
       }),
     return: protectedProcedure
       .input(z.object({
@@ -609,7 +612,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         await db.updateEquipmentLoan(input.id, {
-          returnDate: input.returnDate,
+          returnDate: toDate(input.returnDate),
           conditionAtReturn: input.conditionAtReturn,
           status: "Devolvido",
         });
@@ -637,7 +640,7 @@ export const appRouter = router({
         reason: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createPpeDelivery(input);
+        return db.createPpeDelivery({ ...input, deliveryDate: toDate(input.deliveryDate) });
       }),
   }),
 
@@ -662,7 +665,7 @@ export const appRouter = router({
         certificateUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createTraining(input);
+        return db.createTraining({ ...input, trainingDate: toDate(input.trainingDate), expiryDate: toDateOpt(input.expiryDate) });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -694,7 +697,7 @@ export const appRouter = router({
         issueDate: z.string(),
       }))
       .mutation(async ({ input }) => {
-        return db.createServiceOrder(input);
+        return db.createServiceOrder({ ...input, issueDate: toDate(input.issueDate) });
       }),
   }),
 
@@ -791,7 +794,7 @@ export const appRouter = router({
         dueDate: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createNotification(input);
+        return db.createNotification({ ...input, dueDate: toDateOpt(input.dueDate) });
       }),
   }),
 
@@ -810,7 +813,7 @@ export const appRouter = router({
         recurring: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createHoliday(input);
+        return db.createHoliday({ ...input, date: toDate(input.date) });
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -860,7 +863,7 @@ export const appRouter = router({
         familySalary: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createDependent(input);
+        return db.createDependent({ ...input, birthDate: toDateOpt(input.birthDate) });
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -887,7 +890,7 @@ export const appRouter = router({
         reason: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createAbsence(input);
+        return db.createAbsence({ ...input, absenceDate: toDate(input.absenceDate) });
       }),
   }),
 

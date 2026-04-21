@@ -1262,8 +1262,8 @@ export async function getOvertimeStats(
       if (row.status === "APPROVED") approvedRequests += row.count || 0;
       if (row.status === "REJECTED") rejectedRequests += row.count || 0;
       if (row.status === "PENDING") pendingRequests += row.count || 0;
-      totalOvertimeHours += (row.totalHours as number) || 0;
-      totalOvertimeValue += (row.totalValue as number) || 0;
+      totalOvertimeHours += (row.totalHours as unknown as number) || 0;
+      totalOvertimeValue += (row.totalValue as unknown as number) || 0;
     });
     
     return {
@@ -1286,9 +1286,8 @@ export async function getUser(email: string) {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
-    return db.query.users.findFirst({
-      where: eq(users.email, email),
-    });
+    const result = await db.select().from(users).where(eq(users.email, email));
+    return result[0] || null;
   }, "getUser");
 }
 
@@ -1297,9 +1296,8 @@ export async function getUserById(id: number) {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
-    return db.query.users.findFirst({
-      where: eq(users.id, id),
-    });
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0] || null;
   }, "getUserById");
 }
 
@@ -1314,7 +1312,7 @@ export async function createUser(data: {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
-    const result = await db.insert(users).values({
+    await db.insert(users).values({
       email: data.email,
       name: data.name,
       passwordHash: data.passwordHash,
@@ -1322,7 +1320,8 @@ export async function createUser(data: {
       loginMethod: data.loginMethod || 'jwt',
     });
     
-    return result;
+    const newUser = await db.select().from(users).where(eq(users.email, data.email));
+    return newUser[0] || null;
   }, "createUser");
 }
 
@@ -1354,6 +1353,6 @@ export async function listUsers() {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
-    return db.query.users.findMany();
+    return db.select().from(users);
   }, "listUsers");
 }

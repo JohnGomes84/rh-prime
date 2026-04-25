@@ -278,7 +278,7 @@ export async function getOverdueVacations() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(vacations)
-    .where(and(sql`${vacations.concessionLimit} <= ${todayStr()}`, eq(vacations.status, "Pendente")));
+    .where(and(sql`${vacations.concessionLimit} <= ${todayStr()}` as any, eq(vacations.status, "Pendente")));
 }
 
 export async function getUpcomingVacationDeadlines(daysAhead: number = 60) {
@@ -286,8 +286,8 @@ export async function getUpcomingVacationDeadlines(daysAhead: number = 60) {
   if (!db) return [];
   return db.select().from(vacations)
     .where(and(
-      sql`${vacations.concessionLimit} >= ${todayStr()}`,
-      sql`${vacations.concessionLimit} <= ${futureDateStr(daysAhead)}`,
+      sql`${vacations.concessionLimit} >= ${todayStr()}` as any,
+      sql`${vacations.concessionLimit} <= ${futureDateStr(daysAhead)}` as any,
       eq(vacations.status, "Pendente")
     ));
 }
@@ -348,7 +348,7 @@ export async function getExpiredExams() {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(medicalExams)
-      .where(and(sql`${medicalExams.expiryDate} <= ${todayStr()}`, eq(medicalExams.status, "Válido")));
+      .where(and(sql`${medicalExams.expiryDate} <= ${todayStr()}` as any, eq(medicalExams.status, "Válido")));
   }, "getExpiredExams");
 }
 
@@ -358,8 +358,8 @@ export async function getUpcomingExamExpirations(daysAhead: number = 30) {
     if (!db) return [];
     return db.select().from(medicalExams)
       .where(and(
-        sql`${medicalExams.expiryDate} >= ${todayStr()}`,
-        sql`${medicalExams.expiryDate} <= ${futureDateStr(daysAhead)}`,
+        sql`${medicalExams.expiryDate} >= ${todayStr()}` as any,
+        sql`${medicalExams.expiryDate} <= ${futureDateStr(daysAhead)}` as any,
         eq(medicalExams.status, "Válido")
       ));
   }, "getUpcomingExamExpirations");
@@ -487,7 +487,7 @@ export async function listDocuments(employeeId?: number, category?: string) {
     const conditions = [];
     if (employeeId) conditions.push(eq(documents.employeeId, employeeId));
     if (category) conditions.push(eq(documents.category, category));
-    if (conditions.length > 0) return db.select().from(documents).where(and(...conditions)).orderBy(desc(documents.uploadedAt));
+    if (conditions.length > 0) return db.select().from(documents).where(and(...(conditions.filter(Boolean) as any))).orderBy(desc(documents.uploadedAt));
     return db.select().from(documents).orderBy(desc(documents.uploadedAt));
   }, "listDocuments");
 }
@@ -522,7 +522,7 @@ export async function listChecklistItems(employeeId: number, checklistType?: str
     if (!db) return [];
     const conditions = [eq(checklistItems.employeeId, employeeId)];
     if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType));
-    return db.select().from(checklistItems).where(and(...conditions)).orderBy(asc(checklistItems.category), asc(checklistItems.id));
+    return db.select().from(checklistItems).where(and(...(conditions.filter(Boolean) as any))).orderBy(asc(checklistItems.category), asc(checklistItems.id));
   }, "listChecklistItems");
 }
 
@@ -892,10 +892,12 @@ export async function createAuditEntry(data: InsertAuditLog) {
     const db = await getDb();
     if (!db) return;
     // Encriptar CPF se presente
-    const auditData = {
+    const auditData: any = {
       ...data,
-      cpf: data.cpf ? encryptCPF(data.cpf) : undefined,
     };
+    if (data.cpf) {
+      auditData.cpf = encryptCPF(data.cpf);
+    }
     await db.insert(auditLogs).values(auditData);
   }, "createAuditEntry");
 }
@@ -1066,18 +1068,18 @@ export async function listTimeRecords(
     const db = await getDb();
     if (!db) return [];
     
-    let query = db.select().from(timeRecords).where(eq(timeRecords.employeeId, employeeId));
+    const conditions = [eq(timeRecords.employeeId, employeeId)];
     
     if (startDate && endDate) {
-      query = query.where(
+      conditions.push(
         and(
-          sql`${timeRecords.clockIn} >= ${startDate}`,
-          sql`${timeRecords.clockIn} <= ${endDate}`
-        )
+          sql`${timeRecords.clockIn} >= ${startDate}` as any,
+          sql`${timeRecords.clockIn} <= ${endDate}` as any
+        ) as any
       );
     }
     
-    return query.orderBy(desc(timeRecords.clockIn));
+    return db.select().from(timeRecords).where(and(...conditions.filter(Boolean))).orderBy(desc(timeRecords.clockIn));
   }, "listTimeRecords");
 }
 
@@ -1177,7 +1179,7 @@ export async function createOvertimeRequest(data: {
         status: "PENDING",
         createdAt: new Date(),
         updatedAt: new Date(),
-      });
+      } as any);
       
       return { success: true, id: result[0]?.insertId };
     }, "createOvertimeRequest");
@@ -1192,16 +1194,20 @@ export async function listOvertimeRequests(
     const db = await getDb();
     if (!db) return [];
     
-    let query = db.select().from(overtimeRecords);
+    const conditions: any[] = [];
     
     if (employeeId) {
-      query = query.where(eq(overtimeRecords.employeeId, employeeId));
+      conditions.push(eq(overtimeRecords.employeeId, employeeId));
     }
     
     if (status) {
-      query = query.where(eq(overtimeRecords.status, status));
+      conditions.push(eq(overtimeRecords.status, status));
     }
     
+    let query: any = db.select().from(overtimeRecords);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
     return query.orderBy(desc(overtimeRecords.createdAt));
   }, "listOvertimeRequests");
 }
@@ -1237,16 +1243,18 @@ export async function getOvertimeStats(
       totalOvertimeValue: 0,
     };
     
-    let query = db.select({
+    let baseQuery: any = db.select({
       status: overtimeRecords.status,
       count: count(),
       totalHours: sum(overtimeRecords.overtimeHours),
-      totalValue: sum(sql`${overtimeRecords.overtimeHours} * ${overtimeRecords.multiplier}`),
-    }).from(overtimeRecords).groupBy(overtimeRecords.status);
+      totalValue: sum(sql`${overtimeRecords.overtimeHours} * ${overtimeRecords.multiplier}` as any),
+    }).from(overtimeRecords);
     
     if (employeeId) {
-      query = query.where(eq(overtimeRecords.employeeId, employeeId));
+      baseQuery = baseQuery.where(eq(overtimeRecords.employeeId, employeeId));
     }
+    
+    const query: any = baseQuery.groupBy(overtimeRecords.status);
     
     const results = await query;
     
@@ -1257,7 +1265,7 @@ export async function getOvertimeStats(
     let totalOvertimeHours = 0;
     let totalOvertimeValue = 0;
     
-    results.forEach(row => {
+    results.forEach((row: any) => {
       totalRequests += row.count || 0;
       if (row.status === "APPROVED") approvedRequests += row.count || 0;
       if (row.status === "REJECTED") rejectedRequests += row.count || 0;
@@ -1327,15 +1335,15 @@ export async function createUser(data: {
 
 export async function updateUser(id: number, data: Partial<{
   email: string;
-  name: string;
-  passwordHash: string;
+  name: string | null;
+  passwordHash: string | null;
   role: string;
 }>) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
-    return db.update(users).set(data).where(eq(users.id, id));
+    return db.update(users).set(data as any).where(eq(users.id, id));
   }, "updateUser");
 }
 

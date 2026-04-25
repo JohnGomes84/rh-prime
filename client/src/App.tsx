@@ -27,9 +27,9 @@ const Timesheet = lazy(() => import("./pages/Timesheet"));
 const Payroll = lazy(() => import("./pages/Payroll"));
 const ProfessionalAssessment = lazy(() => import("./pages/ProfessionalAssessment"));
 const Audit = lazy(() => import("./pages/Audit"));
-const TimeTracking = lazy(() => import("./pages/TimeTracking"));
-const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement"));
-const Payslip = lazy(() => import("./pages/Payslip"));
+const TimeTracking = lazy(() => import("./pages/TimeTracking").then(m => ({ default: m.TimeTracking })));
+const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement").then(m => ({ default: m.OvertimeManagement })));
+const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Payslip })));
 
 function PageLoader() {
   return (

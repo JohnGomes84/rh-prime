@@ -135,7 +135,7 @@ export const appRouter = router({
         status: z.enum(["Ativo", "Inativo", "Afastado", "Férias"]).optional(),
       }))
       .mutation(async ({ input }) => {
-        const result = await db.createEmployee(convertEmployeeInput(input)) || { id: 0 };
+        const result = await db.createEmployee(convertEmployeeInput(input) as any) || { id: 0 };
         // Create default admission checklist
         if (result?.id) {
           await db.createDefaultAdmissionChecklist(result.id);

@@ -44,7 +44,7 @@ export const authRbacRouter = router({
       }
 
       // Gerar token
-      const token = createToken(user.id, user.email, user.role);
+      const token = createToken(user.id, user.email, user.role as any);
 
       return {
         token,

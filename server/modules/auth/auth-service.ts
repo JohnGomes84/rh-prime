@@ -169,7 +169,7 @@ export async function changePassword(userId: number, oldPassword: string, newPas
   }
 
   const newPasswordHash = await hashPassword(newPassword);
-  await updateUser(userId, { passwordHash: newPasswordHash });
+  await db.updateUser(userId, { passwordHash: newPasswordHash });
 
   return true;
 }

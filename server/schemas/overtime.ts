@@ -57,9 +57,7 @@ export type OvertimeApprovalInput = z.infer<typeof overtimeApprovalSchema>;
  * Calcula multiplicador baseado no tipo de hora extra
  */
 export const overtimeCalculationSchema = z.object({
-  type: z.enum(['50%', '100%', 'NOTURNO'], {
-    errorMap: () => ({ message: 'Tipo deve ser 50%, 100% ou NOTURNO' }),
-  }),
+  type: z.enum(['50%', '100%', 'NOTURNO'] as const),
   hoursWorked: z.number().positive('Horas deve ser positivo'),
   hourlyRate: z.number().positive('Taxa horária deve ser positiva'),
 }).transform((data) => {

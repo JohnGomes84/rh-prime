@@ -27,16 +27,16 @@ export const reportsRouter = router({
       const startDate = new Date(`${input.year}-${String(input.month).padStart(2, '0')}-01`);
       const endDate = new Date(`${input.year}-${String(input.month).padStart(2, '0')}-31`);
       
-      const conditions = [
+      const conditions: any = [
         gte(timeRecords.clockIn, startDate),
         lte(timeRecords.clockIn, endDate),
       ];
       
       if (input.employeeId) {
-        conditions.push(eq(timeRecords.employeeId, input.employeeId));
+        conditions.push(eq(timeRecords.employeeId, input.employeeId as any));
       }
       
-      return db.select().from(timeRecords).where(and(...conditions));
+      return db.select().from(timeRecords).where(and(...conditions as any));
     }),
 
   vacationReport: protectedProcedure

@@ -288,6 +288,22 @@
 
 ---
 
+## FASE 5: Notificações em Tempo Real (30 créditos) - CONCLUIDO
+
+### WebSocket + Eventos
+- [x] Servidor WebSocket com gerenciamento de conexões
+- [x] Eventos de aprovação (horas extras, férias, vagas)
+- [x] Alertas de eventos críticos (ponto, documentos, exames)
+- [x] Context React para gerenciar notificações
+- [x] Componente NotificationBell com dropdown
+- [x] Componente NotificationToast com animação
+- [x] Integração no App.tsx
+- [x] Testes vitest para WebSocket
+- [x] Persistência de notificações no banco
+- [x] Reconexão automática
+
+---
+
 ## PRÓXIMAS FASES (Após FASE 1)
 
 ### Gov.br OAuth Integration (15 créditos)

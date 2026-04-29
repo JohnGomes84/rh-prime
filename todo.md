@@ -13,74 +13,74 @@
 - [ ] Hash de senha com bcrypt
 
 ### Sprint 2: Auditoria Completa (18 créditos)
-- [ ] Criar tabela audit_logs
-- [ ] Middleware de auditoria global
-- [ ] Registrar alterações (before/after)
-- [ ] Endpoint de consulta de logs
-- [ ] Dashboard de auditoria
-- [ ] Retenção automática de logs (90 dias)
-- [ ] Testes vitest para auditoria
-- [ ] Exportar logs em CSV
+- [x] Criar tabela audit_logs
+- [x] Middleware de auditoria global
+- [x] Registrar alterações (before/after)
+- [x] Endpoint de consulta de logs
+- [x] Dashboard de auditoria
+- [x] Retenção automática de logs (90 dias)
+- [x] Testes vitest para auditoria
+- [x] Exportar logs em CSV
 
 ### Sprint 3: Hierarquia e Permissões (15 créditos)
-- [ ] Adicionar manager_id em employees
-- [ ] Criar matriz de permissões por role
-- [ ] Middleware de verificação granular
-- [ ] Controle de acesso por departamento
-- [ ] Testes de permissões
-- [ ] Página de hierarquia visual
-- [ ] Validação de acesso em endpoints
+- [x] Adicionar manager_id em employees
+- [x] Criar matriz de permissões por role
+- [x] Middleware de verificação granular
+- [x] Controle de acesso por departamento
+- [x] Testes de permissões
+- [x] Página de hierarquia visual
+- [x] Validação de acesso em endpoints
 
 ### Sprint 4: Configurações Avançadas (12 créditos)
-- [ ] Bloqueio de usuários após tentativas falhas
-- [ ] Política de senha (complexidade, expiração)
-- [ ] Gerenciamento de sessão
-- [ ] Two-factor authentication (opcional)
-- [ ] Logs de login/logout
-- [ ] Página de configurações de segurança
-- [ ] Testes de segurança
+- [x] Bloqueio de usuários após tentativas falhas
+- [x] Política de senha (complexidade, expiração)
+- [x] Gerenciamento de sessão
+- [x] Two-factor authentication (opcional)
+- [x] Logs de login/logout
+- [x] Página de configurações de segurança
+- [x] Testes de segurança
 
 ---
 
 ## FASE 2: Novos Módulos (150 créditos)
 
 ### Módulo 1: Recrutamento e Seleção (50 créditos)
-- [ ] Cadastro de vagas (cargo, nível, salário, requisitos)
-- [ ] Fluxo de aprovação de vaga (gestor → RH → publicada)
-- [ ] Portal de candidatos (cadastro, currículo)
-- [ ] Triagem de currículos (filtros, classificação)
-- [ ] Agendamento de entrevistas (Google Calendar)
-- [ ] Formulário de avaliação por etapa
-- [ ] Geração de carta-oferta
-- [ ] Assinatura eletrônica de contrato
-- [ ] Onboarding checklist
-- [ ] Testes vitest para recrutamento
+- [x] Cadastro de vagas (cargo, nível, salário, requisitos)
+- [x] Fluxo de aprovação de vaga (gestor → RH → publicada)
+- [x] Portal de candidatos (cadastro, currículo)
+- [x] Triagem de currículos (filtros, classificação)
+- [x] Agendamento de entrevistas (Google Calendar)
+- [x] Formulário de avaliação por etapa
+- [x] Geração de carta-oferta
+- [x] Assinatura eletrônica de contrato
+- [x] Onboarding checklist
+- [x] Testes vitest para recrutamento
 
 ### Módulo 2: Controle de Ponto e Jornada (40 créditos)
-- [ ] Registro de entrada/saída (botão toque)
-- [ ] Geolocalização (opcional)
-- [ ] Intervalo com notificação
-- [ ] Ponto atrasado com justificativa
-- [ ] Cadastro de jornadas (40h, 44h, 12x36, noturno)
-- [ ] Regras de horas extras e banco de horas
-- [ ] Escalas por departamento
-- [ ] Solicitação de troca de turno
-- [ ] Relatório de horas trabalhadas
-- [ ] Integração com folha
-- [ ] Testes vitest
+- [x] Registro de entrada/saída (botão toque)
+- [x] Geolocalização (opcional)
+- [x] Intervalo com notificação
+- [x] Ponto atrasado com justificativa
+- [x] Cadastro de jornadas (40h, 44h, 12x36, noturno)
+- [x] Regras de horas extras e banco de horas
+- [x] Escalas por departamento
+- [x] Solicitação de troca de turno
+- [x] Relatório de horas trabalhadas
+- [x] Integração com folha
+- [x] Testes vitest
 
 ### Módulo 3: Folha de Pagamento e Benefícios (60 créditos)
-- [ ] Estrutura salarial (base, adicionais, comissões)
-- [ ] Benefícios (VR, VA, VT, plano saúde, odonto)
-- [ ] Regras de desconto conforme legislação
-- [ ] Central de pedidos de benefícios
-- [ ] Cálculo automático de folha
-- [ ] Integração com ponto
-- [ ] Geração de holerite (PDF)
-- [ ] Acesso do colaborador ao holerite
-- [ ] Relatórios de custo (por colaborador, departamento)
-- [ ] Exportação para contadores (CSV, XML)
-- [ ] Testes vitest
+- [x] Estrutura salarial (base, adicionais, comissões)
+- [x] Benefícios (VR, VA, VT, plano saúde, odonto)
+- [x] Regras de desconto conforme legislação
+- [x] Central de pedidos de benefícios
+- [x] Cálculo automático de folha
+- [x] Integração com ponto
+- [x] Geração de holerite (PDF)
+- [x] Acesso do colaborador ao holerite
+- [x] Relatórios de custo (por colaborador, departamento)
+- [x] Exportação para contadores (CSV, XML)
+- [x] Testes vitest
 
 ---
 
@@ -291,17 +291,17 @@
 ## PRÓXIMAS FASES (Após FASE 1)
 
 ### Gov.br OAuth Integration (15 créditos)
-- [ ] Integrar autenticação Gov.br
-- [ ] Sincronizar dados de CPF com Base de Dados Gov.br
-- [ ] Validação de dados com Gov.br
+- [x] Integrar autenticação Gov.br
+- [x] Sincronizar dados de CPF com Base de Dados Gov.br
+- [x] Validação de dados com Gov.br
 
 ### Sólides API Integration (18 créditos)
-- [ ] Conectar API Sólides
-- [ ] Sincronizar funcionários
-- [ ] Sincronizar folha de pagamento
-- [ ] Sincronizar ponto
+- [x] Conectar API Sólides
+- [x] Sincronizar funcionários
+- [x] Sincronizar folha de pagamento
+- [x] Sincronizar ponto
 
 ### KPI Dashboard (15 créditos)
-- [ ] Dashboard com KPIs de RH
-- [ ] Gráficos de turnover, absenteísmo, custo
-- [ ] Relatórios customizáveis
+- [x] Dashboard com KPIs de RH
+- [x] Gráficos de turnover, absentesmo, custo
+- [x] Relatórios customizáveis

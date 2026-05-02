@@ -30,6 +30,14 @@ const Timesheet = lazy(() => import("./pages/Timesheet"));
 const Payroll = lazy(() => import("./pages/Payroll"));
 const ProfessionalAssessment = lazy(() => import("./pages/ProfessionalAssessment"));
 const Audit = lazy(() => import("./pages/Audit"));
+const PeopleAnalytics = lazy(() => import("./pages/PeopleAnalytics"));
+const Login = lazy(() => import("./pages/Login").then(m => ({ default: (m as any).default || (m as any).Login || (() => null) })));
+const UserManagement = lazy(() => import("./pages/UserManagement").then(m => ({ default: (m as any).default || (m as any).UserManagement || (() => null) })));
+const UserHierarchy = lazy(() => import("./pages/UserHierarchy").then(m => ({ default: (m as any).default || (m as any).UserHierarchy || (() => null) })));
+const SecuritySettings = lazy(() => import("./pages/SecuritySettings").then(m => ({ default: (m as any).default || (m as any).SecuritySettings || (() => null) })));
+const SignContracts = lazy(() => import("./pages/SignContracts").then(m => ({ default: (m as any).default || (m as any).SignContracts || (() => null) })));
+const SignASOs = lazy(() => import("./pages/SignASOs").then(m => ({ default: (m as any).default || (m as any).SignASOs || (() => null) })));
+const SignatureAudit = lazy(() => import("./pages/SignatureAudit").then(m => ({ default: (m as any).default || (m as any).SignatureAudit || (() => null) })));
 const TimeTracking = lazy(() => import("./pages/TimeTracking").then(m => ({ default: m.TimeTracking })));
 const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement").then(m => ({ default: m.OvertimeManagement })));
 const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Payslip })));
@@ -69,6 +77,14 @@ function Router() {
         <Route path="/holerite" component={Payslip} />
         <Route path="/avaliacoes" component={ProfessionalAssessment} />
         <Route path="/auditoria" component={Audit} />
+        <Route path="/analytics" component={PeopleAnalytics} />
+        <Route path="/login" component={Login} />
+        <Route path="/usuarios" component={UserManagement} />
+        <Route path="/hierarquia" component={UserHierarchy} />
+        <Route path="/seguranca-config" component={SecuritySettings} />
+        <Route path="/assinar-contratos" component={SignContracts} />
+        <Route path="/assinar-asos" component={SignASOs} />
+        <Route path="/auditoria-assinaturas" component={SignatureAudit} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

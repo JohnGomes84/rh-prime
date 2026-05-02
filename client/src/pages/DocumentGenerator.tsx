@@ -17,7 +17,8 @@ import { toast } from "sonner";
 
 export default function DocumentGenerator() {
   const { data: templates, isLoading: templatesLoading } = trpc.documentTemplates.list.useQuery();
-  const { data: employees, isLoading: employeesLoading } = trpc.employees.list.useQuery({});
+  const { data: employeesResult, isLoading: employeesLoading } = trpc.employees.list.useQuery({});
+  const employees = (employeesResult as any)?.data || (Array.isArray(employeesResult) ? employeesResult : []);
   
   // Document generation is handled via templates
   const handleGenerateClick = () => {

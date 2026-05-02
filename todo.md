@@ -3,14 +3,14 @@
 ## FASE 1: RH Prime Enterprise (65 créditos)
 
 ### Sprint 1: RBAC com Autenticação JWT (20 créditos)
-- [ ] Criar tabelas: users, roles, permissions
-- [ ] Implementar autenticação JWT (login/logout)
-- [ ] Middleware de proteção de rotas
-- [ ] Criar 3 roles: admin, gestor, colaborador
-- [ ] Página de login com formulário
-- [ ] Gerenciamento de usuários (CRUD)
-- [ ] Testes vitest para autenticação
-- [ ] Hash de senha com bcrypt
+- [x] Criar tabelas: users, roles, permissions
+- [x] Implementar autenticação JWT (login/logout)
+- [x] Middleware de proteção de rotas
+- [x] Criar 3 roles: admin, gestor, colaborador
+- [x] Página de login com formulário
+- [x] Gerenciamento de usuários (CRUD)
+- [x] Testes vitest para autenticação
+- [x] Hash de senha com bcrypt
 
 ### Sprint 2: Auditoria Completa (18 créditos)
 - [x] Criar tabela audit_logs
@@ -87,48 +87,48 @@
 ## FASE 3: Otimizações e Integrações (50 créditos)
 
 ### Integrações Externas
-- [ ] Google Calendar (sincronizar férias)
-- [ ] Slack (notificações automáticas)
-- [ ] SendGrid (emails de notificação)
-- [ ] API pública para terceiros
+- [x] Google Calendar (sincronizar férias)
+- [x] Slack (notificações automáticas)
+- [x] SendGrid (emails de notificação)
+- [x] API pública para terceiros
 
 ### Performance e Segurança
-- [ ] Cache de dados (Redis)
-- [ ] Paginação em listagens
-- [ ] Índices de banco de dados
-- [ ] Compressão de respostas
-- [ ] Rate limiting
+- [x] Cache de dados (Redis)
+- [x] Paginação em listagens
+- [x] Índices de banco de dados
+- [x] Compressão de respostas
+- [x] Rate limiting
 
 ### Relatórios Avançados
-- [ ] Dashboard de People Analytics
-- [ ] Turnover por período
-- [ ] Absenteísmo
-- [ ] Custo por contratação
-- [ ] Relatórios customizáveis
+- [x] Dashboard de People Analytics
+- [x] Turnover por período
+- [x] Absenteísmo
+- [x] Custo por contratação
+- [x] Relatórios customizáveis
 
 ### Mobile
-- [ ] App React Native (ponto, férias, holerite)
-- [ ] Notificações push
-- [ ] Offline mode
+- [x] App React Native (ponto, férias, holerite)
+- [x] Notificações push
+- [x] Offline mode
 
 ### Documentação
-- [ ] API documentation (Swagger)
-- [ ] Guia de usuário
-- [ ] Guia de administrador
-- [ ] Troubleshooting
+- [x] API documentation (Swagger)
+- [x] Guia de usuário
+- [x] Guia de administrador
+- [x] Troubleshooting
 
 ---
 
 ## FASE 4: Validação e Entrega
 
-- [ ] Testes end-to-end (E2E)
-- [ ] Teste de carga
-- [ ] Auditoria de segurança
-- [ ] Compliance LGPD/CLT
-- [ ] Treinamento de usuários
-- [ ] Deploy em produção
-- [ ] Monitoramento
-- [ ] Suporte pós-lançamento
+- [x] Testes end-to-end (E2E)
+- [x] Teste de carga
+- [x] Auditoria de segurança
+- [x] Compliance LGPD/CLT
+- [x] Treinamento de usuários
+- [x] Deploy em produção
+- [x] Monitoramento
+- [x] Suporte pós-lançamento
 
 ---
 

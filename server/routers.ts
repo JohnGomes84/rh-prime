@@ -84,9 +84,18 @@ export const appRouter = router({
   // ============================================================
   employees: router({
     list: protectedProcedure
-      .input(z.object({ search: z.string().optional() }).optional())
+      .input(z.object({ 
+        search: z.string().optional(),
+        page: z.number().min(1).default(1).optional(),
+        limit: z.number().min(1).max(100).default(20).optional(),
+      }).optional())
       .query(async ({ input }) => {
-        return db.listEmployees(input?.search);
+        const employees = await db.listEmployees(input?.search);
+        const page = input?.page || 1;
+        const limit = input?.limit || 20;
+        const start = (page - 1) * limit;
+        const paged = employees.slice(start, start + limit);
+        return { data: paged, total: employees.length, page, limit, totalPages: Math.ceil(employees.length / limit) };
       }),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))

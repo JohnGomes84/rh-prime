@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Clock, CheckCircle, XCircle, Plus } from 'lucide-react';
+import DashboardLayout from '@/components/DashboardLayout';
 
 const formatDateTimeBR = (date: Date) => new Date(date).toLocaleString('pt-BR');
 
@@ -83,9 +84,10 @@ export function OvertimeManagement() {
   };
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Gestão de Horas Extras</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Gestão de Horas Extras</h1>
         <p className="text-muted-foreground mt-2">Solicite e acompanhe suas horas extras</p>
       </div>
 
@@ -270,5 +272,6 @@ export function OvertimeManagement() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }

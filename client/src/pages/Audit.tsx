@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default function Audit() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -38,6 +39,7 @@ export default function Audit() {
   const logs = auditData?.logs || [];
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Auditoria</h1>
@@ -172,5 +174,6 @@ export default function Audit() {
         )}
       </div>
     </div>
+    </DashboardLayout>
   );
 }

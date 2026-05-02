@@ -1093,6 +1093,24 @@ export async function getTimeRecord(id: string) {
   }, "getTimeRecord");
 }
 
+export async function getOpenTimeRecord(employeeId: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    
+    const result = await db.select().from(timeRecords)
+      .where(
+        and(
+          eq(timeRecords.employeeId, employeeId),
+          sql`${timeRecords.clockOut} IS NULL`
+        )
+      )
+      .orderBy(desc(timeRecords.clockIn))
+      .limit(1);
+    return result[0] || null;
+  }, "getOpenTimeRecord");
+}
+
 export async function updateTimeRecord(id: string, data: Record<string, any>) {
   return withTransaction(async () => {
     return withDBRetry(async () => {

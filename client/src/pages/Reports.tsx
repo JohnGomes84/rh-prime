@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { Download, FileText, AlertCircle, CheckCircle } from "lucide-react";
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default function Reports() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export default function Reports() {
   };
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Relatórios</h1>
@@ -205,5 +207,6 @@ export default function Reports() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }

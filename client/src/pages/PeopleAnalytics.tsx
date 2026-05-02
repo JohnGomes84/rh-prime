@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { Users, TrendingDown, TrendingUp, Clock, DollarSign, AlertTriangle, Calendar, BarChart3 } from "lucide-react";
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default function PeopleAnalytics() {
   const [period, setPeriod] = useState("12");
@@ -56,7 +57,8 @@ export default function PeopleAnalytics() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <DashboardLayout>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">People Analytics</h1>
@@ -304,5 +306,6 @@ export default function PeopleAnalytics() {
         </TabsContent>
       </Tabs>
     </div>
+    </DashboardLayout>
   );
 }

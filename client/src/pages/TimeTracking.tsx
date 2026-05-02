@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Clock, LogIn, LogOut, Calendar } from 'lucide-react';
+import DashboardLayout from '@/components/DashboardLayout';
 
 const formatDateTimeBR = (date: Date) => new Date(date).toLocaleString('pt-BR');
 
@@ -40,7 +41,7 @@ export function TimeTracking() {
     },
   });
 
-  const clockOutMutation = trpc.timesheet.clockIn.useMutation({
+  const clockOutMutation = trpc.timesheet.clockOut.useMutation({
     onSuccess: () => {
       setClockOutTime(new Date());
       alert('Saída registrada com sucesso!');
@@ -51,7 +52,6 @@ export function TimeTracking() {
     if (!user?.id) return;
     clockInMutation.mutate({
       employeeId: String(user.id),
-      clockIn: new Date(),
     });
   };
 
@@ -59,15 +59,14 @@ export function TimeTracking() {
     if (!user?.id) return;
     clockOutMutation.mutate({
       employeeId: String(user.id),
-      clockIn: new Date(),
-      clockOut: new Date(),
     });
   };
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Controle de Ponto</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Controle de Ponto</h1>
         <p className="text-muted-foreground mt-2">Registre suas entradas e saídas</p>
       </div>
 
@@ -206,5 +205,6 @@ export function TimeTracking() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }

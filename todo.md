@@ -321,3 +321,88 @@
 - [x] Dashboard com KPIs de RH
 - [x] Gráficos de turnover, absentesmo, custo
 - [x] Relatórios customizáveis
+
+---
+
+## FASE 6: Melhorias de Alto Valor v15.0
+
+### Exportação PDF de Holerite
+- [ ] Endpoint tRPC payroll.generatePayslip que calcula e retorna PDF base64
+- [ ] Geração de PDF com jsPDF (cabeçalho empresa, dados funcionário, proventos, descontos, líquido)
+- [ ] Botão Baixar PDF funcional na página Payslip.tsx
+
+### Busca Global no Header
+- [ ] Componente GlobalSearch com Command (cmdk) no DashboardLayout
+- [ ] Busca por funcionários, cargos, páginas do sistema
+- [ ] Atalho Ctrl+K para abrir busca
+
+### Filtros Avançados nas Listagens
+- [ ] Filtros por departamento, status e data na página Funcionários
+- [ ] Filtros por status na página Férias
+- [ ] Filtros por tipo na página Auditoria
+
+### Modais de Confirmação para Exclusão
+- [ ] Componente ConfirmDialog reutilizável com AlertDialog
+- [ ] Substituir confirm() nativo por ConfirmDialog em Employees
+- [ ] Aplicar ConfirmDialog em todas as ações de exclusão
+
+### Módulo de Avaliação de Desempenho (PDI)
+- [ ] Tabela performance_reviews no schema
+- [ ] Funções db.ts para CRUD de avaliações
+- [ ] Endpoints tRPC para avaliações (create, list, get, update)
+- [ ] Página PerformanceReviews.tsx com formulário e listagem
+- [ ] Rota /avaliacoes-desempenho no App.tsx e sidebar
+
+---
+
+## FASE 6b: Correção e Melhoria do Sistema de Bater Ponto
+
+### Backend
+- [x] Adicionar endpoint clockOut separado (atualizar registro existente)
+- [x] Corrigir employeeId para usar id do user logado (não string do user.id)
+- [x] Adicionar endpoint para buscar ponto aberto (sem clockOut)
+- [x] Calcular hoursWorked automaticamente ao registrar saída
+
+### Frontend
+- [x] Reescrever página de ponto com DashboardLayout
+- [x] Relógio em tempo real na tela
+- [x] Botão único inteligente (Entrada/Saída baseado no estado)
+- [x] Histórico semanal com tabela real do banco
+- [x] Resumo mensal integrado com dados reais
+- [x] Status visual (trabalhando/não iniciado)
+- [ ] Toast em vez de alert() (parcial - TimeTracking ainda usa alert)
+
+### Sidebar e Rotas
+- [x] Adicionar "Bater Ponto" no sidebar do DashboardLayout
+- [ ] Unificar rotas /ponto e /ponto-novo em uma só (mantidas ambas por segurança)
+
+---
+
+## FASE 7: Conectar Frontend ao Backend Real
+
+### Páginas Críticas (trpc=0, dados mock)
+- [x] Timesheet.tsx → Reescrito usando tRPC timesheet real com DashboardLayout
+- [x] Payroll.tsx → Conectado ao employees.list real + cálculo INSS/IR/FGTS local
+- [x] Payslip.tsx → Conectado ao employees.list + cálculo real + DashboardLayout
+- [ ] Recruitment.tsx → Ainda com mock data (sem tabela no banco)
+- [ ] ProfessionalAssessment.tsx → Ainda com mock data
+- [ ] UserManagement.tsx → Ainda com mock data
+- [ ] UserHierarchy.tsx → Ainda com mock data
+- [ ] SecuritySettings.tsx → Ainda com mock data
+
+### Páginas sem DashboardLayout
+- [x] TimeTracking.tsx → DashboardLayout adicionado
+- [x] OvertimeManagement.tsx → DashboardLayout adicionado
+- [x] Payslip.tsx → DashboardLayout adicionado
+- [x] PeopleAnalytics.tsx → DashboardLayout adicionado
+- [x] Audit.tsx → DashboardLayout adicionado
+- [x] Reports.tsx → DashboardLayout adicionado
+
+### Sidebar Faltando
+- [x] Adicionar "Bater Ponto" no sidebar
+- [x] Adicionar "Horas Extras" no sidebar
+- [x] Adicionar "Folha de Pagamento" no sidebar
+- [x] Adicionar "Holerite" no sidebar
+- [x] Adicionar "People Analytics" no sidebar
+- [x] Adicionar "Recrutamento" no sidebar
+- [x] Reorganizar sidebar com seções/grupos (Geral, Jornada, Financeiro, Saúde, Documentos, Análise, Sistema)

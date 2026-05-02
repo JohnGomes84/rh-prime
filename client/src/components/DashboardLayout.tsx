@@ -36,26 +36,54 @@ import {
   Bell,
   Settings,
   Shield,
+  Timer,
+  DollarSign,
+  Receipt,
+  BarChart3,
+  UserSearch,
+  ClipboardCheck,
+  TimerOff,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Users, label: "Funcionários", path: "/funcionarios" },
-  { icon: Briefcase, label: "Cargos e Funções", path: "/cargos" },
-  { icon: CalendarDays, label: "Férias", path: "/ferias" },
-  { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude" },
-  { icon: Clock, label: "Banco de Horas", path: "/banco-horas" },
-  { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos" },
-  { icon: FileText, label: "Gerador de Docs", path: "/gerador" },
-  { icon: FileText, label: "Relatórios", path: "/relatorios" },
-  { icon: ArrowRightLeft, label: "Integração", path: "/integracao" },
-  { icon: Bell, label: "Notificações", path: "/notificacoes" },
-  { icon: Shield, label: "Auditoria", path: "/auditoria" },
-  { icon: Settings, label: "Configurações", path: "/configuracoes" },
+type MenuItem = {
+  icon: any;
+  label: string;
+  path: string;
+  section?: string;
+};
+
+const menuItems: MenuItem[] = [
+  // Geral
+  { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
+  { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral" },
+  { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral" },
+  { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral" },
+  // Jornada
+  { icon: Timer, label: "Bater Ponto", path: "/ponto", section: "Jornada" },
+  { icon: Clock, label: "Banco de Horas", path: "/banco-horas", section: "Jornada" },
+  { icon: TimerOff, label: "Horas Extras", path: "/horas-extras", section: "Jornada" },
+  { icon: CalendarDays, label: "Férias", path: "/ferias", section: "Jornada" },
+  // Financeiro
+  { icon: DollarSign, label: "Folha de Pagamento", path: "/folha", section: "Financeiro" },
+  { icon: Receipt, label: "Holerite", path: "/holerite", section: "Financeiro" },
+  // Saúde e Segurança
+  { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude", section: "Saúde" },
+  { icon: ClipboardCheck, label: "Avaliações", path: "/avaliacoes", section: "Saúde" },
+  // Documentos
+  { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos", section: "Documentos" },
+  { icon: FileText, label: "Gerador de Docs", path: "/gerador", section: "Documentos" },
+  // Análise
+  { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Análise" },
+  { icon: FileText, label: "Relatórios", path: "/relatorios", section: "Análise" },
+  { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Análise" },
+  // Sistema
+  { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema" },
+  { icon: Bell, label: "Notificações", path: "/notificacoes", section: "Sistema" },
+  { icon: Settings, label: "Configurações", path: "/configuracoes", section: "Sistema" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -208,26 +236,40 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
+          <SidebarContent className="gap-0 overflow-y-auto">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map((item) => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {(() => {
+                let lastSection = '';
+                return menuItems.map((item) => {
+                  const isActive = location === item.path;
+                  const showSection = item.section && item.section !== lastSection;
+                  if (item.section) lastSection = item.section;
+                  return (
+                    <div key={item.path}>
+                      {showSection && (
+                        <div className="px-3 pt-4 pb-1 group-data-[collapsible=icon]:hidden">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                            {item.section}
+                          </span>
+                        </div>
+                      )}
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => setLocation(item.path)}
+                          tooltip={item.label}
+                          className={`h-9 transition-all font-normal text-[13px]`}
+                        >
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                          />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </div>
+                  );
+                });
+              })()}
             </SidebarMenu>
           </SidebarContent>
 

@@ -9,50 +9,107 @@ export const timesheetRouter = router({
   // CONTROLE DE PONTO
   // ============================================================
   
-  // Registrar entrada/saída
+  // Registrar entrada
   clockIn: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
-      clockIn: z.date(),
-      clockOut: z.date().optional(),
+      employeeId: z.string().optional(),
       location: z.string().optional(),
       notes: z.string().optional(),
-    }))
+    }).optional())
     .mutation(async ({ input, ctx }) => {
+      const employeeId = input?.employeeId || String(ctx.user?.id || "");
+      if (!employeeId) throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
+
+      // Verificar se já tem ponto aberto
+      const openRecord = await db.getOpenTimeRecord(employeeId);
+      if (openRecord) {
+        throw new TRPCError({ 
+          code: "CONFLICT", 
+          message: "Você já tem um ponto aberto. Registre a saída antes de uma nova entrada." 
+        });
+      }
+
       return withDBRetry(async () => {
         return db.createTimeRecord({
-          employeeId: input.employeeId,
-          clockIn: input.clockIn,
-          clockOut: input.clockOut,
-          location: input.location,
-          notes: input.notes,
+          employeeId,
+          clockIn: new Date(),
+          location: input?.location,
+          notes: input?.notes,
         });
       }, "clockIn");
+    }),
+
+  // Registrar saída (atualiza registro aberto)
+  clockOut: protectedProcedure
+    .input(z.object({
+      employeeId: z.string().optional(),
+      notes: z.string().optional(),
+    }).optional())
+    .mutation(async ({ input, ctx }) => {
+      const employeeId = input?.employeeId || String(ctx.user?.id || "");
+      if (!employeeId) throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
+
+      // Buscar ponto aberto
+      const openRecord = await db.getOpenTimeRecord(employeeId);
+      if (!openRecord) {
+        throw new TRPCError({ 
+          code: "NOT_FOUND", 
+          message: "Nenhum ponto aberto encontrado. Registre a entrada primeiro." 
+        });
+      }
+
+      const clockOut = new Date();
+      const clockIn = new Date(openRecord.clockIn);
+      const hoursWorked = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+
+      return withDBRetry(async () => {
+        return db.updateTimeRecord(openRecord.id, {
+          clockOut,
+          hoursWorked: Math.round(hoursWorked * 100) / 100,
+          status: "APPROVED",
+        });
+      }, "clockOut");
+    }),
+
+  // Buscar ponto aberto (sem saída registrada)
+  getOpenRecord: protectedProcedure
+    .input(z.object({
+      employeeId: z.string().optional(),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const employeeId = input?.employeeId || String(ctx.user?.id || "");
+      if (!employeeId) return null;
+
+      return withDBRetry(async () => {
+        return db.getOpenTimeRecord(employeeId);
+      }, "getOpenRecord");
     }),
 
   // Listar registros de ponto do funcionário
   listRecords: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
+      employeeId: z.string().optional(),
       startDate: z.date().optional(),
       endDate: z.date().optional(),
-    }))
-    .query(async ({ input }) => {
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const employeeId = input?.employeeId || String(ctx.user?.id || "");
       return withDBRetry(async () => {
-        return db.listTimeRecords(input.employeeId, input.startDate, input.endDate);
+        return db.listTimeRecords(employeeId, input?.startDate, input?.endDate);
       }, "listTimeRecords");
     }),
 
   // Obter resumo de horas do mês
   monthlySummary: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
+      employeeId: z.string().optional(),
       month: z.number().min(1).max(12),
       year: z.number(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const employeeId = input.employeeId || String(ctx.user?.id || "");
       return withDBRetry(async () => {
-        return db.getMonthlyTimeSummary(input.employeeId, input.month, input.year);
+        return db.getMonthlyTimeSummary(employeeId, input.month, input.year);
       }, "monthlySummary");
     }),
 
@@ -69,7 +126,7 @@ export const timesheetRouter = router({
       type: z.enum(["50%", "100%", "NOTURNO"]),
       reason: z.string().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       return withDBRetry(async () => {
         return db.createOvertimeRequest({
           employeeId: input.employeeId,

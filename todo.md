@@ -406,3 +406,46 @@
 - [x] Adicionar "People Analytics" no sidebar
 - [x] Adicionar "Recrutamento" no sidebar
 - [x] Reorganizar sidebar com seções/grupos (Geral, Jornada, Financeiro, Saúde, Documentos, Análise, Sistema)
+
+---
+
+## FASE 7: Implementações Concluídas (Rodada Atual)
+
+### Exportação PDF de Holerite ✅
+- [x] Endpoint tRPC payslip.generatePdf que calcula e retorna PDF base64
+- [x] Geração de PDF com jsPDF (cabeçalho empresa, dados funcionário, proventos, descontos, líquido)
+- [x] Botão Baixar PDF funcional na página Payslip.tsx
+- [x] Router payslip registrado no appRouter
+
+### Tabelas de Recrutamento ✅
+- [x] Tabela job_openings criada no banco
+- [x] Tabela candidates criada no banco
+- [x] Tipos TypeScript exportados no schema
+
+### Tabela de Assinatura Digital ✅
+- [x] Tabela digital_signatures criada no banco
+- [x] Tipos TypeScript exportados no schema
+- [x] Integração com digital-signature-service
+
+### Sidebar Reorganizado ✅
+- [x] 7 seções organizadas (Geral, Jornada, Financeiro, Saúde, Documentos, Análise, Sistema)
+- [x] 20+ itens de menu incluindo Bater Ponto, Horas Extras, Folha, Holerite, Analytics
+
+### Páginas Conectadas ao Banco Real ✅
+- [x] Timesheet.tsx - conectado ao tRPC timesheet real
+- [x] Payroll.tsx - conectado ao employees.list + cálculo INSS/IR/FGTS
+- [x] Payslip.tsx - conectado ao employees.list + cálculo real + DashboardLayout
+- [x] TimeTracking.tsx - DashboardLayout adicionado
+- [x] OvertimeManagement.tsx - DashboardLayout adicionado
+- [x] PeopleAnalytics.tsx - DashboardLayout adicionado
+- [x] Audit.tsx - DashboardLayout adicionado
+- [x] Reports.tsx - DashboardLayout adicionado
+
+### Próximas Fases (Planejadas)
+- [ ] Busca Global com Command (Ctrl+K)
+- [ ] Filtros Avançados nas Listagens
+- [ ] Modais de Confirmação para Exclusão
+- [ ] Módulo de Avaliação de Desempenho (PDI)
+- [ ] Conectar Recrutamento ao banco (endpoints tRPC)
+- [ ] Conectar UserManagement ao banco
+

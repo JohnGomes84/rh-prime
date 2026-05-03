@@ -15,6 +15,7 @@ import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
 import { timesheetRouter } from './routers/timesheet';
 import { reportsRouter } from './routers/reports';
+import { payslipRouter } from './routers/payslip';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
@@ -931,6 +932,10 @@ export const appRouter = router({
   // REPORTS
   // ============================================================
   reports: reportsRouter,
+  // ============================================================
+  // PAYSLIP (Holerite PDF)
+  // ============================================================
+  payslip: payslipRouter,
 });
 
 export type AppRouter = typeof appRouter;

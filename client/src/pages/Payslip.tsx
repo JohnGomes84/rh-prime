@@ -52,6 +52,25 @@ export function Payslip() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [downloading, setDownloading] = useState(false);
+
+  const generatePdf = trpc.payslip.generatePdf.useMutation({
+    onSuccess: (data) => {
+      // Criar link de download a partir do base64
+      const link = document.createElement('a');
+      link.href = data.pdf;
+      link.download = data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Holerite baixado com sucesso!');
+      setDownloading(false);
+    },
+    onError: (err) => {
+      toast.error(`Erro ao gerar PDF: ${err.message}`);
+      setDownloading(false);
+    },
+  });
 
   const months = [
     { value: 1, label: 'Janeiro' }, { value: 2, label: 'Fevereiro' },
@@ -214,11 +233,20 @@ export function Payslip() {
               </div>
 
               <Button
-                onClick={() => toast.info('Funcionalidade de download PDF em desenvolvimento')}
+                onClick={() => {
+                  if (!myEmployee?.id) return;
+                  setDownloading(true);
+                  generatePdf.mutate({
+                    employeeId: myEmployee.id,
+                    month: selectedMonth,
+                    year: selectedYear,
+                  });
+                }}
+                disabled={downloading}
                 className="w-full gap-2"
               >
-                <Download className="w-4 h-4" />
-                Baixar PDF
+                {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {downloading ? 'Gerando PDF...' : 'Baixar PDF'}
               </Button>
             </CardContent>
           </Card>

@@ -85,6 +85,13 @@
       "when": 1771211317737,
       "tag": "0011_strange_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1777776862294,
+      "tag": "0012_conscious_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

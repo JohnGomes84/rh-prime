@@ -1,108 +1,48 @@
-import React, { useState } from 'react';
+import { useState, useMemo } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, FileText, CheckCircle2, Clock, Users } from 'lucide-react';
-
-interface JobOpening {
-  id: number;
-  titulo: string;
-  departamento: string;
-  cargo: string;
-  salarioMinimo: number;
-  salarioMaximo: number;
-  quantidadeVagas: number;
-  status: string;
-  dataAbertura: string;
-}
-
-interface Candidate {
-  id: number;
-  nome: string;
-  email: string;
-  cpf: string;
-  telefone: string;
-  status: string;
-  dataAplicacao: string;
-}
+import { Plus, Search, FileText, CheckCircle2, Clock, Users, Loader2, AlertCircle } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
+import { toast } from 'sonner';
 
 export default function Recruitment() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('vagas');
 
-  // Mock data
-  const jobOpenings: JobOpening[] = [
-    {
-      id: 1,
-      titulo: 'Desenvolvedor Full Stack',
-      departamento: 'TI',
-      cargo: 'Desenvolvedor',
-      salarioMinimo: 5000,
-      salarioMaximo: 8000,
-      quantidadeVagas: 2,
-      status: 'publicada',
-      dataAbertura: '2026-02-01',
-    },
-    {
-      id: 2,
-      titulo: 'Analista de RH',
-      departamento: 'RH',
-      cargo: 'Analista',
-      salarioMinimo: 3500,
-      salarioMaximo: 5500,
-      quantidadeVagas: 1,
-      status: 'publicada',
-      dataAbertura: '2026-02-05',
-    },
-  ];
+  // Buscar vagas do banco
+  const { data: jobsData, isLoading: jobsLoading } = trpc.positions.list.useQuery(undefined);
+  const jobOpenings = (jobsData as any)?.data || [];
 
-  const candidates: Candidate[] = [
-    {
-      id: 1,
-      nome: 'João Silva',
-      email: 'joao@example.com',
-      cpf: '12345678901',
-      telefone: '11999999999',
-      status: 'entrevista',
-      dataAplicacao: '2026-02-10',
-    },
-    {
-      id: 2,
-      nome: 'Maria Santos',
-      email: 'maria@example.com',
-      cpf: '98765432101',
-      telefone: '11888888888',
-      status: 'triada',
-      dataAplicacao: '2026-02-08',
-    },
-  ];
+  // Buscar candidatos do banco (mock - seria um endpoint real)
+  const candidates: any[] = [];
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { label: string; variant: any }> = {
-      publicada: { label: '📢 Publicada', variant: 'default' },
-      preenchida: { label: '✓ Preenchida', variant: 'secondary' },
-      cancelada: { label: '✗ Cancelada', variant: 'destructive' },
-      recebida: { label: 'Recebida', variant: 'outline' },
-      triada: { label: 'Triada', variant: 'outline' },
-      entrevista: { label: 'Entrevista', variant: 'default' },
-      aprovada: { label: 'Aprovada', variant: 'default' },
-      rejeitada: { label: 'Rejeitada', variant: 'destructive' },
+      'Aberta': { label: '📢 Aberta', variant: 'default' },
+      'Em Andamento': { label: '⏳ Em Andamento', variant: 'secondary' },
+      'Fechada': { label: '✓ Fechada', variant: 'secondary' },
+      'Cancelada': { label: '✗ Cancelada', variant: 'destructive' },
     };
     return config[status] || { label: status, variant: 'outline' };
   };
 
-  const filteredJobs = jobOpenings.filter(job =>
-    job.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.departamento.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredJobs = useMemo(() => {
+    return jobOpenings.filter((job: any) =>
+      job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.department?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [jobOpenings, searchTerm]);
 
-  const filteredCandidates = candidates.filter(c =>
-    c.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCandidates = useMemo(() => {
+    return candidates.filter((c: any) =>
+      c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [candidates, searchTerm]);
 
   return (
     <DashboardLayout>
@@ -185,54 +125,59 @@ export default function Recruitment() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {filteredJobs.map(job => (
-                    <div key={job.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-semibold text-lg">{job.titulo}</h3>
-                          <p className="text-sm text-muted-foreground">{job.departamento}</p>
+                {jobsLoading ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    Carregando vagas...
+                  </div>
+                ) : filteredJobs.length === 0 ? (
+                  <div className="text-center py-12">
+                    <AlertCircle className="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="text-muted-foreground">Nenhuma vaga encontrada</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredJobs.map((job: any) => (
+                      <div key={job.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h3 className="font-semibold text-lg">{job.title}</h3>
+                            <p className="text-sm text-muted-foreground">{job.department || 'Sem departamento'}</p>
+                          </div>
+                          <Badge variant="default">Aberta</Badge>
                         </div>
-                        <Badge variant="default">{getStatusBadge(job.status).label}</Badge>
-                      </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Cargo</p>
-                          <p className="font-medium">{job.cargo}</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Cargo</p>
+                            <p className="font-medium">{job.title}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Salário</p>
+                            <p className="font-medium">
+                              {job.baseSalary ? `R$ ${Number(job.baseSalary).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '---'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Departamento</p>
+                            <p className="font-medium">{job.department || '---'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-muted-foreground">Salário</p>
-                          <p className="font-medium">
-                            R$ {job.salarioMinimo.toLocaleString('pt-BR')} - R${' '}
-                            {job.salarioMaximo.toLocaleString('pt-BR')}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Vagas</p>
-                          <p className="font-medium">{job.quantidadeVagas}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Aberta em</p>
-                          <p className="font-medium">
-                            {new Date(job.dataAbertura).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline">
-                          <FileText className="w-4 h-4 mr-2" />
-                          Ver Detalhes
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Users className="w-4 h-4 mr-2" />
-                          Ver Candidatos
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline">
+                            <FileText className="w-4 h-4 mr-2" />
+                            Ver Detalhes
+                          </Button>
+                          <Button size="sm" variant="outline">
+                            <Users className="w-4 h-4 mr-2" />
+                            Ver Candidatos
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

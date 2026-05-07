@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,14 +7,93 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, Coins, Plane, AlertTriangle } from "lucide-react";
+import { Calculator, Coins, Plane, AlertTriangle, User } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 const formatBRL = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
 
+function useEmployeeContext() {
+  const search = useSearch();
+  const initialId = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const v = params.get("employeeId");
+    return v ? Number(v) : null;
+  }, [search]);
+
+  const [employeeId, setEmployeeId] = useState<number | null>(initialId);
+  const employeesQuery = trpc.employees.list.useQuery({});
+  const employees = useMemo(() => {
+    const data = employeesQuery.data as any;
+    return Array.isArray(data) ? data : data?.data ?? [];
+  }, [employeesQuery.data]);
+
+  const contractsQuery = trpc.contracts.list.useQuery(
+    { employeeId: employeeId ?? 0 },
+    { enabled: !!employeeId }
+  );
+  const latestContract = useMemo(() => {
+    const list = (contractsQuery.data as any[]) ?? [];
+    if (list.length === 0) return null;
+    const sorted = [...list].sort((a, b) => new Date(b.hireDate).getTime() - new Date(a.hireDate).getTime());
+    return sorted[0];
+  }, [contractsQuery.data]);
+
+  const employee = useMemo(
+    () => (employeeId ? employees.find((e: any) => e.id === employeeId) : null),
+    [employeeId, employees]
+  );
+
+  return { employees, employeeId, setEmployeeId, employee, latestContract };
+}
+
+function EmployeePicker({
+  value,
+  onChange,
+  employees,
+}: {
+  value: number | null;
+  onChange: (id: number | null) => void;
+  employees: any[];
+}) {
+  return (
+    <div className="rounded-md border bg-muted/40 p-3 flex items-center gap-3">
+      <User className="h-4 w-4 text-muted-foreground" />
+      <Label className="text-sm">Funcionário (opcional — preenche dados do contrato):</Label>
+      <Select
+        value={value ? String(value) : "manual"}
+        onValueChange={(v) => onChange(v === "manual" ? null : Number(v))}
+      >
+        <SelectTrigger className="max-w-xs">
+          <SelectValue placeholder="Modo manual" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="manual">— Modo manual —</SelectItem>
+          {employees.map((e: any) => (
+            <SelectItem key={e.id} value={String(e.id)}>
+              {e.fullName} {e.cpf ? `· ${e.cpf}` : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function monthsBetween(start: string | Date | null, end: string | Date | null): number {
+  if (!start || !end) return 0;
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+  let m = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  if (e.getDate() - s.getDate() >= 15) m++;
+  return Math.max(0, Math.min(12, m));
+}
+
 export default function Calculators() {
+  const ctx = useEmployeeContext();
+
   // 13º
   const [d13Salary, setD13Salary] = useState<number>(0);
   const [d13Months, setD13Months] = useState<number>(12);
@@ -41,6 +121,22 @@ export default function Calculators() {
   const [rescResult, setRescResult] = useState<any>(null);
   const utils = trpc.useUtils();
 
+  useEffect(() => {
+    if (!ctx.latestContract) return;
+    const salary = parseFloat(ctx.latestContract.salary ?? "0") || 0;
+    const hire = ctx.latestContract.hireDate
+      ? new Date(ctx.latestContract.hireDate).toISOString().slice(0, 10)
+      : "";
+    setRescForm((f) => ({ ...f, salaryGross: salary, hireDate: hire }));
+    setD13Salary(salary);
+    setFpSalary(salary);
+    const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    setD13Months(monthsBetween(hire > yearStart ? hire : yearStart, today));
+    setFpMonths(monthsBetween(hire, today));
+    setRescResult(null);
+  }, [ctx.latestContract]);
+
   const runRescisao = async () => {
     if (!rescForm.salaryGross || !rescForm.hireDate || !rescForm.terminationDate) {
       toast.error("Preencha salário, data admissão e data rescisão");
@@ -65,6 +161,21 @@ export default function Calculators() {
             Estimativas baseadas na CLT. Não substituem cálculo oficial do contador.
           </p>
         </div>
+
+        <EmployeePicker value={ctx.employeeId} onChange={ctx.setEmployeeId} employees={ctx.employees} />
+        {ctx.employee && ctx.latestContract && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+            <strong>{ctx.employee.fullName}</strong> · contrato {ctx.latestContract.contractType} ·
+            admissão {new Date(ctx.latestContract.hireDate).toLocaleDateString("pt-BR")} ·
+            salário {formatBRL(parseFloat(ctx.latestContract.salary ?? "0"))}
+            {" "}— campos pré-preenchidos abaixo.
+          </div>
+        )}
+        {ctx.employeeId && !ctx.latestContract && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            Funcionário selecionado, mas sem contrato cadastrado. Preencha manualmente.
+          </div>
+        )}
 
         <Tabs defaultValue="rescisao" className="w-full">
           <TabsList className="grid w-full grid-cols-3">

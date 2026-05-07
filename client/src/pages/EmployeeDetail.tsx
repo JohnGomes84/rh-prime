@@ -170,7 +170,12 @@ export default function EmployeeDetail() {
                 </Button>
               </>
             ) : (
-              <Button variant="outline" onClick={() => setEditing(true)}>Editar Dados</Button>
+              <>
+                <Button variant="outline" onClick={() => setEditing(true)}>Editar Dados</Button>
+                <Button variant="outline" onClick={() => setLocation(`/calculadoras?employeeId=${employee.id}`)}>
+                  Calculadoras CLT
+                </Button>
+              </>
             )}
           </div>
         </div>

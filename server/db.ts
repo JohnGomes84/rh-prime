@@ -45,15 +45,16 @@ const generateId = () => nanoid(36);
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+  if (_db) return _db;
+  const url = process.env.DATABASE_URL;
+  if (!url) return null;
+  try {
+    _db = drizzle(url);
+    return _db;
+  } catch (error) {
+    console.error("[Database] Failed to initialize drizzle:", error);
+    throw error;
   }
-  return _db;
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]!; }

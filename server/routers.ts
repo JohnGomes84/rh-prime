@@ -20,7 +20,7 @@ import { payrollRouter } from "./routers/payroll";
 import { payslipRouter } from './routers/payslip';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
-import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
+import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service";
 import { validatePasswordStrength } from "./auth/jwt-service";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -78,11 +78,19 @@ export const appRouter = router({
             message: strength.errors.join('; '),
           });
         }
-        const result = await authRegister(input);
+        let result;
+        try {
+          result = await authRegister(input);
+        } catch (err) {
+          if (err instanceof RegisterEmailNotAllowedError) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: err.message });
+          }
+          throw err;
+        }
         if (!result) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Email já cadastrado ou erro ao registrar',
+            message: 'Email já cadastrado com senha definida',
           });
         }
         setSessionCookie(ctx, result.token);

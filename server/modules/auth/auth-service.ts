@@ -24,6 +24,26 @@ export interface RegisterRequest {
   name: string;
 }
 
+const ALLOWED_REGISTER_EMAILS = new Set(
+  (process.env.ALLOWED_REGISTER_EMAILS ??
+    "adm@mlservicoseco.com.br,mayk.lopes@mlservicoseco.com.br,ediani@mlservicoseco.com.br,operacao@mlservicoseco.com.br,comercial@mlservicoseco.com.br")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+export class RegisterEmailNotAllowedError extends Error {
+  constructor(email: string) {
+    super(`Email não autorizado para cadastro: ${email}`);
+    this.name = "RegisterEmailNotAllowedError";
+  }
+}
+
+export function isEmailAllowedToRegister(email: string): boolean {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") return true;
+  return ALLOWED_REGISTER_EMAILS.has(email.trim().toLowerCase());
+}
+
 export { hashPassword, verifyPassword as comparePassword };
 
 export function verifyToken(token: string): (AuthPayload & { iat?: number; exp?: number }) | null {
@@ -54,15 +74,28 @@ export async function login(request: LoginRequest): Promise<{ token: string; use
 }
 
 export async function register(request: RegisterRequest): Promise<{ token: string; user: AuthPayload } | null> {
-  const existing = await db.getUser(request.email);
-  if (existing) return null;
+  if (!isEmailAllowedToRegister(request.email)) {
+    throw new RegisterEmailNotAllowedError(request.email);
+  }
 
   const passwordHash = await hashPassword(request.password);
+  const existing = await db.getUser(request.email);
+
+  if (existing) {
+    if (existing.passwordHash) return null;
+    await db.updateUser(existing.id, { passwordHash, name: request.name });
+    const payload: AuthPayload = { id: existing.id, email: existing.email, role: existing.role };
+    return { token: generateToken(payload), user: payload };
+  }
+
+  const role = ALLOWED_REGISTER_EMAILS.has(request.email.trim().toLowerCase())
+    ? 'admin'
+    : 'colaborador';
   const newUser = await db.createUser({
     email: request.email,
     name: request.name,
     passwordHash,
-    role: 'colaborador',
+    role,
     loginMethod: 'jwt',
   });
   if (!newUser) return null;

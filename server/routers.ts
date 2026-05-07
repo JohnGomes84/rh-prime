@@ -17,6 +17,7 @@ import { timesheetRouter } from './routers/timesheet';
 import { reportsRouter } from './routers/reports';
 import { authRbacRouter } from './routers/auth-rbac';
 import { payrollRouter } from "./routers/payroll";
+import { payslipRouter } from './routers/payslip';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
@@ -105,9 +106,18 @@ export const appRouter = router({
   // ============================================================
   employees: router({
     list: protectedProcedure
-      .input(z.object({ search: z.string().optional() }).optional())
+      .input(z.object({ 
+        search: z.string().optional(),
+        page: z.number().min(1).default(1).optional(),
+        limit: z.number().min(1).max(100).default(20).optional(),
+      }).optional())
       .query(async ({ input }) => {
-        return db.listEmployees(input?.search);
+        const employees = await db.listEmployees(input?.search);
+        const page = input?.page || 1;
+        const limit = input?.limit || 20;
+        const start = (page - 1) * limit;
+        const paged = employees.slice(start, start + limit);
+        return { data: paged, total: employees.length, page, limit, totalPages: Math.ceil(employees.length / limit) };
       }),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -947,6 +957,10 @@ export const appRouter = router({
   // PAYROLL
   // ============================================================
   payroll: payrollRouter,
+  // ============================================================
+  // PAYSLIP (Holerite PDF)
+  // ============================================================
+  payslip: payslipRouter,
 });
 
 export type AppRouter = typeof appRouter;

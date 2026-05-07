@@ -503,7 +503,7 @@ export async function listDocuments(employeeId?: number, category?: string) {
     const conditions = [];
     if (employeeId) conditions.push(eq(documents.employeeId, employeeId));
     if (category) conditions.push(eq(documents.category, category as any));
-    if (conditions.length > 0) return db.select().from(documents).where(and(...(conditions.filter(Boolean) as any))).orderBy(desc(documents.uploadedAt));
+    if (conditions.length > 0) return db.select().from(documents).where((conditions.length === 1 ? conditions[0] : and(...conditions))! as any).orderBy(desc(documents.uploadedAt));
     return db.select().from(documents).orderBy(desc(documents.uploadedAt));
   }, "listDocuments");
 }
@@ -538,7 +538,7 @@ export async function listChecklistItems(employeeId: number, checklistType?: str
     if (!db) return [];
     const conditions = [eq(checklistItems.employeeId, employeeId)];
     if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType as any));
-    return db.select().from(checklistItems).where(and(...(conditions.filter(Boolean) as any))).orderBy(asc(checklistItems.category), asc(checklistItems.id));
+    return db.select().from(checklistItems).where((conditions.length === 1 ? conditions[0] : and(...conditions))! as any).orderBy(asc(checklistItems.category), asc(checklistItems.id));
   }, "listChecklistItems");
 }
 
@@ -1106,6 +1106,24 @@ export async function getTimeRecord(id: number) {
     const result = await db.select().from(timeRecords).where(eq(timeRecords.id, id));
     return result[0] || null;
   }, "getTimeRecord");
+}
+
+export async function getOpenTimeRecord(employeeId: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+
+    const result = await db.select().from(timeRecords)
+      .where(
+        and(
+          eq(timeRecords.employeeId, employeeId),
+          sql`${timeRecords.clockOut} IS NULL`
+        )
+      )
+      .orderBy(desc(timeRecords.clockIn))
+      .limit(1);
+    return result[0] || null;
+  }, "getOpenTimeRecord");
 }
 
 export async function updateTimeRecord(id: number, data: Record<string, any>) {

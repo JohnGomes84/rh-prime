@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -6,114 +6,113 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Clock, LogIn, LogOut, Calendar } from 'lucide-react';
-import { toast } from 'sonner';
+import DashboardLayout from '@/components/DashboardLayout';
 
 const formatDateTimeBR = (date: Date) => new Date(date).toLocaleString('pt-BR');
 
 export function TimeTracking() {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const employeeId = Number(user?.id ?? 0);
+  const [clockInTime, setClockInTime] = useState<Date | null>(null);
+  const [clockOutTime, setClockOutTime] = useState<Date | null>(null);
 
-  const queryRange = useMemo(() => ({
-    startDate: new Date(selectedDate),
-    endDate: new Date(`${selectedDate}T23:59:59`),
-  }), [selectedDate]);
-
-  const utils = trpc.useUtils();
   const { data: records = [], isLoading } = trpc.timesheet.listRecords.useQuery(
     {
-      employeeId,
-      startDate: queryRange.startDate,
-      endDate: queryRange.endDate,
+      employeeId: user?.id,
+      startDate: new Date(selectedDate),
+      endDate: new Date(selectedDate + 'T23:59:59'),
     },
-    { enabled: !!employeeId }
+    { enabled: !!user?.id }
   );
 
   const { data: summary } = trpc.timesheet.monthlySummary.useQuery(
     {
-      employeeId,
+      employeeId: user?.id,
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
     },
-    { enabled: !!employeeId }
+    { enabled: !!user?.id }
   );
 
-  const refreshRecords = async () => {
-    await Promise.all([
-      utils.timesheet.listRecords.invalidate(),
-      utils.timesheet.monthlySummary.invalidate(),
-    ]);
-  };
-
   const clockInMutation = trpc.timesheet.clockIn.useMutation({
-    onSuccess: async () => {
-      await refreshRecords();
-      toast.success('Entrada registrada com sucesso.');
+    onSuccess: () => {
+      setClockInTime(new Date());
+      alert('Entrada registrada com sucesso!');
     },
-    onError: (error) => toast.error(error.message),
   });
 
-  const clockOutMutation = trpc.timesheet.clockIn.useMutation({
-    onSuccess: async () => {
-      await refreshRecords();
-      toast.success('Saida registrada com sucesso.');
+  const clockOutMutation = trpc.timesheet.clockOut.useMutation({
+    onSuccess: () => {
+      setClockOutTime(new Date());
+      alert('Saída registrada com sucesso!');
     },
-    onError: (error) => toast.error(error.message),
   });
 
   const handleClockIn = () => {
-    if (!employeeId) return;
+    if (!user?.id) return;
     clockInMutation.mutate({
-      employeeId,
-      clockIn: new Date(),
+      employeeId: user.id,
     });
   };
 
   const handleClockOut = () => {
-    if (!employeeId) return;
+    if (!user?.id) return;
     clockOutMutation.mutate({
-      employeeId,
-      clockIn: new Date(),
-      clockOut: new Date(),
+      employeeId: user.id,
     });
   };
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Controle de Ponto</h1>
-        <p className="text-muted-foreground mt-2">Registre suas entradas e saidas</p>
+        <h1 className="text-2xl font-bold tracking-tight">Controle de Ponto</h1>
+        <p className="text-muted-foreground mt-2">Registre suas entradas e saídas</p>
       </div>
 
+      {/* Clock In/Out Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
             Registrar Ponto
           </CardTitle>
-          <CardDescription>Hora atual: {new Date().toLocaleTimeString('pt-BR')}</CardDescription>
+          <CardDescription>
+            Hora atual: {new Date().toLocaleTimeString('pt-BR')}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Button onClick={handleClockIn} disabled={clockInMutation.isPending} className="gap-2" size="lg">
+            <Button
+              onClick={handleClockIn}
+              disabled={clockInMutation.isPending}
+              className="gap-2"
+              size="lg"
+            >
               <LogIn className="w-4 h-4" />
               {clockInMutation.isPending ? 'Registrando...' : 'Entrada'}
             </Button>
-            <Button onClick={handleClockOut} disabled={clockOutMutation.isPending} variant="outline" className="gap-2" size="lg">
+            <Button
+              onClick={handleClockOut}
+              disabled={clockOutMutation.isPending}
+              variant="outline"
+              className="gap-2"
+              size="lg"
+            >
               <LogOut className="w-4 h-4" />
-              {clockOutMutation.isPending ? 'Registrando...' : 'Saida'}
+              {clockOutMutation.isPending ? 'Registrando...' : 'Saída'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
+      {/* Monthly Summary */}
       {summary && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="w-5 h-5" />
-              Resumo do Mes
+              Resumo do Mês
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -139,6 +138,7 @@ export function TimeTracking() {
         </Card>
       )}
 
+      {/* Records Table */}
       <Card>
         <CardHeader>
           <CardTitle>Registros do Dia</CardTitle>
@@ -149,7 +149,7 @@ export function TimeTracking() {
                 id="date"
                 type="date"
                 value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-40"
               />
             </div>
@@ -166,7 +166,7 @@ export function TimeTracking() {
                 <thead>
                   <tr className="border-b">
                     <th className="text-left py-2 px-4">Hora de Entrada</th>
-                    <th className="text-left py-2 px-4">Hora de Saida</th>
+                    <th className="text-left py-2 px-4">Hora de Saída</th>
                     <th className="text-left py-2 px-4">Horas Trabalhadas</th>
                     <th className="text-left py-2 px-4">Status</th>
                   </tr>
@@ -174,9 +174,15 @@ export function TimeTracking() {
                 <tbody>
                   {records.map((record: any) => (
                     <tr key={record.id} className="border-b hover:bg-muted/50">
-                      <td className="py-2 px-4">{formatDateTimeBR(new Date(record.clockIn))}</td>
-                      <td className="py-2 px-4">{record.clockOut ? formatDateTimeBR(new Date(record.clockOut)) : '-'}</td>
-                      <td className="py-2 px-4">{record.hoursWorked ? `${record.hoursWorked}h` : '-'}</td>
+                      <td className="py-2 px-4">
+                        {formatDateTimeBR(new Date(record.clockIn))}
+                      </td>
+                      <td className="py-2 px-4">
+                        {record.clockOut ? formatDateTimeBR(new Date(record.clockOut)) : '-'}
+                      </td>
+                      <td className="py-2 px-4">
+                        {record.hoursWorked ? `${record.hoursWorked}h` : '-'}
+                      </td>
                       <td className="py-2 px-4">
                         <span
                           className={`px-2 py-1 rounded text-xs font-medium ${
@@ -199,5 +205,6 @@ export function TimeTracking() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }

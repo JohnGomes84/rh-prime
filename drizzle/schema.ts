@@ -695,3 +695,48 @@ export const overtimeRecords = mysqlTable("overtime_records", {
 
 export type OvertimeRecord = typeof overtimeRecords.$inferSelect;
 export type InsertOvertimeRecord = typeof overtimeRecords.$inferInsert;
+
+// ============================================================
+// JOB OPENINGS (Vagas de Emprego)
+// ============================================================
+export const jobOpenings = mysqlTable("job_openings", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  department: varchar("department", { length: 100 }),
+  positionId: int("positionId"),
+  description: text("description"),
+  requirements: text("requirements"),
+  salaryMin: decimal("salaryMin", { precision: 10, scale: 2 }),
+  salaryMax: decimal("salaryMax", { precision: 10, scale: 2 }),
+  vacancies: int("vacancies").default(1).notNull(),
+  status: mysqlEnum("status", ["Aberta", "Em Andamento", "Fechada", "Cancelada"]).default("Aberta").notNull(),
+  priority: mysqlEnum("priority", ["Baixa", "Normal", "Alta", "Urgente"]).default("Normal").notNull(),
+  openedAt: timestamp("openedAt").defaultNow().notNull(),
+  closedAt: timestamp("closedAt"),
+  createdBy: varchar("createdBy", { length: 36 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type JobOpening = typeof jobOpenings.$inferSelect;
+export type InsertJobOpening = typeof jobOpenings.$inferInsert;
+
+// ============================================================
+// CANDIDATES (Candidatos)
+// ============================================================
+export const candidates = mysqlTable("candidates", {
+  id: int("id").autoincrement().primaryKey(),
+  jobOpeningId: int("jobOpeningId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 20 }),
+  resumeUrl: varchar("resumeUrl", { length: 500 }),
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  stage: mysqlEnum("stage", ["Triagem", "Entrevista RH", "Entrevista Tecnica", "Entrevista Final", "Aprovado", "Reprovado", "Desistiu"]).default("Triagem").notNull(),
+  notes: text("notes"),
+  rating: int("rating"),
+  appliedAt: timestamp("appliedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Candidate = typeof candidates.$inferSelect;
+export type InsertCandidate = typeof candidates.$inferInsert;

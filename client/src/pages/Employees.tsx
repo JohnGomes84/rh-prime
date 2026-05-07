@@ -42,9 +42,10 @@ export default function Employees() {
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
 
-  const { data: employees, isLoading } = trpc.employees.list.useQuery(
+  const { data: employeesResult, isLoading } = trpc.employees.list.useQuery(
     search ? { search } : undefined
   );
+  const employees = employeesResult?.data || (Array.isArray(employeesResult) ? employeesResult : []);
 
   const utils = trpc.useUtils();
   const createMutation = trpc.employees.create.useMutation({

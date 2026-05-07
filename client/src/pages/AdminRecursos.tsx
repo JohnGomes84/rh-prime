@@ -121,7 +121,8 @@ export default function AdminRecursos() {
   const vacationNumber = Number(vacationId);
   const utils = trpc.useUtils();
 
-  const { data: employees = [] } = trpc.employees.list.useQuery({});
+  const { data: employeesResponse } = trpc.employees.list.useQuery({});
+  const employees = Array.isArray(employeesResponse) ? employeesResponse : (employeesResponse?.data ?? []);
   const { data: positions = [] } = trpc.positions.list.useQuery();
   const employeePositions = trpc.employeePositions.list.useQuery({ employeeId: employeeNumber }, { enabled: !!employeeNumber });
   const vacationPeriods = trpc.vacationPeriods.list.useQuery({ vacationId: vacationNumber }, { enabled: !!vacationNumber });

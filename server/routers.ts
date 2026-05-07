@@ -201,6 +201,167 @@ export const appRouter = router({
         await db.deleteEmployee(input.id);
         return { success: true };
       }),
+    bulkImport: protectedProcedure
+      .input(z.object({
+        rows: z.array(z.record(z.string(), z.any())).max(2000),
+        dryRun: z.boolean().default(true),
+      }))
+      .mutation(async ({ input }) => {
+        const sanitizeDigits = (s: string) => String(s ?? "").replace(/\D/g, "");
+        const validateCpfChecksum = (cpf: string): boolean => {
+          if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+          let sum = 0;
+          for (let i = 1; i <= 9; i++) sum += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+          let rem = (sum * 10) % 11;
+          if (rem === 10 || rem === 11) rem = 0;
+          if (rem !== parseInt(cpf.substring(9, 10))) return false;
+          sum = 0;
+          for (let i = 1; i <= 10; i++) sum += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+          rem = (sum * 10) % 11;
+          if (rem === 10 || rem === 11) rem = 0;
+          return rem === parseInt(cpf.substring(10, 11));
+        };
+
+        const existing = await db.listEmployees();
+        const existingCpfs = new Set((existing as any[]).map((e) => sanitizeDigits(e.cpf ?? "")));
+        const seenCpfs = new Set<string>();
+
+        const FIELD_ALIASES: Record<string, string> = {
+          "nome": "fullName",
+          "nome completo": "fullName",
+          "fullname": "fullName",
+          "cpf": "cpf",
+          "rg": "rg",
+          "email": "email",
+          "e-mail": "email",
+          "telefone": "phone",
+          "phone": "phone",
+          "celular": "phone",
+          "data nascimento": "birthDate",
+          "data de nascimento": "birthDate",
+          "nascimento": "birthDate",
+          "birthdate": "birthDate",
+          "genero": "gender",
+          "gênero": "gender",
+          "estado civil": "maritalStatus",
+          "logradouro": "addressStreet",
+          "rua": "addressStreet",
+          "numero": "addressNumber",
+          "número": "addressNumber",
+          "complemento": "addressComplement",
+          "bairro": "addressNeighborhood",
+          "cidade": "addressCity",
+          "estado": "addressState",
+          "uf": "addressState",
+          "cep": "addressZip",
+          "status": "status",
+        };
+
+        const normalizeKey = (k: string) => k.trim().toLowerCase();
+        const normalizeRow = (raw: Record<string, any>): Record<string, any> => {
+          const out: Record<string, any> = {};
+          for (const [k, v] of Object.entries(raw)) {
+            const target = FIELD_ALIASES[normalizeKey(k)] ?? k;
+            out[target] = typeof v === "string" ? v.trim() : v;
+          }
+          return out;
+        };
+
+        const VALID_GENDERS = new Set(["M", "F", "Outro"]);
+        const VALID_MARITAL = new Set(["Solteiro", "Casado", "Divorciado", "Viúvo", "União Estável"]);
+        const VALID_STATUS = new Set(["Ativo", "Inativo", "Afastado", "Demitido", "Em Férias"]);
+
+        const results: Array<{
+          index: number;
+          status: "valid" | "invalid" | "duplicate";
+          errors: string[];
+          data: Record<string, any>;
+        }> = [];
+
+        for (let i = 0; i < input.rows.length; i++) {
+          const row = normalizeRow(input.rows[i]!);
+          const errors: string[] = [];
+
+          if (!row.fullName || String(row.fullName).length < 2) {
+            errors.push("Nome obrigatório");
+          }
+          const cpf = sanitizeDigits(row.cpf ?? "");
+          if (!cpf) {
+            errors.push("CPF obrigatório");
+          } else if (cpf.length !== 11) {
+            errors.push("CPF deve ter 11 dígitos");
+          } else if (!validateCpfChecksum(cpf)) {
+            errors.push("CPF inválido (dígitos verificadores)");
+          }
+          row.cpf = cpf;
+
+          if (row.gender && !VALID_GENDERS.has(row.gender)) {
+            errors.push(`Gênero inválido: ${row.gender}`);
+          }
+          if (row.maritalStatus && !VALID_MARITAL.has(row.maritalStatus)) {
+            errors.push(`Estado civil inválido: ${row.maritalStatus}`);
+          }
+          if (row.status && !VALID_STATUS.has(row.status)) {
+            errors.push(`Status inválido: ${row.status}`);
+          }
+          if (row.addressState && String(row.addressState).length !== 2) {
+            errors.push("UF deve ter 2 letras");
+          }
+
+          if (row.birthDate) {
+            const d = new Date(row.birthDate);
+            if (isNaN(d.getTime())) {
+              errors.push("Data de nascimento inválida");
+            } else {
+              row.birthDate = d.toISOString().slice(0, 10);
+            }
+          }
+
+          let status: "valid" | "invalid" | "duplicate" = errors.length > 0 ? "invalid" : "valid";
+          if (status === "valid" && cpf) {
+            if (existingCpfs.has(cpf)) {
+              status = "duplicate";
+              errors.push("CPF já cadastrado no sistema");
+            } else if (seenCpfs.has(cpf)) {
+              status = "duplicate";
+              errors.push("CPF duplicado neste arquivo");
+            }
+            seenCpfs.add(cpf);
+          }
+
+          results.push({ index: i, status, errors, data: row });
+        }
+
+        if (input.dryRun) {
+          return {
+            dryRun: true,
+            total: results.length,
+            valid: results.filter((r) => r.status === "valid").length,
+            invalid: results.filter((r) => r.status === "invalid").length,
+            duplicate: results.filter((r) => r.status === "duplicate").length,
+            results,
+          };
+        }
+
+        let inserted = 0;
+        const failed: Array<{ index: number; error: string }> = [];
+        for (const r of results) {
+          if (r.status !== "valid") continue;
+          try {
+            await db.createEmployee(r.data as any);
+            inserted++;
+          } catch (err: any) {
+            failed.push({ index: r.index, error: err?.message ?? String(err) });
+          }
+        }
+        return {
+          dryRun: false,
+          total: results.length,
+          inserted,
+          skipped: results.length - inserted,
+          failed,
+        };
+      }),
   }),
 
   // ============================================================

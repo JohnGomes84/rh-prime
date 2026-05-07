@@ -172,6 +172,84 @@ export async function deleteEmployee(id: number) {
   }, { name: "deleteEmployee-transaction" });
 }
 
+export async function getTurnoverMonthly(months: number = 12) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = await db.execute(sql`
+      SELECT
+        DATE_FORMAT(month_date, '%Y-%m') AS ym,
+        SUM(CASE WHEN type = 'hire' THEN 1 ELSE 0 END) AS hires,
+        SUM(CASE WHEN type = 'termination' THEN 1 ELSE 0 END) AS terminations
+      FROM (
+        SELECT DATE_FORMAT(hireDate, '%Y-%m-01') AS month_date, 'hire' AS type FROM contracts WHERE hireDate IS NOT NULL
+        UNION ALL
+        SELECT DATE_FORMAT(terminationDate, '%Y-%m-01') AS month_date, 'termination' AS type FROM contracts WHERE terminationDate IS NOT NULL
+      ) t
+      WHERE month_date >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL ${months} MONTH), '%Y-%m-01')
+      GROUP BY ym
+      ORDER BY ym
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      month: r.ym,
+      hires: Number(r.hires) || 0,
+      terminations: Number(r.terminations) || 0,
+    }));
+  }, "getTurnoverMonthly");
+}
+
+export async function getAbsenteeismMonthly(months: number = 12) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = await db.execute(sql`
+      SELECT
+        DATE_FORMAT(absenceDate, '%Y-%m') AS ym,
+        COUNT(*) AS total,
+        SUM(CASE WHEN justified = 1 THEN 1 ELSE 0 END) AS justified,
+        SUM(CASE WHEN justified = 0 THEN 1 ELSE 0 END) AS unjustified
+      FROM absences
+      WHERE absenceDate >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL ${months} MONTH), '%Y-%m-01')
+      GROUP BY ym
+      ORDER BY ym
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      month: r.ym,
+      total: Number(r.total) || 0,
+      justified: Number(r.justified) || 0,
+      unjustified: Number(r.unjustified) || 0,
+    }));
+  }, "getAbsenteeismMonthly");
+}
+
+export async function getHeadcountEvolution(months: number = 12) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = await db.execute(sql`
+      WITH RECURSIVE month_series AS (
+        SELECT DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL ${months} MONTH), '%Y-%m-01') AS month_start
+        UNION ALL
+        SELECT DATE_ADD(month_start, INTERVAL 1 MONTH) FROM month_series
+        WHERE month_start < DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+      )
+      SELECT
+        DATE_FORMAT(ms.month_start, '%Y-%m') AS ym,
+        (
+          SELECT COUNT(*) FROM contracts c
+          WHERE c.hireDate <= LAST_DAY(ms.month_start)
+            AND (c.terminationDate IS NULL OR c.terminationDate > LAST_DAY(ms.month_start))
+        ) AS active
+      FROM month_series ms
+      ORDER BY ms.month_start
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({ month: r.ym, active: Number(r.active) || 0 }));
+  }, "getHeadcountEvolution");
+}
+
 export async function listBirthdaysThisMonth() {
   return withDBRetry(async () => {
     const db = await getDb();

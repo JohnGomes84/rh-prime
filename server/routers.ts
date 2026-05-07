@@ -112,6 +112,21 @@ export const appRouter = router({
     birthdays: protectedProcedure.query(async () => {
       return db.listBirthdaysThisMonth();
     }),
+    turnover: protectedProcedure
+      .input(z.object({ months: z.number().int().min(3).max(36).default(12) }).optional())
+      .query(async ({ input }) => {
+        return db.getTurnoverMonthly(input?.months ?? 12);
+      }),
+    absenteeism: protectedProcedure
+      .input(z.object({ months: z.number().int().min(3).max(36).default(12) }).optional())
+      .query(async ({ input }) => {
+        return db.getAbsenteeismMonthly(input?.months ?? 12);
+      }),
+    headcount: protectedProcedure
+      .input(z.object({ months: z.number().int().min(3).max(36).default(12) }).optional())
+      .query(async ({ input }) => {
+        return db.getHeadcountEvolution(input?.months ?? 12);
+      }),
   }),
 
   // ============================================================

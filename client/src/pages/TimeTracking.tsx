@@ -48,17 +48,36 @@ export function TimeTracking() {
     },
   });
 
-  const handleClockIn = () => {
+  const captureLocation = (): Promise<string | undefined> =>
+    new Promise((resolve) => {
+      if (!('geolocation' in navigator)) return resolve(undefined);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude.toFixed(6);
+          const lng = pos.coords.longitude.toFixed(6);
+          const acc = Math.round(pos.coords.accuracy);
+          resolve(`${lat},${lng} (±${acc}m)`);
+        },
+        () => resolve(undefined),
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      );
+    });
+
+  const handleClockIn = async () => {
     if (!user?.id) return;
+    const location = await captureLocation();
     clockInMutation.mutate({
       employeeId: user.id,
+      location,
     });
   };
 
-  const handleClockOut = () => {
+  const handleClockOut = async () => {
     if (!user?.id) return;
+    const location = await captureLocation();
     clockOutMutation.mutate({
       employeeId: user.id,
+      notes: location ? `[saída] ${location}` : undefined,
     });
   };
 

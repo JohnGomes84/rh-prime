@@ -5,11 +5,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { Users, TrendingDown, TrendingUp, Clock, DollarSign, AlertTriangle, Calendar, BarChart3 } from "lucide-react";
 import DashboardLayout from '@/components/DashboardLayout';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  AreaChart,
+  Area,
+} from "recharts";
 
 export default function PeopleAnalytics() {
   const [period, setPeriod] = useState("12");
   const employeesQuery = trpc.employees.list.useQuery({});
   const vacationsQuery = trpc.vacations.list.useQuery({});
+  const months = parseInt(period) || 12;
+  const turnoverQuery = trpc.dashboard.turnover.useQuery({ months });
+  const absenteeismQuery = trpc.dashboard.absenteeism.useQuery({ months });
+  const headcountQuery = trpc.dashboard.headcount.useQuery({ months });
 
   const employees = useMemo(() => employeesQuery.data?.data || employeesQuery.data || [], [employeesQuery.data]);
   const vacations = useMemo(() => vacationsQuery.data || [], [vacationsQuery.data]);
@@ -305,6 +323,70 @@ export default function PeopleAnalytics() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Charts: turnover + absenteísmo + headcount */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Admissões vs Demissões ({months} meses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={turnoverQuery.data ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="hires" name="Admissões" fill="#10b981" />
+                <Bar dataKey="terminations" name="Demissões" fill="#ef4444" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Absenteísmo ({months} meses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={absenteeismQuery.data ?? []} stackOffset="sign">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="justified" name="Justificadas" stackId="a" fill="#3b82f6" />
+                <Bar dataKey="unjustified" name="Não justificadas" stackId="a" fill="#f59e0b" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" /> Evolução de headcount ({months} meses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={headcountQuery.data ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Area type="monotone" dataKey="active" name="Ativos" stroke="#6366f1" fill="#a5b4fc" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
     </DashboardLayout>
   );

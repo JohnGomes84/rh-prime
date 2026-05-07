@@ -641,17 +641,19 @@ export type InsertDigitalSignature = typeof digitalSignatures.$inferInsert;
 // TIME RECORDS (Registros de Ponto)
 // ============================================================
 export const timeRecords = mysqlTable("time_records", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  employeeId: varchar("employee_id", { length: 36 })
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employees.id, { onDelete: "cascade", onUpdate: "cascade" }),
   clockIn: timestamp("clock_in").notNull(),
   clockOut: timestamp("clock_out"),
   hoursWorked: decimal("hours_worked", { precision: 6, scale: 2 }),
+  location: varchar("location", { length: 255 }),
+  notes: text("notes"),
   status: mysqlEnum("status", ["PENDING", "APPROVED", "REJECTED"]).default("PENDING").notNull(),
-  approvedById: varchar("approved_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  approvedById: int("approved_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   approvedAt: timestamp("approved_at"),
-  updatedById: varchar("updated_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  updatedById: int("updated_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
@@ -667,19 +669,20 @@ export type InsertTimeRecord = typeof timeRecords.$inferInsert;
 // OVERTIME RECORDS (Registros de Horas Extras)
 // ============================================================
 export const overtimeRecords = mysqlTable("overtime_records", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  employeeId: varchar("employee_id", { length: 36 })
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employees.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  timeRecordId: varchar("time_record_id", { length: 36 })
+  timeRecordId: int("time_record_id")
     .notNull()
     .references(() => timeRecords.id, { onDelete: "cascade", onUpdate: "cascade" }),
   hoursWorked: decimal("hours_worked", { precision: 6, scale: 2 }).notNull(),
   overtimeHours: decimal("overtime_hours", { precision: 6, scale: 2 }).notNull(),
   multiplier: decimal("multiplier", { precision: 3, scale: 2 }).notNull(),
   type: mysqlEnum("type", ["50%", "100%", "NOTURNO"]).notNull(),
+  reason: text("reason"),
   status: mysqlEnum("status", ["PENDING", "APPROVED", "REJECTED"]).default("PENDING").notNull(),
-  approvedById: varchar("approved_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  approvedById: int("approved_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   approvedAt: timestamp("approved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),

@@ -5,22 +5,23 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc';
 import { AlertCircle } from 'lucide-react';
+import { getLoginUrl, isOAuthConfigured } from '@/const';
 
 export function Login() {
   const [, setLocation] = useLocation();
-  const [loginMethod, setLoginMethod] = useState<'oauth' | 'jwt'>('oauth');
+  const oauthEnabled = isOAuthConfigured();
+  const [loginMethod, setLoginMethod] = useState<'oauth' | 'jwt'>(oauthEnabled ? 'oauth' : 'jwt');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleOAuthLogin = () => {
-    window.location.href = `/api/oauth/authorize?redirect_uri=${window.location.origin}`;
+    window.location.href = getLoginUrl();
   };
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
+    onSuccess: () => {
       setLocation('/');
     },
     onError: (error) => {
@@ -65,12 +66,13 @@ export function Login() {
           {/* Tab Selector */}
           <div className="flex gap-2 border-b">
             <button
-              onClick={() => setLoginMethod('oauth')}
+              onClick={() => oauthEnabled && setLoginMethod('oauth')}
               className={`flex-1 py-2 text-sm font-medium border-b-2 transition ${
                 loginMethod === 'oauth'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
+              disabled={!oauthEnabled}
             >
               Manus OAuth
             </button>
@@ -90,12 +92,15 @@ export function Login() {
           {loginMethod === 'oauth' && (
             <div className="space-y-4">
               <p className="text-gray-600 text-sm">
-                Acesse o sistema com sua conta Manus
+                {oauthEnabled
+                  ? 'Acesse o sistema com sua conta Manus'
+                  : 'OAuth local não configurado. Use Email/Senha para desenvolvimento.'}
               </p>
 
               <Button
                 onClick={handleOAuthLogin}
                 className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                disabled={!oauthEnabled}
               >
                 Entrar com Manus OAuth
               </Button>

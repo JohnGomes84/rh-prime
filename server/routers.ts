@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { withDBRetry } from "./utils/retry";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, managerProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -15,9 +15,19 @@ import { digitalSignatureRouter } from "./routers/digital-signature";
 import { auditRouter } from "./routers/audit";
 import { timesheetRouter } from './routers/timesheet';
 import { reportsRouter } from './routers/reports';
+import { authRbacRouter } from './routers/auth-rbac';
+import { payrollRouter } from "./routers/payroll";
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
+import { validatePasswordStrength } from "./auth/jwt-service";
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function setSessionCookie(ctx: { req: any; res: any }, token: string) {
+  const opts = getSessionCookieOptions(ctx.req);
+  ctx.res.cookie(COOKIE_NAME, token, { ...opts, maxAge: SEVEN_DAYS_MS });
+}
 
 
 // ============================================================
@@ -37,10 +47,10 @@ export const appRouter = router({
       .input(
         z.object({
           email: z.string().email(),
-          password: z.string().min(6),
+          password: z.string().min(1),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const result = await authLogin(input);
         if (!result) {
           throw new TRPCError({
@@ -48,6 +58,7 @@ export const appRouter = router({
             message: 'Email ou senha inválidos',
           });
         }
+        setSessionCookie(ctx, result.token);
         return result;
       }),
     register: publicProcedure
@@ -58,7 +69,14 @@ export const appRouter = router({
           name: z.string().min(3),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        const strength = validatePasswordStrength(input.password);
+        if (!strength.valid) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: strength.errors.join('; '),
+          });
+        }
         const result = await authRegister(input);
         if (!result) {
           throw new TRPCError({
@@ -66,9 +84,12 @@ export const appRouter = router({
             message: 'Email já cadastrado ou erro ao registrar',
           });
         }
+        setSessionCookie(ctx, result.token);
         return result;
       }),
   }),
+
+  users: authRbacRouter,
 
   // ============================================================
   // DASHBOARD
@@ -151,7 +172,7 @@ export const appRouter = router({
         await db.updateEmployee(input.id, convertUpdateData(input.data));
         return { success: true };
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteEmployee(input.id);
@@ -189,7 +210,7 @@ export const appRouter = router({
         await db.updatePosition(input.id, input.data);
         return { success: true };
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deletePosition(input.id);
@@ -495,7 +516,7 @@ export const appRouter = router({
         const employee = await db.getEmployee(input.employeeId);
         return db.createDocument({ ...input, expiryDate: toDateOpt(input.expiryDate), cpf: employee?.cpf || "" });
       }),
-    delete: protectedProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteDocument(input.id);
@@ -815,7 +836,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createHoliday({ ...input, date: toDate(input.date) });
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteHoliday(input.id);
@@ -835,7 +856,7 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getSetting(input.key);
       }),
-    upsert: protectedProcedure
+    upsert: adminProcedure
       .input(z.object({ key: z.string(), value: z.string(), description: z.string().optional() }))
       .mutation(async ({ input }) => {
         await db.upsertSetting(input.key, input.value, input.description);
@@ -865,7 +886,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createDependent({ ...input, birthDate: toDateOpt(input.birthDate) });
       }),
-    delete: protectedProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteDependent(input.id);
@@ -922,6 +943,10 @@ export const appRouter = router({
   // REPORTS
   // ============================================================
   reports: reportsRouter,
+  // ============================================================
+  // PAYROLL
+  // ============================================================
+  payroll: payrollRouter,
 });
 
 export type AppRouter = typeof appRouter;

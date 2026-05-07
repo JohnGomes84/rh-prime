@@ -225,7 +225,7 @@ describe('Auth Service', () => {
 
       const registerResult = await register({
         email,
-        oldPassword,
+        password: oldPassword,
         name: 'Change Password Test',
       });
 

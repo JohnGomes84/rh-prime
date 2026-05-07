@@ -1,20 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { appRouter } from '../routers';
-import { createCallerFactory } from '@trpc/server';
+import { describe, it, expect } from "vitest";
+import { appRouter } from "../routers";
 
-const createCaller = createCallerFactory(appRouter);
-
-describe('Timesheet Router', () => {
-  const mockUserId = 'test-user-123';
+describe("Timesheet Router", () => {
+  const mockUserId = 123;
   const mockContext = {
-    user: { id: mockUserId, email: 'test@example.com', role: 'user' },
+    user: { id: mockUserId, email: "test@example.com", role: "user" },
     req: { headers: {} },
     res: { setHeader: () => {}, clearCookie: () => {} },
   };
 
-  describe('clockIn', () => {
-    it('deve registrar entrada com sucesso', async () => {
-      const caller = createCaller(mockContext);
+  describe("clockIn", () => {
+    it("deve registrar entrada com sucesso", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.clockIn({
         employeeId: mockUserId,
         clockIn: new Date(),
@@ -24,8 +21,8 @@ describe('Timesheet Router', () => {
       expect(result.id).toBeDefined();
     });
 
-    it('deve registrar saída com sucesso', async () => {
-      const caller = createCaller(mockContext);
+    it("deve registrar saída com sucesso", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const now = new Date();
       const result = await caller.timesheet.clockIn({
         employeeId: mockUserId,
@@ -37,9 +34,9 @@ describe('Timesheet Router', () => {
     });
   });
 
-  describe('listRecords', () => {
-    it('deve listar registros de ponto', async () => {
-      const caller = createCaller(mockContext);
+  describe("listRecords", () => {
+    it("deve listar registros de ponto", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.listRecords({
         employeeId: mockUserId,
       });
@@ -47,10 +44,10 @@ describe('Timesheet Router', () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    it('deve filtrar por data', async () => {
-      const caller = createCaller(mockContext);
-      const startDate = new Date('2026-02-01');
-      const endDate = new Date('2026-02-28');
+    it("deve filtrar por data", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
+      const startDate = new Date("2026-02-01");
+      const endDate = new Date("2026-02-28");
 
       const result = await caller.timesheet.listRecords({
         employeeId: mockUserId,
@@ -62,23 +59,23 @@ describe('Timesheet Router', () => {
     });
   });
 
-  describe('monthlySummary', () => {
-    it('deve retornar resumo mensal', async () => {
-      const caller = createCaller(mockContext);
+  describe("monthlySummary", () => {
+    it("deve retornar resumo mensal", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.monthlySummary({
         employeeId: mockUserId,
         month: 2,
         year: 2026,
       });
 
-      expect(result).toHaveProperty('totalHours');
-      expect(result).toHaveProperty('overtimeHours');
-      expect(result).toHaveProperty('absences');
-      expect(result).toHaveProperty('delays');
+      expect(result).toHaveProperty("totalHours");
+      expect(result).toHaveProperty("overtimeHours");
+      expect(result).toHaveProperty("absences");
+      expect(result).toHaveProperty("delays");
     });
 
-    it('deve calcular total de horas corretamente', async () => {
-      const caller = createCaller(mockContext);
+    it("deve calcular total de horas corretamente", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.monthlySummary({
         employeeId: mockUserId,
         month: 2,
@@ -86,50 +83,62 @@ describe('Timesheet Router', () => {
       });
 
       expect(result.totalHours).toBeGreaterThanOrEqual(0);
-      expect(typeof result.totalHours).toBe('number');
+      expect(typeof result.totalHours).toBe("number");
     });
   });
 });
 
-describe('Overtime Router', () => {
-  const mockUserId = 'test-user-123';
+describe("Overtime Router", () => {
+  const mockUserId = 123;
   const mockContext = {
-    user: { id: mockUserId, email: 'test@example.com', role: 'user' },
+    user: { id: mockUserId, email: "test@example.com", role: "gestor" },
     req: { headers: {} },
     res: { setHeader: () => {}, clearCookie: () => {} },
   };
 
-  describe('requestOvertime', () => {
-    it('deve criar solicitação de horas extras', async () => {
-      const caller = createCaller(mockContext);
+  describe("requestOvertime", () => {
+    it("deve criar solicitação de horas extras", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
+      const timeRecord = await caller.timesheet.clockIn({
+        employeeId: mockUserId,
+        clockIn: new Date("2026-02-10T08:00:00Z"),
+        clockOut: new Date("2026-02-10T18:00:00Z"),
+      });
+
       const result = await caller.timesheet.requestOvertime({
         employeeId: mockUserId,
-        timeRecordId: 'record-123',
+        timeRecordId: Number(timeRecord.id),
         overtimeHours: 2,
-        type: '100%',
-        reason: 'Projeto urgente',
+        type: "100%",
+        reason: "Projeto urgente",
       });
 
       expect(result.success).toBe(true);
       expect(result.id).toBeDefined();
     });
 
-    it('deve validar tipo de hora extra', async () => {
-      const caller = createCaller(mockContext);
+    it("deve validar tipo de hora extra", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
+      const timeRecord = await caller.timesheet.clockIn({
+        employeeId: mockUserId,
+        clockIn: new Date("2026-02-11T08:00:00Z"),
+        clockOut: new Date("2026-02-11T17:30:00Z"),
+      });
+
       const result = await caller.timesheet.requestOvertime({
         employeeId: mockUserId,
-        timeRecordId: 'record-123',
+        timeRecordId: Number(timeRecord.id),
         overtimeHours: 1.5,
-        type: '50%',
+        type: "50%",
       });
 
       expect(result.success).toBe(true);
     });
   });
 
-  describe('listOvertimeRequests', () => {
-    it('deve listar solicitações de horas extras', async () => {
-      const caller = createCaller(mockContext);
+  describe("listOvertimeRequests", () => {
+    it("deve listar solicitações de horas extras", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.listOvertimeRequests({
         employeeId: mockUserId,
       });
@@ -137,57 +146,81 @@ describe('Overtime Router', () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    it('deve filtrar por status', async () => {
-      const caller = createCaller(mockContext);
+    it("deve filtrar por status", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.listOvertimeRequests({
         employeeId: mockUserId,
-        status: 'PENDING',
+        status: "PENDING",
       });
 
       expect(Array.isArray(result)).toBe(true);
     });
   });
 
-  describe('approveOvertime', () => {
-    it('deve aprovar horas extras', async () => {
-      const caller = createCaller(mockContext);
+  describe("approveOvertime", () => {
+    it("deve aprovar horas extras", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
+      const timeRecord = await caller.timesheet.clockIn({
+        employeeId: mockUserId,
+        clockIn: new Date("2026-02-12T08:00:00Z"),
+        clockOut: new Date("2026-02-12T19:00:00Z"),
+      });
+      const overtime = await caller.timesheet.requestOvertime({
+        employeeId: mockUserId,
+        timeRecordId: Number(timeRecord.id),
+        overtimeHours: 3,
+        type: "100%",
+      });
+
       const result = await caller.timesheet.approveOvertime({
-        overtimeId: 'overtime-123',
+        overtimeId: Number(overtime.id),
         approved: true,
       });
 
       expect(result.success).toBe(true);
     });
 
-    it('deve rejeitar horas extras', async () => {
-      const caller = createCaller(mockContext);
+    it("deve rejeitar horas extras", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
+      const timeRecord = await caller.timesheet.clockIn({
+        employeeId: mockUserId,
+        clockIn: new Date("2026-02-13T08:00:00Z"),
+        clockOut: new Date("2026-02-13T18:00:00Z"),
+      });
+      const overtime = await caller.timesheet.requestOvertime({
+        employeeId: mockUserId,
+        timeRecordId: Number(timeRecord.id),
+        overtimeHours: 2,
+        type: "50%",
+      });
+
       const result = await caller.timesheet.approveOvertime({
-        overtimeId: 'overtime-123',
+        overtimeId: Number(overtime.id),
         approved: false,
-        notes: 'Não autorizado',
+        notes: "Não autorizado",
       });
 
       expect(result.success).toBe(true);
     });
   });
 
-  describe('overtimeStats', () => {
-    it('deve retornar estatísticas de horas extras', async () => {
-      const caller = createCaller(mockContext);
+  describe("overtimeStats", () => {
+    it("deve retornar estatísticas de horas extras", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.overtimeStats({
         employeeId: mockUserId,
       });
 
-      expect(result).toHaveProperty('totalRequests');
-      expect(result).toHaveProperty('approvedRequests');
-      expect(result).toHaveProperty('rejectedRequests');
-      expect(result).toHaveProperty('pendingRequests');
-      expect(result).toHaveProperty('totalOvertimeHours');
-      expect(result).toHaveProperty('totalOvertimeValue');
+      expect(result).toHaveProperty("totalRequests");
+      expect(result).toHaveProperty("approvedRequests");
+      expect(result).toHaveProperty("rejectedRequests");
+      expect(result).toHaveProperty("pendingRequests");
+      expect(result).toHaveProperty("totalOvertimeHours");
+      expect(result).toHaveProperty("totalOvertimeValue");
     });
 
-    it('deve calcular totais corretamente', async () => {
-      const caller = createCaller(mockContext);
+    it("deve calcular totais corretamente", async () => {
+      const caller = appRouter.createCaller(mockContext as any);
       const result = await caller.timesheet.overtimeStats({
         employeeId: mockUserId,
         month: 2,

@@ -36,6 +36,15 @@ import {
   Bell,
   Settings,
   Shield,
+  Receipt,
+  Star,
+  UserCog,
+  GitBranch,
+  FileSignature,
+  Stethoscope,
+  Search,
+  ClipboardList,
+  Wallet,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -44,18 +53,34 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Users, label: "Funcionários", path: "/funcionarios" },
-  { icon: Briefcase, label: "Cargos e Funções", path: "/cargos" },
-  { icon: CalendarDays, label: "Férias", path: "/ferias" },
-  { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude" },
+  { icon: Users, label: "Funcionarios", path: "/funcionarios" },
+  { icon: Briefcase, label: "Cargos e Funcoes", path: "/cargos" },
+  { icon: CalendarDays, label: "Ferias", path: "/ferias" },
+  { icon: HeartPulse, label: "Saude e Seguranca", path: "/saude" },
   { icon: Clock, label: "Banco de Horas", path: "/banco-horas" },
-  { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos" },
+  { icon: FolderOpen, label: "Dossie Digital", path: "/documentos" },
+  { icon: FileText, label: "Templates", path: "/templates" },
   { icon: FileText, label: "Gerador de Docs", path: "/gerador" },
-  { icon: FileText, label: "Relatórios", path: "/relatorios" },
-  { icon: ArrowRightLeft, label: "Integração", path: "/integracao" },
-  { icon: Bell, label: "Notificações", path: "/notificacoes" },
+  { icon: FileText, label: "Relatorios", path: "/relatorios" },
+  { icon: Users, label: "Recrutamento", path: "/recrutamento" },
+  { icon: Clock, label: "Ponto", path: "/ponto" },
+  { icon: ClipboardList, label: "Historico de Ponto", path: "/ponto-historico" },
+  { icon: Clock, label: "Horas Extras", path: "/horas-extras" },
+  { icon: Wallet, label: "Folha", path: "/folha" },
+  { icon: Receipt, label: "Holerite", path: "/holerite" },
+  { icon: Star, label: "Avaliacoes", path: "/avaliacoes" },
+  { icon: ArrowRightLeft, label: "Integracao", path: "/integracao" },
+  { icon: Bell, label: "Notificacoes", path: "/notificacoes" },
   { icon: Shield, label: "Auditoria", path: "/auditoria" },
-  { icon: Settings, label: "Configurações", path: "/configuracoes" },
+  { icon: Search, label: "Auditoria Geral", path: "/auditoria-geral" },
+  { icon: FileSignature, label: "Assinar Contratos", path: "/assinar-contratos" },
+  { icon: Stethoscope, label: "Assinar ASOs", path: "/assinar-asos" },
+  { icon: Search, label: "Auditoria de Assinaturas", path: "/auditoria-assinaturas" },
+  { icon: Settings, label: "Configuracoes", path: "/configuracoes" },
+  { icon: UserCog, label: "Usuarios", path: "/usuarios" },
+  { icon: Shield, label: "Seguranca", path: "/seguranca-config" },
+  { icon: GitBranch, label: "Hierarquia", path: "/hierarquia" },
+  { icon: Settings, label: "Recursos do Sistema", path: "/admin/recursos" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -94,8 +119,7 @@ export default function DashboardLayout({
               RH Prime
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Sistema de Gestão de Recursos Humanos. Faça login para acessar o
-              painel.
+              Sistema de Gestao de Recursos Humanos. Faca login para acessar o painel.
             </p>
           </div>
           <Button
@@ -218,7 +242,7 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className="h-10 transition-all font-normal"
                     >
                       <item.icon
                         className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
@@ -273,7 +297,7 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        {isMobile && (
+        {isMobile ? (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
@@ -286,7 +310,7 @@ function DashboardLayoutContent({
               </div>
             </div>
           </div>
-        )}
+        ) : null}
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>

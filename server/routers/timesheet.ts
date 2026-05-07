@@ -1,24 +1,19 @@
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, managerProcedure } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 import { withDBRetry } from "../utils/retry";
-import { TRPCError } from "@trpc/server";
 
 export const timesheetRouter = router({
-  // ============================================================
   // CONTROLE DE PONTO
-  // ============================================================
-  
-  // Registrar entrada/saída
   clockIn: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
+      employeeId: z.number().int().positive(),
       clockIn: z.date(),
       clockOut: z.date().optional(),
-      location: z.string().optional(),
-      notes: z.string().optional(),
+      location: z.string().max(255).optional(),
+      notes: z.string().max(2000).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       return withDBRetry(async () => {
         return db.createTimeRecord({
           employeeId: input.employeeId,
@@ -30,10 +25,9 @@ export const timesheetRouter = router({
       }, "clockIn");
     }),
 
-  // Listar registros de ponto do funcionário
   listRecords: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
+      employeeId: z.number().int().positive(),
       startDate: z.date().optional(),
       endDate: z.date().optional(),
     }))
@@ -43,12 +37,11 @@ export const timesheetRouter = router({
       }, "listTimeRecords");
     }),
 
-  // Obter resumo de horas do mês
   monthlySummary: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
-      month: z.number().min(1).max(12),
-      year: z.number(),
+      employeeId: z.number().int().positive(),
+      month: z.number().int().min(1).max(12),
+      year: z.number().int().min(2000).max(2100),
     }))
     .query(async ({ input }) => {
       return withDBRetry(async () => {
@@ -56,20 +49,16 @@ export const timesheetRouter = router({
       }, "monthlySummary");
     }),
 
-  // ============================================================
   // HORAS EXTRAS
-  // ============================================================
-
-  // Solicitar horas extras
   requestOvertime: protectedProcedure
     .input(z.object({
-      employeeId: z.string(),
-      timeRecordId: z.string(),
+      employeeId: z.number().int().positive(),
+      timeRecordId: z.number().int().positive(),
       overtimeHours: z.number().min(0.5).max(24),
       type: z.enum(["50%", "100%", "NOTURNO"]),
-      reason: z.string().optional(),
+      reason: z.string().max(500).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       return withDBRetry(async () => {
         return db.createOvertimeRequest({
           employeeId: input.employeeId,
@@ -81,10 +70,9 @@ export const timesheetRouter = router({
       }, "requestOvertime");
     }),
 
-  // Listar solicitações de horas extras
   listOvertimeRequests: protectedProcedure
     .input(z.object({
-      employeeId: z.string().optional(),
+      employeeId: z.number().int().positive().optional(),
       status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
     }))
     .query(async ({ input }) => {
@@ -93,30 +81,28 @@ export const timesheetRouter = router({
       }, "listOvertimeRequests");
     }),
 
-  // Aprovar/rejeitar horas extras
-  approveOvertime: protectedProcedure
+  approveOvertime: managerProcedure
     .input(z.object({
-      overtimeId: z.string(),
+      overtimeId: z.number().int().positive(),
       approved: z.boolean(),
-      notes: z.string().optional(),
+      notes: z.string().max(2000).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       return withDBRetry(async () => {
         return db.updateOvertimeRequest(input.overtimeId, {
           status: input.approved ? "APPROVED" : "REJECTED",
           approvedAt: new Date(),
-          approvedById: ctx.user?.id,
+          approvedById: ctx.user.id,
           notes: input.notes,
         });
       }, "approveOvertime");
     }),
 
-  // Obter estatísticas de horas extras
   overtimeStats: protectedProcedure
     .input(z.object({
-      employeeId: z.string().optional(),
-      month: z.number().optional(),
-      year: z.number().optional(),
+      employeeId: z.number().int().positive().optional(),
+      month: z.number().int().min(1).max(12).optional(),
+      year: z.number().int().min(2000).max(2100).optional(),
     }))
     .query(async ({ input }) => {
       return withDBRetry(async () => {

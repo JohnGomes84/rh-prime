@@ -33,6 +33,7 @@ import {
   overtimeRecords, InsertOvertimeRecord,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
 import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks';
 import { withDBRetry } from './utils/retry';
 import { encryptCPF } from './utils/encryption';
@@ -68,6 +69,17 @@ function futureDateStr(days: number) {
 // ============================================================
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.email) throw new Error("User email is required for upsert");
+  if (isLocalDevUsersEnabled()) {
+    await localDevUsers.upsertUser({
+      email: user.email,
+      openId: user.openId,
+      name: user.name,
+      loginMethod: user.loginMethod,
+      role: user.role,
+      passwordHash: user.passwordHash,
+    });
+    return;
+  }
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
   try {
@@ -90,6 +102,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 export async function getUserByOpenId(openId: string) {
+  if (isLocalDevUsersEnabled()) {
+    return localDevUsers.getUserByOpenId(openId);
+  }
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
@@ -486,7 +501,7 @@ export async function listDocuments(employeeId?: number, category?: string) {
     if (!db) return [];
     const conditions = [];
     if (employeeId) conditions.push(eq(documents.employeeId, employeeId));
-    if (category) conditions.push(eq(documents.category, category));
+    if (category) conditions.push(eq(documents.category, category as any));
     if (conditions.length > 0) return db.select().from(documents).where(and(...(conditions.filter(Boolean) as any))).orderBy(desc(documents.uploadedAt));
     return db.select().from(documents).orderBy(desc(documents.uploadedAt));
   }, "listDocuments");
@@ -521,7 +536,7 @@ export async function listChecklistItems(employeeId: number, checklistType?: str
     const db = await getDb();
     if (!db) return [];
     const conditions = [eq(checklistItems.employeeId, employeeId)];
-    if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType));
+    if (checklistType) conditions.push(eq(checklistItems.checklistType, checklistType as any));
     return db.select().from(checklistItems).where(and(...(conditions.filter(Boolean) as any))).orderBy(asc(checklistItems.category), asc(checklistItems.id));
   }, "listChecklistItems");
 }
@@ -1033,7 +1048,7 @@ export async function getDashboardStats() {
 // TIME RECORDS (CONTROLE DE PONTO)
 // ============================================================
 export async function createTimeRecord(data: {
-  employeeId: string;
+  employeeId: number;
   clockIn: Date;
   clockOut?: Date;
   location?: string;
@@ -1043,33 +1058,32 @@ export async function createTimeRecord(data: {
     return withDBRetry(async () => {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
-      
+
       const result = await db.insert(timeRecords).values({
-        id: nanoid(36),
         employeeId: data.employeeId,
         clockIn: data.clockIn,
         clockOut: data.clockOut,
+        location: data.location,
+        notes: data.notes,
         status: "PENDING",
-        createdAt: new Date(),
-        updatedAt: new Date(),
       });
-      
+
       return { success: true, id: result[0]?.insertId };
     }, "createTimeRecord");
   }, { name: "createTimeRecord-transaction" });
 }
 
 export async function listTimeRecords(
-  employeeId: string,
+  employeeId: number,
   startDate?: Date,
   endDate?: Date
 ) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return [];
-    
+
     const conditions = [eq(timeRecords.employeeId, employeeId)];
-    
+
     if (startDate && endDate) {
       conditions.push(
         and(
@@ -1078,22 +1092,22 @@ export async function listTimeRecords(
         ) as any
       );
     }
-    
+
     return db.select().from(timeRecords).where(and(...conditions.filter(Boolean))).orderBy(desc(timeRecords.clockIn));
   }, "listTimeRecords");
 }
 
-export async function getTimeRecord(id: string) {
+export async function getTimeRecord(id: number) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return null;
-    
+
     const result = await db.select().from(timeRecords).where(eq(timeRecords.id, id));
     return result[0] || null;
   }, "getTimeRecord");
 }
 
-export async function updateTimeRecord(id: string, data: Record<string, any>) {
+export async function updateTimeRecord(id: number, data: Record<string, any>) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
       const db = await getDb();
@@ -1109,7 +1123,7 @@ export async function updateTimeRecord(id: string, data: Record<string, any>) {
 }
 
 export async function getMonthlyTimeSummary(
-  employeeId: string,
+  employeeId: number,
   month: number,
   year: number
 ) {
@@ -1150,8 +1164,8 @@ export async function getMonthlyTimeSummary(
 // OVERTIME RECORDS (HORAS EXTRAS)
 // ============================================================
 export async function createOvertimeRequest(data: {
-  employeeId: string;
-  timeRecordId: string;
+  employeeId: number;
+  timeRecordId: number;
   overtimeHours: number;
   type: "50%" | "100%" | "NOTURNO";
   reason?: string;
@@ -1160,34 +1174,32 @@ export async function createOvertimeRequest(data: {
     return withDBRetry(async () => {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
-      
+
       const multipliers: Record<string, number> = {
         "50%": 1.5,
         "100%": 2.0,
         "NOTURNO": 1.2,
       };
-      
-      const multiplier = multipliers[data.type];
-      
+      const multiplier = multipliers[data.type] ?? 1;
+
       const result = await db.insert(overtimeRecords).values({
-        id: nanoid(36),
         employeeId: data.employeeId,
         timeRecordId: data.timeRecordId,
-        overtimeHours: data.overtimeHours,
-        multiplier,
+        hoursWorked: String(data.overtimeHours),
+        overtimeHours: String(data.overtimeHours),
+        multiplier: String(multiplier),
         type: data.type,
+        reason: data.reason,
         status: "PENDING",
-        createdAt: new Date(),
-        updatedAt: new Date(),
       } as any);
-      
+
       return { success: true, id: result[0]?.insertId };
     }, "createOvertimeRequest");
   }, { name: "createOvertimeRequest-transaction" });
 }
 
 export async function listOvertimeRequests(
-  employeeId?: string,
+  employeeId?: number,
   status?: "PENDING" | "APPROVED" | "REJECTED"
 ) {
   return withDBRetry(async () => {
@@ -1212,7 +1224,7 @@ export async function listOvertimeRequests(
   }, "listOvertimeRequests");
 }
 
-export async function updateOvertimeRequest(id: string, data: Record<string, any>) {
+export async function updateOvertimeRequest(id: number, data: Record<string, any>) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
       const db = await getDb();
@@ -1228,7 +1240,7 @@ export async function updateOvertimeRequest(id: string, data: Record<string, any
 }
 
 export async function getOvertimeStats(
-  employeeId?: string,
+  employeeId?: number,
   month?: number,
   year?: number
 ) {
@@ -1291,6 +1303,9 @@ export async function getOvertimeStats(
 // ============================================================
 export async function getUser(email: string) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.getUser(email);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1301,6 +1316,9 @@ export async function getUser(email: string) {
 
 export async function getUserById(id: number) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.getUserById(id);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1317,6 +1335,9 @@ export async function createUser(data: {
   loginMethod?: string;
 }) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.createUser(data);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1340,6 +1361,9 @@ export async function updateUser(id: number, data: Partial<{
   role: string;
 }>) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.updateUser(id, data as any);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1349,6 +1373,9 @@ export async function updateUser(id: number, data: Partial<{
 
 export async function deleteUser(id: number) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.deleteUser(id);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1358,9 +1385,30 @@ export async function deleteUser(id: number) {
 
 export async function listUsers() {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.listUsers();
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
-    
     return db.select().from(users);
   }, "listUsers");
+}
+
+export async function getUsersByRole(role: string) {
+  return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.getUsersByRole(role);
+    }
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(users).where(eq(users.role, role as any));
+  }, "getUsersByRole");
+}
+
+export async function getUsersByDepartment(_departmentId: string) {
+  if (isLocalDevUsersEnabled()) {
+    return localDevUsers.getUsersByDepartment(_departmentId);
+  }
+  // Schema currently lacks departments table — return empty until added
+  return [] as Array<typeof users.$inferSelect>;
 }

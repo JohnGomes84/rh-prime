@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
+import { verifyToken as verifyLocalJwt } from "../auth/jwt-service";
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -257,11 +258,21 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
-    const session = await this.verifySession(sessionCookie);
 
+    // 1. Try local JWT (issued by /auth/login)
+    if (sessionCookie) {
+      const localPayload = verifyLocalJwt(sessionCookie);
+      if (localPayload) {
+        const user = await db.getUserById(localPayload.userId);
+        if (user) return user;
+        throw ForbiddenError("Local JWT user not found");
+      }
+    }
+
+    // 2. Fallback: OAuth session (jose-signed)
+    const session = await this.verifySession(sessionCookie);
     if (!session) {
       throw ForbiddenError("Invalid session cookie");
     }

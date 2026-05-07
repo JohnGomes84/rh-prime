@@ -1,11 +1,11 @@
-import { eq } from 'drizzle-orm';
 import * as db from '../../db';
-import { users } from '../../../drizzle/schema';
-import * as bcrypt from 'bcrypt';
-import * as jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const JWT_EXPIRY = '7d';
+import {
+  hashPassword,
+  verifyPassword,
+  createToken,
+  verifyToken as verifyJwtToken,
+  type UserRole,
+} from '../../auth/jwt-service';
 
 export interface AuthPayload {
   id: number;
@@ -24,82 +24,40 @@ export interface RegisterRequest {
   name: string;
 }
 
-/**
- * Hash de senha com bcrypt
- */
-export async function hashPassword(password: string): Promise<string> {
-  const saltRounds = 10;
-  return bcrypt.hash(password, saltRounds);
+export { hashPassword, verifyPassword as comparePassword };
+
+export function verifyToken(token: string): (AuthPayload & { iat?: number; exp?: number }) | null {
+  const decoded = verifyJwtToken(token) as any;
+  if (!decoded) return null;
+  return {
+    id: decoded.userId,
+    email: decoded.email,
+    role: decoded.role,
+    iat: decoded.iat,
+    exp: decoded.exp,
+  } as any;
 }
 
-/**
- * Comparar senha com hash
- */
-export async function comparePassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
-
-/**
- * Gerar JWT token
- */
 export function generateToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  return createToken(payload.id, payload.email, payload.role as UserRole);
 }
 
-/**
- * Verificar JWT token
- */
-export function verifyToken(token: string): AuthPayload | null {
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload;
-    return decoded;
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
- * Login - retorna token JWT
- */
 export async function login(request: LoginRequest): Promise<{ token: string; user: AuthPayload } | null> {
   const user = await db.getUser(request.email);
+  if (!user || !user.passwordHash) return null;
 
-  if (!user || !user.passwordHash) {
-    return null;
-  }
+  const isValid = await verifyPassword(request.password, user.passwordHash);
+  if (!isValid) return null;
 
-  const isPasswordValid = await comparePassword(request.password, user.passwordHash);
-  if (!isPasswordValid) {
-    return null;
-  }
-
-  const payload: AuthPayload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-  };
-
-  const token = generateToken(payload);
-
-  return {
-    token,
-    user: payload,
-  };
+  const payload: AuthPayload = { id: user.id, email: user.email, role: user.role };
+  return { token: generateToken(payload), user: payload };
 }
 
-/**
- * Registrar novo usuário
- */
 export async function register(request: RegisterRequest): Promise<{ token: string; user: AuthPayload } | null> {
-  // Verificar se usuário já existe
-  const existingUser = await db.getUser(request.email);
-
-  if (existingUser) {
-    return null;
-  }
+  const existing = await db.getUser(request.email);
+  if (existing) return null;
 
   const passwordHash = await hashPassword(request.password);
-
   const newUser = await db.createUser({
     email: request.email,
     name: request.name,
@@ -107,69 +65,36 @@ export async function register(request: RegisterRequest): Promise<{ token: strin
     role: 'colaborador',
     loginMethod: 'jwt',
   });
+  if (!newUser) return null;
 
-  if (!newUser) {
-    return null;
-  }
-
-  const payload: AuthPayload = {
-    id: newUser.id,
-    email: newUser.email,
-    role: newUser.role,
-  };
-
-  const token = generateToken(payload);
-
-  return {
-    token,
-    user: payload,
-  };
+  const payload: AuthPayload = { id: newUser.id, email: newUser.email, role: newUser.role };
+  return { token: generateToken(payload), user: payload };
 }
 
-/**
- * Obter usuário por ID
- */
 export async function getUserById(id: number) {
   return db.getUserById(id);
 }
 
-/**
- * Atualizar usuário
- */
 export async function updateUser(id: number, data: Partial<{ email: string; name: string; role: string }>) {
   return db.updateUser(id, data);
 }
 
-/**
- * Deletar usuário
- */
 export async function deleteUser(id: number) {
   return db.deleteUser(id);
 }
 
-/**
- * Listar todos os usuários
- */
 export async function listUsers() {
   return db.listUsers();
 }
 
-/**
- * Alterar senha
- */
 export async function changePassword(userId: number, oldPassword: string, newPassword: string): Promise<boolean> {
   const user = await getUserById(userId);
-  if (!user || !user.passwordHash) {
-    return false;
-  }
+  if (!user || !user.passwordHash) return false;
 
-  const isPasswordValid = await comparePassword(oldPassword, user.passwordHash);
-  if (!isPasswordValid) {
-    return false;
-  }
+  const isValid = await verifyPassword(oldPassword, user.passwordHash);
+  if (!isValid) return false;
 
-  const newPasswordHash = await hashPassword(newPassword);
-  await db.updateUser(userId, { passwordHash: newPasswordHash });
-
+  const newHash = await hashPassword(newPassword);
+  await db.updateUser(userId, { passwordHash: newHash });
   return true;
 }

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Settings as SettingsIcon, Building2, Mail, Bell, Sun, Moon } from "lucide-react";
+import { Loader2, Settings as SettingsIcon, Building2, Mail, Bell, Sun, Moon, Search } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -36,6 +36,35 @@ export default function Settings() {
   const [email, setEmail] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+
+  const onLookupCnpj = async () => {
+    const digits = cnpj.replace(/\D/g, "");
+    if (digits.length !== 14) {
+      toast.error("CNPJ deve ter 14 dígitos");
+      return;
+    }
+    setCnpjLoading(true);
+    try {
+      const data = await utils.lookup.cnpj.fetch({ cnpj: digits });
+      if (!data) {
+        toast.error("CNPJ não encontrado");
+        return;
+      }
+      setCompanyName(data.razaoSocial || data.nomeFantasia || "");
+      const addr = [data.street, data.number, data.neighborhood, data.city, data.state, data.cep]
+        .filter(Boolean)
+        .join(", ");
+      if (addr) setAddress(addr);
+      if (data.email) setEmail(data.email);
+      if (data.telefone) setPhone(data.telefone);
+      toast.success("Dados da empresa preenchidos");
+    } catch {
+      toast.error("Falha ao consultar CNPJ");
+    } finally {
+      setCnpjLoading(false);
+    }
+  };
 
   useEffect(() => {
     setCompanyName(settingsMap["company.name"] ?? "");
@@ -103,7 +132,12 @@ export default function Settings() {
                   </div>
                   <div>
                     <Label>CNPJ</Label>
-                    <Input value={cnpj} onChange={(event) => setCnpj(event.target.value)} />
+                    <div className="flex gap-2">
+                      <Input value={cnpj} onChange={(event) => setCnpj(event.target.value)} placeholder="00.000.000/0000-00" />
+                      <Button type="button" variant="outline" onClick={onLookupCnpj} disabled={cnpjLoading}>
+                        {cnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div>

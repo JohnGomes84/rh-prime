@@ -33,7 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { Plus, RotateCcw, Search } from "lucide-react";
+import { Plus, RotateCcw, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const HOLIDAY_SORTS = ["data-recente", "data-antiga", "nome"] as const;
@@ -173,6 +173,13 @@ export default function AdminRecursos() {
   const deleteHoliday = trpc.holidays.delete.useMutation({
     onSuccess: async () => {
       await refreshSelected();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const importHolidaysYear = trpc.holidays.importYear.useMutation({
+    onSuccess: async (result) => {
+      await refreshSelected();
+      toast.success(`Importados: ${result.created} novos, ${result.skipped} já existentes (${result.fetched} obtidos da Brasil API)`);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -619,6 +626,16 @@ export default function AdminRecursos() {
                     </Button>
                   </div>
                 </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 mr-2"
+                  onClick={() => importHolidaysYear.mutate({ year: new Date().getFullYear() })}
+                  disabled={importHolidaysYear.isPending}
+                >
+                  {importHolidaysYear.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  Importar nacionais ({new Date().getFullYear()})
+                </Button>
                 <Dialog>
                   <DialogTrigger asChild><Button size="sm" className="gap-2"><Plus className="w-4 h-4" />Novo feriado</Button></DialogTrigger>
                   <DialogContent>

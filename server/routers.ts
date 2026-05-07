@@ -861,6 +861,28 @@ export const appRouter = router({
         await db.deleteHoliday(input.id);
         return { success: true };
       }),
+    importYear: adminProcedure
+      .input(z.object({ year: z.number().int().min(1900).max(2100) }))
+      .mutation(async ({ input }) => {
+        const { listHolidays: fetchHolidays } = await import('./integrations/brasil-api');
+        const remote = await fetchHolidays(input.year);
+        const existing = await db.listHolidays();
+        const existingDates = new Set(
+          existing.map((h: any) => new Date(h.date).toISOString().slice(0, 10))
+        );
+        let created = 0;
+        for (const h of remote) {
+          if (existingDates.has(h.date)) continue;
+          await db.createHoliday({
+            name: h.name,
+            date: toDate(h.date),
+            type: 'Nacional',
+            recurring: false,
+          });
+          created++;
+        }
+        return { fetched: remote.length, created, skipped: remote.length - created };
+      }),
   }),
 
   // ============================================================

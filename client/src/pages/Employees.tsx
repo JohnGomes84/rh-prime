@@ -42,6 +42,53 @@ export default function Employees() {
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
 
+  // Address state for CEP autofill + state/city dropdowns
+  const [addressZip, setAddressZip] = useState("");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressNeighborhood, setAddressNeighborhood] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
+
+  const { data: states = [] } = trpc.lookup.states.useQuery(undefined, {
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+  const { data: cities = [] } = trpc.lookup.cities.useQuery(
+    { uf: addressState },
+    { enabled: addressState.length === 2, staleTime: 24 * 60 * 60 * 1000 }
+  );
+  const trpcUtils = trpc.useUtils();
+
+  const onCepBlur = async () => {
+    const digits = addressZip.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const data = await trpcUtils.lookup.cep.fetch({ cep: digits });
+      if (data) {
+        if (data.street) setAddressStreet(data.street);
+        if (data.neighborhood) setAddressNeighborhood(data.neighborhood);
+        if (data.state) setAddressState(data.state);
+        if (data.city) setAddressCity(data.city);
+        toast.success("Endereço preenchido pelo CEP");
+      } else {
+        toast.error("CEP não encontrado");
+      }
+    } catch {
+      toast.error("Falha ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  const resetAddress = () => {
+    setAddressZip("");
+    setAddressStreet("");
+    setAddressNeighborhood("");
+    setAddressCity("");
+    setAddressState("");
+  };
+
   const { data: employeesResult, isLoading } = trpc.employees.list.useQuery(
     search ? { search } : undefined
   );
@@ -55,6 +102,7 @@ export default function Employees() {
       setGender("");
       setMaritalStatus("");
       setErrors({});
+      resetAddress();
       setDialogOpen(false);
       toast.success("Funcionário cadastrado com sucesso!");
     },
@@ -347,9 +395,25 @@ export default function Employees() {
                     Endereço
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="addressZip">CEP {cepLoading && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}</Label>
+                      <Input
+                        id="addressZip"
+                        name="addressZip"
+                        placeholder="00000-000"
+                        value={addressZip}
+                        onChange={(e) => setAddressZip(e.target.value)}
+                        onBlur={onCepBlur}
+                      />
+                    </div>
                     <div className="sm:col-span-2">
                       <Label htmlFor="addressStreet">Logradouro</Label>
-                      <Input id="addressStreet" name="addressStreet" />
+                      <Input
+                        id="addressStreet"
+                        name="addressStreet"
+                        value={addressStreet}
+                        onChange={(e) => setAddressStreet(e.target.value)}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="addressNumber">Número</Label>
@@ -361,19 +425,36 @@ export default function Employees() {
                     </div>
                     <div>
                       <Label htmlFor="addressNeighborhood">Bairro</Label>
-                      <Input id="addressNeighborhood" name="addressNeighborhood" />
-                    </div>
-                    <div>
-                      <Label htmlFor="addressCity">Cidade</Label>
-                      <Input id="addressCity" name="addressCity" />
+                      <Input
+                        id="addressNeighborhood"
+                        name="addressNeighborhood"
+                        value={addressNeighborhood}
+                        onChange={(e) => setAddressNeighborhood(e.target.value)}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="addressState">Estado</Label>
-                      <Input id="addressState" name="addressState" placeholder="UF" maxLength={2} />
+                      <input type="hidden" name="addressState" value={addressState} />
+                      <Select value={addressState} onValueChange={(v) => { setAddressState(v); setAddressCity(""); }}>
+                        <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>
+                          {states.map((s: any) => (
+                            <SelectItem key={s.id} value={s.sigla}>{s.sigla} — {s.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
-                      <Label htmlFor="addressZip">CEP</Label>
-                      <Input id="addressZip" name="addressZip" placeholder="00000-000" />
+                      <Label htmlFor="addressCity">Cidade</Label>
+                      <input type="hidden" name="addressCity" value={addressCity} />
+                      <Select value={addressCity} onValueChange={setAddressCity} disabled={!addressState}>
+                        <SelectTrigger><SelectValue placeholder={addressState ? "Selecione" : "Selecione UF primeiro"} /></SelectTrigger>
+                        <SelectContent>
+                          {cities.map((c: any) => (
+                            <SelectItem key={c.id} value={c.nome}>{c.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>

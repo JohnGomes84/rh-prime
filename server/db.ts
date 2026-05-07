@@ -172,6 +172,27 @@ export async function deleteEmployee(id: number) {
   }, { name: "deleteEmployee-transaction" });
 }
 
+export async function listBirthdaysThisMonth() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const month = new Date().getMonth() + 1;
+    return db.select({
+      id: employees.id,
+      fullName: employees.fullName,
+      birthDate: employees.birthDate,
+      email: employees.email,
+      phone: employees.phone,
+    })
+      .from(employees)
+      .where(and(
+        sql`MONTH(${employees.birthDate}) = ${month}`,
+        eq(employees.status, "Ativo")
+      ))
+      .orderBy(sql`DAY(${employees.birthDate})`);
+  }, "listBirthdaysThisMonth");
+}
+
 export async function countEmployees() {
   const db = await getDb();
   if (!db) return 0;

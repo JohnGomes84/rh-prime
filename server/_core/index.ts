@@ -12,6 +12,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { setupWebSocket } from "./websocket";
 import { ENV } from "./env";
+import { startNotificationScheduler } from "./notification-scheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -130,6 +131,7 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log(`WebSocket available at ws://localhost:${port}/api/ws`);
+    if (!ENV.isTest) startNotificationScheduler();
   });
 }
 

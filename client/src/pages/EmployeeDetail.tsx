@@ -234,7 +234,12 @@ export default function EmployeeDetail() {
                       <InfoRow label="Gênero" value={employee.gender} />
                       <InfoRow label="Estado Civil" value={employee.maritalStatus} />
                       <InfoRow label="E-mail" value={employee.email} />
-                      <InfoRow label="Telefone" value={employee.phone} />
+                      <InfoRow
+                        label="Telefone"
+                        value={employee.phone}
+                        href={employee.phone ? `https://wa.me/55${String(employee.phone).replace(/\D/g, "")}` : undefined}
+                        hrefLabel="WhatsApp"
+                      />
                       <InfoRow label="Status" value={employee.status} />
                     </div>
                   )}
@@ -641,11 +646,33 @@ export default function EmployeeDetail() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+function InfoRow({
+  label,
+  value,
+  href,
+  hrefLabel,
+}: {
+  label: string;
+  value: string | null | undefined;
+  href?: string;
+  hrefLabel?: string;
+}) {
   return (
     <div className="flex justify-between py-1.5 border-b border-border/50 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground">{value || "-"}</span>
+      <span className="font-medium text-foreground flex items-center gap-2">
+        {value || "-"}
+        {href && value && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-emerald-600 hover:underline"
+          >
+            {hrefLabel ?? "Abrir"}
+          </a>
+        )}
+      </span>
     </div>
   );
 }

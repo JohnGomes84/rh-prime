@@ -1,11 +1,12 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Users, Loader2 } from "lucide-react";
+import { Users, Loader2, Cake } from "lucide-react";
 
 export default function Home() {
   const { isLoading: authLoading } = trpc.auth.me.useQuery();
   const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery();
+  const { data: birthdays = [] } = trpc.dashboard.birthdays.useQuery();
 
   if (authLoading) {
     return (
@@ -114,6 +115,50 @@ export default function Home() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Cake className="h-5 w-5 text-pink-600" />
+              Aniversariantes do mês
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {birthdays.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum aniversariante este mês.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {birthdays.map((b: any) => {
+                  const date = b.birthDate ? new Date(b.birthDate) : null;
+                  const day = date ? String(date.getDate()).padStart(2, "0") : "??";
+                  const today = new Date();
+                  const isToday = date && date.getDate() === today.getDate() && date.getMonth() === today.getMonth();
+                  return (
+                    <li key={b.id} className="flex items-center justify-between py-2 text-sm">
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-flex w-8 h-8 items-center justify-center rounded-full ${isToday ? "bg-pink-100 text-pink-700 font-bold" : "bg-muted text-muted-foreground"}`}>
+                          {day}
+                        </span>
+                        <span className={isToday ? "font-semibold" : ""}>{b.fullName}</span>
+                        {isToday && <span className="text-xs text-pink-600">🎂 hoje</span>}
+                      </div>
+                      {b.phone && (
+                        <a
+                          href={`https://wa.me/55${String(b.phone).replace(/\D/g, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-emerald-600 hover:underline"
+                        >
+                          WhatsApp
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

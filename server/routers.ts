@@ -108,6 +108,9 @@ export const appRouter = router({
     stats: protectedProcedure.query(async () => {
       return db.getDashboardStats();
     }),
+    birthdays: protectedProcedure.query(async () => {
+      return db.listBirthdaysThisMonth();
+    }),
   }),
 
   // ============================================================

@@ -18,6 +18,7 @@ import { reportsRouter } from './routers/reports';
 import { authRbacRouter } from './routers/auth-rbac';
 import { payrollRouter } from "./routers/payroll";
 import { payslipRouter } from './routers/payslip';
+import { lookupRouter } from './routers/lookup';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service";
@@ -969,6 +970,10 @@ export const appRouter = router({
   // PAYSLIP (Holerite PDF)
   // ============================================================
   payslip: payslipRouter,
+  // ============================================================
+  // LOOKUP (Brasil API: CEP, CNPJ, Feriados, IBGE)
+  // ============================================================
+  lookup: lookupRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -31,6 +31,8 @@ import {
   dashboardSettings, InsertDashboardSetting,
   timeRecords, InsertTimeRecord,
   overtimeRecords, InsertOvertimeRecord,
+  jobOpenings, InsertJobOpening,
+  candidates, InsertCandidate,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -248,6 +250,95 @@ export async function getHeadcountEvolution(months: number = 12) {
     const rows = (result as any)[0] ?? result;
     return (rows as any[]).map((r) => ({ month: r.ym, active: Number(r.active) || 0 }));
   }, "getHeadcountEvolution");
+}
+
+// ============================================================
+// JOB OPENINGS (Vagas)
+// ============================================================
+export async function listJobOpenings(status?: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const query = db.select().from(jobOpenings).orderBy(desc(jobOpenings.openedAt));
+    if (status) return query.where(eq(jobOpenings.status, status as any));
+    return query;
+  }, "listJobOpenings");
+}
+
+export async function getJobOpening(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db.select().from(jobOpenings).where(eq(jobOpenings.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getJobOpening");
+}
+
+export async function createJobOpening(data: InsertJobOpening) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(jobOpenings).values(data);
+      return { id: r[0].insertId };
+    }, "createJobOpening");
+  }, { name: "createJobOpening-transaction" });
+}
+
+export async function updateJobOpening(id: number, data: Partial<InsertJobOpening>) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(jobOpenings).set(data).where(eq(jobOpenings.id, id));
+    }, "updateJobOpening");
+  }, { name: "updateJobOpening-transaction" });
+}
+
+// ============================================================
+// CANDIDATES
+// ============================================================
+export async function listCandidates(jobOpeningId?: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (jobOpeningId) {
+      return db.select().from(candidates)
+        .where(eq(candidates.jobOpeningId, jobOpeningId))
+        .orderBy(desc(candidates.appliedAt));
+    }
+    return db.select().from(candidates).orderBy(desc(candidates.appliedAt));
+  }, "listCandidates");
+}
+
+export async function getCandidate(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db.select().from(candidates).where(eq(candidates.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getCandidate");
+}
+
+export async function createCandidate(data: InsertCandidate) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(candidates).values(data);
+      return { id: r[0].insertId };
+    }, "createCandidate");
+  }, { name: "createCandidate-transaction" });
+}
+
+export async function updateCandidate(id: number, data: Partial<InsertCandidate>) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(candidates).set(data).where(eq(candidates.id, id));
+    }, "updateCandidate");
+  }, { name: "updateCandidate-transaction" });
 }
 
 export async function listBirthdaysThisMonth() {

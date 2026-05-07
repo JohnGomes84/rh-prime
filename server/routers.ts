@@ -1165,6 +1165,32 @@ export const appRouter = router({
   // AI (resume parser, job description generator)
   // ============================================================
   ai: aiRouter,
+
+  // ============================================================
+  // BUSINESS DAYS (BR working day calculator)
+  // ============================================================
+  businessDays: router({
+    count: protectedProcedure
+      .input(z.object({ startDate: z.string(), endDate: z.string() }))
+      .query(async ({ input }) => {
+        const { countBusinessDays } = await import("./utils/business-days");
+        const days = await countBusinessDays(input.startDate, input.endDate);
+        return { days };
+      }),
+    add: protectedProcedure
+      .input(z.object({ startDate: z.string(), businessDays: z.number().int() }))
+      .query(async ({ input }) => {
+        const { addBusinessDays } = await import("./utils/business-days");
+        const result = await addBusinessDays(input.startDate, input.businessDays);
+        return { date: result.toISOString().slice(0, 10) };
+      }),
+    isBusinessDay: protectedProcedure
+      .input(z.object({ date: z.string() }))
+      .query(async ({ input }) => {
+        const { isBusinessDay } = await import("./utils/business-days");
+        return { isBusinessDay: await isBusinessDay(input.date) };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

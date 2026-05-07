@@ -708,6 +708,29 @@ export type OvertimeRecord = typeof overtimeRecords.$inferSelect;
 export type InsertOvertimeRecord = typeof overtimeRecords.$inferInsert;
 
 // ============================================================
+// OVERTIME AUTHORIZATIONS (Pré-autorização de horas extras)
+// ============================================================
+export const overtimeAuthorizations = mysqlTable("overtime_authorizations", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
+    .notNull()
+    .references(() => employees.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  authorizedDate: date("authorized_date").notNull(),
+  maxHours: decimal("max_hours", { precision: 5, scale: 2 }).notNull(),
+  type: mysqlEnum("type", ["50%", "100%", "NOTURNO"]).notNull(),
+  authorizedById: int("authorized_by_id").references(() => users.id, { onDelete: "set null" }),
+  authorizedAt: timestamp("authorized_at").defaultNow().notNull(),
+  reason: text("reason"),
+  consumed: boolean("consumed").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  employeeDateIdx: index("idx_otauth_employee_date").on(table.employeeId, table.authorizedDate),
+}));
+
+export type OvertimeAuthorization = typeof overtimeAuthorizations.$inferSelect;
+export type InsertOvertimeAuthorization = typeof overtimeAuthorizations.$inferInsert;
+
+// ============================================================
 // JOB OPENINGS (Vagas de Emprego)
 // ============================================================
 export const jobOpenings = mysqlTable("job_openings", {

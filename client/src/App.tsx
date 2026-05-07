@@ -42,6 +42,7 @@ const TimeTracking = lazy(() => import("./pages/TimeTracking").then(m => ({ defa
 const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement").then(m => ({ default: m.OvertimeManagement })));
 const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Payslip })));
 const Calculators = lazy(() => import("./pages/Calculators"));
+const JourneyAdmin = lazy(() => import("./pages/JourneyAdmin"));
 
 function PageLoader() {
   return (
@@ -77,6 +78,7 @@ function Router() {
         <Route path="/folha" component={Payroll} />
         <Route path="/holerite" component={Payslip} />
         <Route path="/calculadoras" component={Calculators} />
+        <Route path="/jornada-admin" component={JourneyAdmin} />
         <Route path="/avaliacoes" component={ProfessionalAssessment} />
         <Route path="/auditoria" component={Audit} />
         <Route path="/analytics" component={PeopleAnalytics} />

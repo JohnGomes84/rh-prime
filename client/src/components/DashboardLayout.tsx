@@ -40,6 +40,7 @@ import {
   DollarSign,
   Receipt,
   Calculator,
+  Stamp,
   BarChart3,
   UserSearch,
   ClipboardCheck,
@@ -67,6 +68,7 @@ const menuItems: MenuItem[] = [
   { icon: Timer, label: "Bater Ponto", path: "/ponto", section: "Jornada" },
   { icon: Clock, label: "Banco de Horas", path: "/banco-horas", section: "Jornada" },
   { icon: TimerOff, label: "Horas Extras", path: "/horas-extras", section: "Jornada" },
+  { icon: Stamp, label: "Jornada — Admin", path: "/jornada-admin", section: "Jornada" },
   { icon: CalendarDays, label: "Férias", path: "/ferias", section: "Jornada" },
   // Financeiro
   { icon: DollarSign, label: "Folha de Pagamento", path: "/folha", section: "Financeiro" },

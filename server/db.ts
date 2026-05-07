@@ -33,6 +33,7 @@ import {
   overtimeRecords, InsertOvertimeRecord,
   jobOpenings, InsertJobOpening,
   candidates, InsertCandidate,
+  overtimeAuthorizations, InsertOvertimeAuthorization,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -250,6 +251,91 @@ export async function getHeadcountEvolution(months: number = 12) {
     const rows = (result as any)[0] ?? result;
     return (rows as any[]).map((r) => ({ month: r.ym, active: Number(r.active) || 0 }));
   }, "getHeadcountEvolution");
+}
+
+// ============================================================
+// OVERTIME AUTHORIZATIONS (Pré-autorização de horas extras)
+// ============================================================
+export async function listOvertimeAuthorizations(filter?: { employeeId?: number; date?: string; consumed?: boolean }) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const conds: any[] = [];
+    if (filter?.employeeId) conds.push(eq(overtimeAuthorizations.employeeId, filter.employeeId));
+    if (filter?.date) conds.push(eq(overtimeAuthorizations.authorizedDate, filter.date as any));
+    if (filter?.consumed !== undefined) conds.push(eq(overtimeAuthorizations.consumed, filter.consumed));
+    if (conds.length > 0) {
+      return db.select().from(overtimeAuthorizations).where(and(...conds)).orderBy(desc(overtimeAuthorizations.authorizedDate));
+    }
+    return db.select().from(overtimeAuthorizations).orderBy(desc(overtimeAuthorizations.authorizedDate)).limit(200);
+  }, "listOvertimeAuthorizations");
+}
+
+export async function createOvertimeAuthorization(data: InsertOvertimeAuthorization) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(overtimeAuthorizations).values(data);
+      return { id: r[0].insertId };
+    }, "createOvertimeAuthorization");
+  }, { name: "createOvertimeAuthorization-transaction" });
+}
+
+export async function findOvertimeAuthorizationFor(employeeId: number, date: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db
+      .select()
+      .from(overtimeAuthorizations)
+      .where(and(
+        eq(overtimeAuthorizations.employeeId, employeeId),
+        eq(overtimeAuthorizations.authorizedDate, date as any),
+        eq(overtimeAuthorizations.consumed, false)
+      ))
+      .limit(1);
+    return r[0] ?? null;
+  }, "findOvertimeAuthorizationFor");
+}
+
+export async function consumeOvertimeAuthorization(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return;
+    await db.update(overtimeAuthorizations).set({ consumed: true }).where(eq(overtimeAuthorizations.id, id));
+  }, "consumeOvertimeAuthorization");
+}
+
+export async function bulkUpdateTimeRecordStatus(ids: number[], status: "PENDING" | "APPROVED" | "REJECTED", approvedById?: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return { updated: 0 };
+    if (ids.length === 0) return { updated: 0 };
+    await db
+      .update(timeRecords)
+      .set({
+        status,
+        approvedById,
+        approvedAt: new Date(),
+      })
+      .where(sql`${timeRecords.id} IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})`);
+    return { updated: ids.length };
+  }, "bulkUpdateTimeRecordStatus");
+}
+
+export async function getTimesheetReport(employeeId: number, startDate: Date, endDate: Date) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(timeRecords)
+      .where(and(
+        eq(timeRecords.employeeId, employeeId),
+        sql`${timeRecords.clockIn} >= ${startDate}`,
+        sql`${timeRecords.clockIn} <= ${endDate}`,
+      ))
+      .orderBy(asc(timeRecords.clockIn));
+  }, "getTimesheetReport");
 }
 
 // ============================================================

@@ -93,14 +93,25 @@ export const timesheetRouter = router({
             : evaluation.overtime.typeNight > 0
               ? "NOTURNO"
               : "50%";
+          const dateStr = clockIn.toISOString().slice(0, 10);
+          const auth = await db.findOvertimeAuthorizationFor(employeeId, dateStr).catch(() => null);
           try {
-            await db.createOvertimeRequest({
+            const otRequest: any = {
               employeeId,
               timeRecordId: openRecord.id,
               overtimeHours: Math.round((evaluation.overtime.total / 60) * 100) / 100,
               type,
               reason: evaluation.notes.join("; "),
-            });
+            };
+            const otId = await db.createOvertimeRequest(otRequest);
+            if (auth && otId && (otId as any).id) {
+              await db.updateOvertimeRequest((otId as any).id, {
+                status: "APPROVED",
+                approvedAt: new Date(),
+                approvedById: auth.authorizedById ?? null,
+              });
+              await db.consumeOvertimeAuthorization(auth.id);
+            }
           } catch (e) { /* sem bloquear clockOut */ }
         }
         if (rule?.hourBankEnabled && (evaluation.hourBank.credit > 0 || evaluation.hourBank.debit > 0)) {
@@ -212,6 +223,113 @@ export const timesheetRouter = router({
           notes: input.notes,
         });
       }, "approveOvertime");
+    }),
+
+  // === Pré-autorização de overtime (admin) ===
+  preauthorizeOvertime: managerProcedure
+    .input(z.object({
+      employeeId: z.number().int().positive(),
+      authorizedDate: z.string(),
+      maxHours: z.number().positive().max(24),
+      type: z.enum(["50%", "100%", "NOTURNO"]).default("50%"),
+      reason: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return db.createOvertimeAuthorization({
+        employeeId: input.employeeId,
+        authorizedDate: input.authorizedDate as any,
+        maxHours: String(input.maxHours) as any,
+        type: input.type,
+        authorizedById: ctx.user.id,
+        reason: input.reason,
+      } as any);
+    }),
+
+  listAuthorizations: protectedProcedure
+    .input(z.object({
+      employeeId: z.number().int().positive().optional(),
+      date: z.string().optional(),
+      consumed: z.boolean().optional(),
+    }).optional())
+    .query(async ({ input }) => db.listOvertimeAuthorizations(input)),
+
+  // === Aprovação em massa de time_records ===
+  bulkApprove: managerProcedure
+    .input(z.object({
+      ids: z.array(z.number().int().positive()).min(1).max(500),
+      status: z.enum(["APPROVED", "REJECTED"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return db.bulkUpdateTimeRecordStatus(input.ids, input.status, ctx.user.id);
+    }),
+
+  // === Espelho de ponto ===
+  report: protectedProcedure
+    .input(z.object({
+      employeeId: z.number().int().positive().optional(),
+      startDate: z.string(),
+      endDate: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const id = input.employeeId ?? ctx.user?.id;
+      if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
+      const start = new Date(input.startDate);
+      const end = new Date(input.endDate);
+      end.setHours(23, 59, 59, 999);
+
+      const records = await db.getTimesheetReport(id, start, end) as any[];
+      const rule = await getActiveScheduleRule(id);
+
+      let totalExpected = 0, totalWorked = 0, totalDelay = 0, totalOvertime = 0, totalNight = 0, totalHB = 0;
+      const days: any[] = [];
+
+      for (const r of records) {
+        if (!r.clockOut || !rule) {
+          days.push({
+            id: r.id,
+            date: new Date(r.clockIn).toISOString().slice(0, 10),
+            clockIn: r.clockIn,
+            clockOut: r.clockOut,
+            status: r.status,
+            location: r.location,
+            evaluation: null,
+          });
+          continue;
+        }
+        const ev = await evaluateClockRecord({
+          clockIn: new Date(r.clockIn),
+          clockOut: new Date(r.clockOut),
+          rule,
+        });
+        totalExpected += ev.expectedMinutes;
+        totalWorked += ev.workedMinutes;
+        totalDelay += ev.delayMinutes;
+        totalOvertime += ev.overtime.total;
+        totalNight += ev.overtime.typeNight;
+        totalHB += ev.hourBank.credit - ev.hourBank.debit;
+        days.push({
+          id: r.id,
+          date: new Date(r.clockIn).toISOString().slice(0, 10),
+          clockIn: r.clockIn,
+          clockOut: r.clockOut,
+          status: r.status,
+          location: r.location,
+          evaluation: ev,
+        });
+      }
+
+      return {
+        rule,
+        days,
+        totals: {
+          expectedMinutes: totalExpected,
+          workedMinutes: totalWorked,
+          delayMinutes: totalDelay,
+          overtimeMinutes: totalOvertime,
+          nightMinutes: totalNight,
+          hourBankBalance: totalHB,
+        },
+      };
     }),
 
   evaluate: protectedProcedure

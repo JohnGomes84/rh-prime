@@ -41,6 +41,7 @@ const SignatureAudit = lazy(() => import("./pages/SignatureAudit").then(m => ({ 
 const TimeTracking = lazy(() => import("./pages/TimeTracking").then(m => ({ default: m.TimeTracking })));
 const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement").then(m => ({ default: m.OvertimeManagement })));
 const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Payslip })));
+const Calculators = lazy(() => import("./pages/Calculators"));
 
 function PageLoader() {
   return (
@@ -75,6 +76,7 @@ function Router() {
         <Route path="/horas-extras" component={OvertimeManagement} />
         <Route path="/folha" component={Payroll} />
         <Route path="/holerite" component={Payslip} />
+        <Route path="/calculadoras" component={Calculators} />
         <Route path="/avaliacoes" component={ProfessionalAssessment} />
         <Route path="/auditoria" component={Audit} />
         <Route path="/analytics" component={PeopleAnalytics} />

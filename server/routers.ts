@@ -20,6 +20,7 @@ import { payrollRouter } from "./routers/payroll";
 import { payslipRouter } from './routers/payslip';
 import { lookupRouter } from './routers/lookup';
 import { aiRouter } from './routers/ai';
+import { laborCalcRouter } from './routers/labor-calc';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service";
@@ -1180,6 +1181,11 @@ export const appRouter = router({
   // AI (resume parser, job description generator)
   // ============================================================
   ai: aiRouter,
+
+  // ============================================================
+  // LABOR CALC (rescisão, 13º, férias proporcionais — BR/CLT)
+  // ============================================================
+  laborCalc: laborCalcRouter,
 
   // ============================================================
   // BUSINESS DAYS (BR working day calculator)

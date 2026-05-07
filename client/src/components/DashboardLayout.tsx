@@ -39,6 +39,7 @@ import {
   Timer,
   DollarSign,
   Receipt,
+  Calculator,
   BarChart3,
   UserSearch,
   ClipboardCheck,
@@ -70,6 +71,7 @@ const menuItems: MenuItem[] = [
   // Financeiro
   { icon: DollarSign, label: "Folha de Pagamento", path: "/folha", section: "Financeiro" },
   { icon: Receipt, label: "Holerite", path: "/holerite", section: "Financeiro" },
+  { icon: Calculator, label: "Calculadoras CLT", path: "/calculadoras", section: "Financeiro" },
   // Saúde e Segurança
   { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude", section: "Saúde" },
   { icon: ClipboardCheck, label: "Avaliações", path: "/avaliacoes", section: "Saúde" },

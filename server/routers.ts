@@ -444,9 +444,22 @@ export const appRouter = router({
         workSchedule: z.string().optional(),
         weeklyHours: z.string().optional(),
         salary: z.string().optional(),
+        // Jornada
+        scheduleType: z.enum(["5x2", "6x1", "12x36", "parcial_30h", "parcial_25h", "flexivel", "intermitente"]).default("5x2"),
+        workDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/).default("08:00"),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/).default("17:00"),
+        lunchBreakMinutes: z.number().int().min(0).max(240).default(60),
+        toleranceMinutes: z.number().int().min(0).max(60).default(5),
+        hourBankEnabled: z.boolean().default(false),
+        nightShiftEnabled: z.boolean().default(false),
       }))
       .mutation(async ({ input }) => {
-        return db.createContract({ ...input, hireDate: toDate(input.hireDate), experienceEndDate: toDateOpt(input.experienceEndDate) });
+        return db.createContract({
+          ...input,
+          hireDate: toDate(input.hireDate),
+          experienceEndDate: toDateOpt(input.experienceEndDate),
+        });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))

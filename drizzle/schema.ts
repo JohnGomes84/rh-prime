@@ -157,6 +157,17 @@ export const contracts = mysqlTable("contracts", {
   workSchedule: varchar("workSchedule", { length: 100 }),
   weeklyHours: decimal("weeklyHours", { precision: 4, scale: 2 }),
   salary: decimal("salary", { precision: 10, scale: 2 }),
+  // Jornada — definida na contratação
+  scheduleType: mysqlEnum("scheduleType", [
+    "5x2", "6x1", "12x36", "parcial_30h", "parcial_25h", "flexivel", "intermitente"
+  ]).default("5x2").notNull(),
+  workDays: json("workDays").$type<number[]>().default([1, 2, 3, 4, 5]),
+  startTime: varchar("startTime", { length: 5 }).default("08:00"),
+  endTime: varchar("endTime", { length: 5 }).default("17:00"),
+  lunchBreakMinutes: int("lunchBreakMinutes").default(60),
+  toleranceMinutes: int("toleranceMinutes").default(5),
+  hourBankEnabled: boolean("hourBankEnabled").default(false),
+  nightShiftEnabled: boolean("nightShiftEnabled").default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

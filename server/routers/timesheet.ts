@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { withDBRetry } from "../utils/retry";
+import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine";
 
 function resolveEmployeeId(inputId: number | undefined, ctxUserId: number | undefined): number {
   const id = inputId ?? ctxUserId;
@@ -65,13 +66,62 @@ export const timesheetRouter = router({
       const clockIn = new Date(openRecord.clockIn);
       const hoursWorked = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
 
-      return withDBRetry(async () => {
+      const rule = await getActiveScheduleRule(employeeId);
+      let evaluation = null as Awaited<ReturnType<typeof evaluateClockRecord>> | null;
+      if (rule) {
+        evaluation = await evaluateClockRecord({ clockIn, clockOut, rule });
+      }
+
+      const result = await withDBRetry(async () => {
         return db.updateTimeRecord(openRecord.id, {
           clockOut,
           hoursWorked: Math.round(hoursWorked * 100) / 100,
-          status: "APPROVED",
+          status: evaluation && evaluation.delayMinutes > 0 ? "PENDING" : "APPROVED",
+          notes: evaluation
+            ? `Esperado ${evaluation.expectedMinutes}min · Trabalhado ${evaluation.workedMinutes}min` +
+              (evaluation.delayMinutes > 0 ? ` · Atraso ${evaluation.delayMinutes}min` : "") +
+              (evaluation.overtime.total > 0 ? ` · HE ${evaluation.overtime.total}min` : "")
+            : undefined,
         });
       }, "clockOut");
+
+      // Persistir movimentos derivados
+      if (evaluation) {
+        if (evaluation.overtime.total > 0) {
+          const type = evaluation.overtime.type100 > 0
+            ? "100%"
+            : evaluation.overtime.typeNight > 0
+              ? "NOTURNO"
+              : "50%";
+          try {
+            await db.createOvertimeRequest({
+              employeeId,
+              timeRecordId: openRecord.id,
+              overtimeHours: Math.round((evaluation.overtime.total / 60) * 100) / 100,
+              type,
+              reason: evaluation.notes.join("; "),
+            });
+          } catch (e) { /* sem bloquear clockOut */ }
+        }
+        if (rule?.hourBankEnabled && (evaluation.hourBank.credit > 0 || evaluation.hourBank.debit > 0)) {
+          try {
+            const balance = (evaluation.hourBank.credit - evaluation.hourBank.debit) / 60;
+            const refMonth = new Date(clockOut.getFullYear(), clockOut.getMonth(), 1);
+            const expiry = new Date(refMonth);
+            expiry.setMonth(expiry.getMonth() + 18);
+            await db.createTimeBankEntry({
+              employeeId,
+              referenceMonth: refMonth as any,
+              hoursBalance: String(Math.round(balance * 100) / 100),
+              expiryDate: expiry as any,
+              status: "Ativo",
+              observations: `Movimento automático do clockOut em ${clockOut.toISOString()}`,
+            } as any);
+          } catch (e) { /* sem bloquear */ }
+        }
+      }
+
+      return { ...result, evaluation };
     }),
 
   // Buscar ponto aberto (sem saída registrada)
@@ -162,6 +212,25 @@ export const timesheetRouter = router({
           notes: input.notes,
         });
       }, "approveOvertime");
+    }),
+
+  evaluate: protectedProcedure
+    .input(z.object({
+      employeeId: z.number().int().positive().optional(),
+      clockIn: z.string(),
+      clockOut: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const id = input.employeeId ?? ctx.user?.id;
+      if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
+      const rule = await getActiveScheduleRule(id);
+      if (!rule) return { rule: null, evaluation: null };
+      const evaluation = await evaluateClockRecord({
+        clockIn: new Date(input.clockIn),
+        clockOut: new Date(input.clockOut),
+        rule,
+      });
+      return { rule, evaluation };
     }),
 
   overtimeStats: protectedProcedure

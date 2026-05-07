@@ -288,6 +288,10 @@ export default function EmployeeDetail() {
                     <form onSubmit={(e) => {
                       e.preventDefault();
                       const fd = new FormData(e.currentTarget);
+                      const workDays: number[] = [];
+                      for (let i = 0; i < 7; i++) {
+                        if (fd.get(`workDay_${i}`)) workDays.push(i);
+                      }
                       createContractMutation.mutate({
                         employeeId: empId,
                         contractType: fd.get("contractType") as "CLT" | "Experiência" | "Temporário" | "Estágio",
@@ -295,6 +299,14 @@ export default function EmployeeDetail() {
                         positionId: fd.get("positionId") ? Number(fd.get("positionId")) : undefined,
                         salary: fd.get("salary") ? String(fd.get("salary")) : undefined,
                         weeklyHours: fd.get("weeklyHours") ? String(fd.get("weeklyHours")) : undefined,
+                        scheduleType: (fd.get("scheduleType") as any) || "5x2",
+                        workDays: workDays.length > 0 ? workDays : [1, 2, 3, 4, 5],
+                        startTime: (fd.get("startTime") as string) || "08:00",
+                        endTime: (fd.get("endTime") as string) || "17:00",
+                        lunchBreakMinutes: Number(fd.get("lunchBreakMinutes")) || 60,
+                        toleranceMinutes: Number(fd.get("toleranceMinutes")) || 5,
+                        hourBankEnabled: !!fd.get("hourBankEnabled"),
+                        nightShiftEnabled: !!fd.get("nightShiftEnabled"),
                       });
                     }} className="space-y-4">
                       <div>
@@ -328,6 +340,67 @@ export default function EmployeeDetail() {
                         <div><Label>Salário (R$)</Label><Input name="salary" type="number" step="0.01" /></div>
                         <div><Label>Carga Horária Semanal</Label><Input name="weeklyHours" type="number" defaultValue={44} /></div>
                       </div>
+
+                      {/* Jornada */}
+                      <div className="border-t pt-3 space-y-3">
+                        <h4 className="text-sm font-semibold">Jornada de Trabalho</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>Tipo de escala</Label>
+                            <Select name="scheduleType" defaultValue="5x2">
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="5x2">5x2 (Seg-Sex)</SelectItem>
+                                <SelectItem value="6x1">6x1 (folga semanal)</SelectItem>
+                                <SelectItem value="12x36">12x36</SelectItem>
+                                <SelectItem value="parcial_30h">Parcial 30h</SelectItem>
+                                <SelectItem value="parcial_25h">Parcial 25h</SelectItem>
+                                <SelectItem value="flexivel">Flexível</SelectItem>
+                                <SelectItem value="intermitente">Intermitente</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Almoço (minutos)</Label>
+                            <Input name="lunchBreakMinutes" type="number" defaultValue={60} />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="block mb-1">Dias da semana</Label>
+                          <div className="flex gap-3 text-sm">
+                            {[
+                              { i: 0, l: "Dom" },
+                              { i: 1, l: "Seg" },
+                              { i: 2, l: "Ter" },
+                              { i: 3, l: "Qua" },
+                              { i: 4, l: "Qui" },
+                              { i: 5, l: "Sex" },
+                              { i: 6, l: "Sáb" },
+                            ].map((d) => (
+                              <label key={d.i} className="flex items-center gap-1">
+                                <input type="checkbox" name={`workDay_${d.i}`} defaultChecked={d.i >= 1 && d.i <= 5} />
+                                {d.l}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div><Label>Início</Label><Input name="startTime" type="time" defaultValue="08:00" /></div>
+                          <div><Label>Fim</Label><Input name="endTime" type="time" defaultValue="17:00" /></div>
+                          <div><Label>Tolerância (min)</Label><Input name="toleranceMinutes" type="number" defaultValue={5} /></div>
+                        </div>
+                        <div className="flex gap-4 text-sm">
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="hourBankEnabled" />
+                            Banco de horas habilitado
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="nightShiftEnabled" />
+                            Adicional noturno
+                          </label>
+                        </div>
+                      </div>
+
                       <div className="flex justify-end gap-2 pt-2">
                         <Button type="button" variant="outline" onClick={() => setContractDialog(false)}>Cancelar</Button>
                         <Button type="submit" disabled={createContractMutation.isPending}>

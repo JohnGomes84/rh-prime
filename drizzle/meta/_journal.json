@@ -85,6 +85,13 @@
       "when": 1771211317737,
       "tag": "0011_strange_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1778163853590,
+      "tag": "0012_careful_banshee",
+      "breakpoints": true
     }
   ]
 }

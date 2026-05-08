@@ -36,6 +36,13 @@ vi.mock("../db", async () => {
     listOvertimeRequests: memoryDb.listOvertimeRequests.bind(memoryDb),
     updateOvertimeRequest: memoryDb.updateOvertimeRequest.bind(memoryDb),
     getOvertimeStats: memoryDb.getOvertimeStats.bind(memoryDb),
+    getOpenTimeRecord: memoryDb.getOpenTimeRecord.bind(memoryDb),
+    updateTimeRecord: memoryDb.updateTimeRecord.bind(memoryDb),
+    findOvertimeAuthorizationFor: memoryDb.findOvertimeAuthorizationFor.bind(memoryDb),
+    consumeOvertimeAuthorization: memoryDb.consumeOvertimeAuthorization.bind(memoryDb),
+    createTimeBankEntry: memoryDb.createTimeBankEntry.bind(memoryDb),
+    getNextNsr: memoryDb.getNextNsr.bind(memoryDb),
+    getLastRecordHash: memoryDb.getLastRecordHash.bind(memoryDb),
   };
 });
 

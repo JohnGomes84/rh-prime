@@ -113,6 +113,13 @@
       "when": 1778188687785,
       "tag": "0015_lean_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1778239741808,
+      "tag": "0016_dizzy_revanche",
+      "breakpoints": true
     }
   ]
 }

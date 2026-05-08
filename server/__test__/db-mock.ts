@@ -197,6 +197,33 @@ export const memoryDb = {
     timeRecords.set(record.id, record);
     return { success: true, id: record.id };
   },
+  async getOpenTimeRecord(employeeId: number) {
+    const recs = Array.from(timeRecords.values())
+      .filter((r) => r.employeeId === employeeId && !r.clockOut)
+      .sort((a, b) => b.clockIn.getTime() - a.clockIn.getTime());
+    return recs[0] ?? null;
+  },
+  async updateTimeRecord(id: number, data: Record<string, any>) {
+    const r = timeRecords.get(id);
+    if (!r) return { success: false };
+    timeRecords.set(id, { ...r, ...data, updatedAt: new Date() });
+    return { success: true };
+  },
+  async findOvertimeAuthorizationFor(_employeeId: number, _date: string) {
+    return null;
+  },
+  async consumeOvertimeAuthorization(_id: number) {
+    return;
+  },
+  async createTimeBankEntry(_data: any) {
+    return { id: 1 };
+  },
+  async getNextNsr() {
+    return Array.from(timeRecords.values()).length + 1;
+  },
+  async getLastRecordHash() {
+    return null;
+  },
   async listTimeRecords(employeeId: number, startDate?: Date, endDate?: Date) {
     return Array.from(timeRecords.values()).filter(record => {
       if (record.employeeId !== employeeId) return false;

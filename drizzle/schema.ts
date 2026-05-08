@@ -665,13 +665,39 @@ export const timeRecords = mysqlTable("time_records", {
   approvedById: int("approved_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   approvedAt: timestamp("approved_at"),
   updatedById: int("updated_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  // Portaria MTP 671/2021 (REP-P)
+  nsr: int("nsr"),
+  previousHash: varchar("previous_hash", { length: 64 }),
+  recordHash: varchar("record_hash", { length: 64 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
   employeeClockInIdx: index("idx_time_employee_clockin").on(table.employeeId, table.clockIn),
   employeeStatusIdx: index("idx_time_employee_status").on(table.employeeId, table.status),
   clockInIdx: index("idx_time_clockin").on(table.clockIn),
+  nsrIdx: index("idx_time_nsr").on(table.nsr),
 }));
+
+// ============================================================
+// COMPLIANCE EXPORTS (AFD/AFDT/ACJEF — Portaria 671/2021)
+// ============================================================
+export const complianceExports = mysqlTable("compliance_exports", {
+  id: int("id").autoincrement().primaryKey(),
+  type: mysqlEnum("type", ["AFD", "AFDT", "ACJEF"]).notNull(),
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  generatedById: int("generated_by_id").references(() => users.id, { onDelete: "set null" }),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  recordCount: int("record_count").default(0).notNull(),
+  fileSha256: varchar("file_sha256", { length: 64 }),
+  fileBytes: int("file_bytes"),
+  notes: text("notes"),
+}, (table) => ({
+  typePeriodIdx: index("idx_compliance_type_period").on(table.type, table.periodStart),
+}));
+
+export type ComplianceExport = typeof complianceExports.$inferSelect;
+export type InsertComplianceExport = typeof complianceExports.$inferInsert;
 
 export type TimeRecord = typeof timeRecords.$inferSelect;
 export type InsertTimeRecord = typeof timeRecords.$inferInsert;

@@ -22,6 +22,7 @@ import { lookupRouter } from './routers/lookup';
 import { aiRouter } from './routers/ai';
 import { laborCalcRouter } from './routers/labor-calc';
 import { recruitmentRouter } from './routers/recruitment';
+import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
 import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service";
@@ -1200,6 +1201,11 @@ export const appRouter = router({
   // RECRUITMENT (vagas + candidatos)
   // ============================================================
   recruitment: recruitmentRouter,
+
+  // ============================================================
+  // COMPLIANCE PORTARIA 671 (AFD/AFDT/ACJEF)
+  // ============================================================
+  compliancePortaria: compliancePortariaRouter,
 
   // ============================================================
   // LABOR CALC (rescisão, 13º, férias proporcionais — BR/CLT)

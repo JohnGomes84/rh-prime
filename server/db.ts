@@ -34,6 +34,7 @@ import {
   jobOpenings, InsertJobOpening,
   candidates, InsertCandidate,
   overtimeAuthorizations, InsertOvertimeAuthorization,
+  complianceExports, InsertComplianceExport,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -322,6 +323,51 @@ export async function bulkUpdateTimeRecordStatus(ids: number[], status: "PENDING
       .where(sql`${timeRecords.id} IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})`);
     return { updated: ids.length };
   }, "bulkUpdateTimeRecordStatus");
+}
+
+export async function listAllTimeRecords(startDate: Date, endDate: Date) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select({
+        id: timeRecords.id,
+        employeeId: timeRecords.employeeId,
+        clockIn: timeRecords.clockIn,
+        clockOut: timeRecords.clockOut,
+        hoursWorked: timeRecords.hoursWorked,
+        status: timeRecords.status,
+        nsr: timeRecords.nsr,
+        recordHash: timeRecords.recordHash,
+        previousHash: timeRecords.previousHash,
+        cpf: employees.cpf,
+        fullName: employees.fullName,
+      })
+      .from(timeRecords)
+      .innerJoin(employees, eq(timeRecords.employeeId, employees.id))
+      .where(and(
+        sql`${timeRecords.clockIn} >= ${startDate}`,
+        sql`${timeRecords.clockIn} <= ${endDate}`,
+      ))
+      .orderBy(asc(timeRecords.nsr), asc(timeRecords.clockIn));
+  }, "listAllTimeRecords");
+}
+
+export async function listComplianceExports() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(complianceExports).orderBy(desc(complianceExports.generatedAt)).limit(100);
+  }, "listComplianceExports");
+}
+
+export async function recordComplianceExport(data: InsertComplianceExport) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return { id: 0 };
+    const r = await db.insert(complianceExports).values(data);
+    return { id: r[0].insertId };
+  }, "recordComplianceExport");
 }
 
 export async function getTimesheetReport(employeeId: number, startDate: Date, endDate: Date) {
@@ -1324,6 +1370,29 @@ export async function getDashboardStats() {
 // ============================================================
 // TIME RECORDS (CONTROLE DE PONTO)
 // ============================================================
+export async function getNextNsr(): Promise<number> {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return 1;
+    const r = await db.select({ max: sql<number>`COALESCE(MAX(${timeRecords.nsr}), 0)` }).from(timeRecords);
+    return Number(r[0]?.max ?? 0) + 1;
+  }, "getNextNsr");
+}
+
+export async function getLastRecordHash(): Promise<string | null> {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db
+      .select({ hash: timeRecords.recordHash })
+      .from(timeRecords)
+      .where(sql`${timeRecords.recordHash} IS NOT NULL`)
+      .orderBy(desc(timeRecords.nsr))
+      .limit(1);
+    return r[0]?.hash ?? null;
+  }, "getLastRecordHash");
+}
+
 export async function createTimeRecord(data: {
   employeeId: number;
   clockIn: Date;
@@ -1336,6 +1405,19 @@ export async function createTimeRecord(data: {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
 
+      const { computeRecordHash } = await import("./utils/portaria-671");
+      const employee = await db.select({ cpf: employees.cpf }).from(employees).where(eq(employees.id, data.employeeId)).limit(1);
+      const cpf = employee[0]?.cpf ?? "00000000000";
+      const nsr = await getNextNsr();
+      const previousHash = await getLastRecordHash();
+      const recordHash = computeRecordHash({
+        previousHash,
+        nsr,
+        employeeCpf: cpf,
+        clockTimestampISO: data.clockIn.toISOString(),
+        type: "IN",
+      });
+
       const result = await db.insert(timeRecords).values({
         employeeId: data.employeeId,
         clockIn: data.clockIn,
@@ -1343,9 +1425,12 @@ export async function createTimeRecord(data: {
         location: data.location,
         notes: data.notes,
         status: "PENDING",
+        nsr,
+        previousHash,
+        recordHash,
       });
 
-      return { success: true, id: result[0]?.insertId };
+      return { success: true, id: result[0]?.insertId, nsr };
     }, "createTimeRecord");
   }, { name: "createTimeRecord-transaction" });
 }

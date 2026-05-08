@@ -988,3 +988,66 @@ export const terminationDevolutionItems = mysqlTable("termination_devolution_ite
 
 export type TerminationDevolutionItem = typeof terminationDevolutionItems.$inferSelect;
 export type InsertTerminationDevolutionItem = typeof terminationDevolutionItems.$inferInsert;
+
+// ============================================================
+// REQUESTS (caixa de entrada unificada)
+// ============================================================
+export const requests = mysqlTable("requests", {
+  id: int("id").autoincrement().primaryKey(),
+  kind: mysqlEnum("kind", [
+    "ferias",
+    "atestado",
+    "ajuste_ponto",
+    "abono",
+    "horas_extras",
+    "declaracao",
+    "adiantamento",
+    "outro",
+  ]).notNull(),
+  employeeId: int("employee_id").notNull(),
+  status: mysqlEnum("status", [
+    "PENDING",
+    "IN_REVIEW",
+    "APPROVED",
+    "REJECTED",
+    "CANCELLED",
+  ]).default("PENDING").notNull(),
+  priority: mysqlEnum("priority", ["LOW", "NORMAL", "HIGH", "URGENT"]).default("NORMAL").notNull(),
+  subject: varchar("subject", { length: 255 }).notNull(),
+  description: text("description"),
+  payload: json("payload"),
+  relatedResourceType: varchar("related_resource_type", { length: 60 }),
+  relatedResourceId: int("related_resource_id"),
+  slaDueAt: timestamp("sla_due_at"),
+  createdById: int("created_by_id"),
+  resolvedById: int("resolved_by_id"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  employeeIdx: index("idx_req_employee").on(table.employeeId),
+  statusIdx: index("idx_req_status").on(table.status),
+  kindIdx: index("idx_req_kind").on(table.kind),
+}));
+
+export type Request = typeof requests.$inferSelect;
+export type InsertRequest = typeof requests.$inferInsert;
+
+// ============================================================
+// APPROVALS (etapas de aprovação por request)
+// ============================================================
+export const approvals = mysqlTable("approvals", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("request_id").notNull(),
+  approverUserId: int("approver_user_id"),
+  level: int("level").default(1).notNull(),
+  decision: mysqlEnum("decision", ["PENDING", "APPROVED", "REJECTED"]).default("PENDING").notNull(),
+  reason: text("reason"),
+  decidedAt: timestamp("decided_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  requestIdx: index("idx_appr_request").on(table.requestId),
+}));
+
+export type Approval = typeof approvals.$inferSelect;
+export type InsertApproval = typeof approvals.$inferInsert;

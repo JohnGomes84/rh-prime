@@ -24,6 +24,7 @@ import { laborCalcRouter } from './routers/labor-calc';
 import { recruitmentRouter } from './routers/recruitment';
 import { departmentsRouter } from './routers/departments';
 import { lifecycleRouter } from './routers/lifecycle';
+import { inboxRouter } from './routers/inbox';
 import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
@@ -1325,6 +1326,11 @@ export const appRouter = router({
   // LIFECYCLE (admissão / movimentação / desligamento)
   // ============================================================
   lifecycle: lifecycleRouter,
+
+  // ============================================================
+  // INBOX (caixa de entrada unificada)
+  // ============================================================
+  inbox: inboxRouter,
 
   // ============================================================
   // COMPLIANCE PORTARIA 671 (AFD/AFDT/ACJEF)

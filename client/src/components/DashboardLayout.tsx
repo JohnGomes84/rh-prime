@@ -23,6 +23,7 @@ import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard,
+  Inbox,
   LogOut,
   PanelLeft,
   Users,
@@ -69,6 +70,7 @@ const ADMIN_OR_MANAGER = ["admin", "gestor"] as const;
 const menuItems: MenuItem[] = [
   // Geral
   { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
+  { icon: Inbox, label: "Caixa de entrada", path: "/inbox", section: "Geral" },
   { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: Building2, label: "Departamentos", path: "/departamentos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },

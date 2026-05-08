@@ -48,6 +48,7 @@ const AdmissionList = lazy(() => import("./pages/AdmissionList"));
 const AdmissionDetail = lazy(() => import("./pages/AdmissionDetail"));
 const TerminationList = lazy(() => import("./pages/TerminationList"));
 const TerminationDetail = lazy(() => import("./pages/TerminationDetail"));
+const Inbox = lazy(() => import("./pages/Inbox"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
 
 function PageLoader() {
@@ -103,6 +104,7 @@ function Router() {
         <Route path="/admissao/:id" component={guarded(AdmissionDetail, "admin")} />
         <Route path="/desligamento" component={guarded(TerminationList, "admin")} />
         <Route path="/desligamento/:id" component={guarded(TerminationDetail, "admin")} />
+        <Route path="/inbox" component={Inbox} />
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
         <Route path="/avaliacoes" component={guarded(ProfessionalAssessment, "manager")} />
         <Route path="/auditoria" component={guarded(Audit, "admin")} />

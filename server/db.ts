@@ -42,6 +42,8 @@ import {
   employeeMovements, InsertEmployeeMovement,
   terminations, InsertTermination,
   terminationDevolutionItems, InsertTerminationDevolutionItem,
+  requests as requestsTable, InsertRequest,
+  approvals, InsertApproval,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -798,6 +800,91 @@ export async function updateTerminationDevolutionItem(id: number, data: Partial<
     await conn.update(terminationDevolutionItems).set(data).where(eq(terminationDevolutionItems.id, id));
     return { success: true };
   }, "updateTerminationDevolutionItem");
+}
+
+// ============================================================
+// REQUESTS / INBOX
+// ============================================================
+const SLA_DEFAULT_DAYS: Record<string, number> = {
+  ferias: 7,
+  atestado: 5,
+  ajuste_ponto: 3,
+  abono: 5,
+  horas_extras: 2,
+  declaracao: 7,
+  adiantamento: 3,
+  outro: 7,
+};
+
+export async function createRequest(data: InsertRequest) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    const slaDays = SLA_DEFAULT_DAYS[data.kind as string] ?? 5;
+    const slaDueAt = data.slaDueAt ?? new Date(Date.now() + slaDays * 24 * 60 * 60 * 1000);
+    const r = await conn.insert(requestsTable).values({ ...data, slaDueAt } as any);
+    return { id: r[0].insertId };
+  }, "createRequest");
+}
+
+export async function listRequests(filter?: {
+  employeeId?: number;
+  employeeIds?: number[];
+  status?: string;
+  kind?: string;
+}) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const conds: any[] = [];
+    if (filter?.employeeId) conds.push(eq(requestsTable.employeeId, filter.employeeId));
+    if (filter?.employeeIds && filter.employeeIds.length > 0) {
+      conds.push(sql`${requestsTable.employeeId} IN (${sql.join(filter.employeeIds.map((i) => sql`${i}`), sql`, `)})`);
+    }
+    if (filter?.status) conds.push(eq(requestsTable.status, filter.status as any));
+    if (filter?.kind) conds.push(eq(requestsTable.kind, filter.kind as any));
+
+    const query = conn.select().from(requestsTable);
+    if (conds.length > 0) {
+      return query.where(and(...conds)).orderBy(desc(requestsTable.priority), asc(requestsTable.slaDueAt), desc(requestsTable.createdAt)).limit(200);
+    }
+    return query.orderBy(desc(requestsTable.priority), asc(requestsTable.slaDueAt), desc(requestsTable.createdAt)).limit(200);
+  }, "listRequests");
+}
+
+export async function getRequest(id: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(requestsTable).where(eq(requestsTable.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getRequest");
+}
+
+export async function updateRequest(id: number, data: Partial<InsertRequest>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(requestsTable).set(data).where(eq(requestsTable.id, id));
+    return { success: true };
+  }, "updateRequest");
+}
+
+export async function listApprovals(requestId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(approvals).where(eq(approvals.requestId, requestId)).orderBy(asc(approvals.level));
+  }, "listApprovals");
+}
+
+export async function createApproval(data: InsertApproval) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    const r = await conn.insert(approvals).values(data);
+    return { id: r[0].insertId };
+  }, "createApproval");
 }
 
 export async function recordLoginLog(data: {

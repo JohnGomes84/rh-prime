@@ -9,6 +9,7 @@ import { NotificationBell } from "./components/NotificationBell";
 import { NotificationToast } from "./components/NotificationToast";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { AdminGuard, ManagerGuard } from "./components/RouteGuard";
 
 const Home = lazy(() => import("./pages/Home"));
 const Employees = lazy(() => import("./pages/Employees"));
@@ -53,44 +54,58 @@ function PageLoader() {
   );
 }
 
+const guarded = (Component: React.ComponentType, kind: "admin" | "manager") => () => {
+  if (kind === "admin") {
+    return (
+      <AdminGuard>
+        <Component />
+      </AdminGuard>
+    );
+  }
+  return (
+    <ManagerGuard>
+      <Component />
+    </ManagerGuard>
+  );
+};
+
 function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path="/" component={Home} />
-        <Route path="/funcionarios" component={Employees} />
-        <Route path="/funcionarios/:id" component={EmployeeDetail} />
-        <Route path="/cargos" component={Positions} />
+        <Route path="/funcionarios" component={guarded(Employees, "manager")} />
+        <Route path="/funcionarios/:id" component={guarded(EmployeeDetail, "manager")} />
+        <Route path="/cargos" component={guarded(Positions, "admin")} />
         <Route path="/ferias" component={Vacations} />
-        <Route path="/saude" component={MedicalExams} />
+        <Route path="/saude" component={guarded(SafetyHealth, "manager")} />
         <Route path="/banco-horas" component={TimeBank} />
-        <Route path="/documentos" component={Documents} />
-        <Route path="/templates" component={DocumentTemplates} />
-        <Route path="/gerador" component={DocumentGenerator} />
-        <Route path="/integracao" component={Integration} />
+        <Route path="/documentos" component={guarded(Documents, "manager")} />
+        <Route path="/templates" component={guarded(DocumentTemplates, "admin")} />
+        <Route path="/gerador" component={guarded(DocumentGenerator, "admin")} />
+        <Route path="/integracao" component={guarded(Integration, "admin")} />
         <Route path="/notificacoes" component={Notifications} />
-        <Route path="/seguranca" component={SafetyHealth} />
-        <Route path="/configuracoes" component={Settings} />
-        <Route path="/relatorios" component={Reports} />
-        <Route path="/recrutamento" component={Recruitment} />
+        <Route path="/configuracoes" component={guarded(Settings, "admin")} />
+        <Route path="/relatorios" component={guarded(Reports, "manager")} />
+        <Route path="/recrutamento" component={guarded(Recruitment, "manager")} />
         <Route path="/ponto" component={Timesheet} />
         <Route path="/horas-extras" component={OvertimeManagement} />
-        <Route path="/folha" component={Payroll} />
+        <Route path="/folha" component={guarded(Payroll, "admin")} />
         <Route path="/holerite" component={Payslip} />
         <Route path="/calculadoras" component={Calculators} />
-        <Route path="/jornada-admin" component={JourneyAdmin} />
-        <Route path="/departamentos" component={Departments} />
-        <Route path="/compliance-jornada" component={CompliancePortaria} />
-        <Route path="/avaliacoes" component={ProfessionalAssessment} />
-        <Route path="/auditoria" component={Audit} />
-        <Route path="/analytics" component={PeopleAnalytics} />
+        <Route path="/jornada-admin" component={guarded(JourneyAdmin, "manager")} />
+        <Route path="/departamentos" component={guarded(Departments, "admin")} />
+        <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
+        <Route path="/avaliacoes" component={guarded(ProfessionalAssessment, "manager")} />
+        <Route path="/auditoria" component={guarded(Audit, "admin")} />
+        <Route path="/analytics" component={guarded(PeopleAnalytics, "manager")} />
         <Route path="/login" component={Login} />
-        <Route path="/usuarios" component={UserManagement} />
-        <Route path="/hierarquia" component={UserHierarchy} />
-        <Route path="/seguranca-config" component={SecuritySettings} />
-        <Route path="/assinar-contratos" component={SignContracts} />
-        <Route path="/assinar-asos" component={SignASOs} />
-        <Route path="/auditoria-assinaturas" component={SignatureAudit} />
+        <Route path="/usuarios" component={guarded(UserManagement, "admin")} />
+        <Route path="/hierarquia" component={guarded(UserHierarchy, "admin")} />
+        <Route path="/seguranca-config" component={guarded(SecuritySettings, "admin")} />
+        <Route path="/assinar-contratos" component={guarded(SignContracts, "admin")} />
+        <Route path="/assinar-asos" component={guarded(SignASOs, "admin")} />
+        <Route path="/auditoria-assinaturas" component={guarded(SignatureAudit, "admin")} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

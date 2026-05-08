@@ -188,6 +188,16 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getHeadcountEvolution(input?.months ?? 12);
       }),
+    pendingByManager: protectedProcedure.query(async () => db.getPendingByManager()),
+    approvalLatency: protectedProcedure
+      .input(z.object({ days: z.number().int().min(7).max(365).default(30) }).optional())
+      .query(async ({ input }) => db.getApprovalLatency(input?.days ?? 30)),
+    hourBankDistribution: protectedProcedure.query(async () => db.getHourBankDistribution()),
+    tardinessByDepartment: protectedProcedure
+      .input(z.object({ months: z.number().int().min(1).max(24).default(3) }).optional())
+      .query(async ({ input }) => db.getTardinessByDepartment(input?.months ?? 3)),
+    documentCompliance: protectedProcedure.query(async () => db.getDocumentComplianceRate()),
+    vacationDeadlineRisks: protectedProcedure.query(async () => db.getVacationDeadlineRisks()),
   }),
 
   // ============================================================

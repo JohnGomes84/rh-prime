@@ -187,6 +187,171 @@ export async function deleteEmployee(id: number) {
   }, { name: "deleteEmployee-transaction" });
 }
 
+// ============================================================
+// ANALYTICS OPERACIONAIS — Fase 6
+// ============================================================
+export async function getPendingByManager() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        m.id AS manager_id,
+        m.fullName AS manager_name,
+        COUNT(DISTINCT r.id) AS pending_requests,
+        COUNT(DISTINCT t.id) AS pending_time_records,
+        (COUNT(DISTINCT r.id) + COUNT(DISTINCT t.id)) AS total_pending
+      FROM employees e
+      INNER JOIN employees m ON e.manager_id = m.id
+      LEFT JOIN requests r ON r.employee_id = e.id AND r.status = 'PENDING'
+      LEFT JOIN time_records t ON t.employee_id = e.id AND t.status = 'PENDING'
+      GROUP BY m.id, m.fullName
+      HAVING total_pending > 0
+      ORDER BY total_pending DESC
+      LIMIT 50
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      managerId: r.manager_id,
+      managerName: r.manager_name,
+      pendingRequests: Number(r.pending_requests) || 0,
+      pendingTimeRecords: Number(r.pending_time_records) || 0,
+      totalPending: Number(r.total_pending) || 0,
+    }));
+  }, "getPendingByManager");
+}
+
+export async function getApprovalLatency(days: number = 30) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return { medianHours: 0, avgHours: 0, totalApproved: 0 };
+    const result = await conn.execute(sql`
+      SELECT
+        AVG(TIMESTAMPDIFF(HOUR, created_at, resolved_at)) AS avg_hours,
+        COUNT(*) AS total_approved
+      FROM requests
+      WHERE status = 'APPROVED'
+        AND resolved_at IS NOT NULL
+        AND created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    `);
+    const rows = (result as any)[0] ?? result;
+    const r = rows[0] ?? {};
+    return {
+      avgHours: Math.round((Number(r.avg_hours) || 0) * 10) / 10,
+      totalApproved: Number(r.total_approved) || 0,
+    };
+  }, "getApprovalLatency");
+}
+
+export async function getHourBankDistribution() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        e.id AS employee_id,
+        e.fullName AS employee_name,
+        COALESCE(SUM(CAST(tb.hoursBalance AS DECIMAL(10,2))), 0) AS total_balance
+      FROM employees e
+      LEFT JOIN time_bank tb ON tb.employeeId = e.id AND tb.status = 'Ativo'
+      WHERE e.status = 'Ativo'
+      GROUP BY e.id, e.fullName
+      HAVING total_balance != 0
+      ORDER BY total_balance DESC
+      LIMIT 100
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      employeeId: r.employee_id,
+      employeeName: r.employee_name,
+      totalBalance: Number(r.total_balance) || 0,
+    }));
+  }, "getHourBankDistribution");
+}
+
+export async function getTardinessByDepartment(months: number = 3) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        d.id AS department_id,
+        d.name AS department_name,
+        COUNT(DISTINCT t.id) AS tardiness_count,
+        COUNT(DISTINCT e.id) AS employee_count
+      FROM departments d
+      LEFT JOIN employees e ON e.department_id = d.id AND e.status = 'Ativo'
+      LEFT JOIN time_records t ON t.employee_id = e.id
+        AND t.status = 'PENDING'
+        AND t.notes LIKE '%Atraso%'
+        AND t.created_at >= DATE_SUB(NOW(), INTERVAL ${months} MONTH)
+      WHERE d.active = 1
+      GROUP BY d.id, d.name
+      ORDER BY tardiness_count DESC
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      departmentId: r.department_id,
+      departmentName: r.department_name,
+      tardinessCount: Number(r.tardiness_count) || 0,
+      employeeCount: Number(r.employee_count) || 0,
+    }));
+  }, "getTardinessByDepartment");
+}
+
+export async function getDocumentComplianceRate() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return { totalEmployees: 0, withCompleteAdmission: 0, rate: 0 };
+    const result = await conn.execute(sql`
+      SELECT
+        (SELECT COUNT(*) FROM employees WHERE status = 'Ativo') AS total,
+        (SELECT COUNT(DISTINCT result_employee_id)
+         FROM admission_workflows
+         WHERE status = 'ACTIVE' AND result_employee_id IS NOT NULL) AS with_admission
+    `);
+    const rows = (result as any)[0] ?? result;
+    const r = rows[0] ?? {};
+    const total = Number(r.total) || 0;
+    const withAdm = Number(r.with_admission) || 0;
+    return {
+      totalEmployees: total,
+      withCompleteAdmission: withAdm,
+      rate: total > 0 ? Math.round((withAdm / total) * 1000) / 10 : 0,
+    };
+  }, "getDocumentComplianceRate");
+}
+
+export async function getVacationDeadlineRisks() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        v.id AS vacation_id,
+        v.employeeId AS employee_id,
+        e.fullName AS employee_name,
+        v.concessionLimit AS concession_limit,
+        DATEDIFF(v.concessionLimit, CURDATE()) AS days_remaining
+      FROM vacations v
+      INNER JOIN employees e ON e.id = v.employeeId
+      WHERE v.status = 'Pendente'
+        AND v.concessionLimit IS NOT NULL
+        AND v.concessionLimit <= DATE_ADD(CURDATE(), INTERVAL 90 DAY)
+      ORDER BY v.concessionLimit ASC
+      LIMIT 50
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      vacationId: r.vacation_id,
+      employeeId: r.employee_id,
+      employeeName: r.employee_name,
+      concessionLimit: r.concession_limit,
+      daysRemaining: Number(r.days_remaining) || 0,
+    }));
+  }, "getVacationDeadlineRisks");
+}
+
 export async function getTurnoverMonthly(months: number = 12) {
   return withDBRetry(async () => {
     const db = await getDb();

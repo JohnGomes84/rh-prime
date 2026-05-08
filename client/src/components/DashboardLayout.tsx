@@ -102,6 +102,7 @@ const menuItems: MenuItem[] = [
   { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Bell, label: "Notificações", path: "/notificacoes", section: "Sistema" },
   { icon: Settings, label: "Configurações", path: "/configuracoes", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Shield, label: "Privacidade (LGPD)", path: "/privacidade", section: "Sistema" },
 ];
 
 function filterByRole(items: MenuItem[], role: string | null | undefined): MenuItem[] {

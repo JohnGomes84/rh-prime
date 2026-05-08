@@ -1051,3 +1051,64 @@ export const approvals = mysqlTable("approvals", {
 
 export type Approval = typeof approvals.$inferSelect;
 export type InsertApproval = typeof approvals.$inferInsert;
+
+// ============================================================
+// CONSENT RECORDS (LGPD — base legal e consentimento explícito)
+// ============================================================
+export const consentRecords = mysqlTable("consent_records", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(),
+  employeeId: int("employee_id"),
+  consentType: mysqlEnum("consent_type", [
+    "data_processing",
+    "selfie_capture",
+    "geo_capture",
+    "marketing_communications",
+    "internal_policies",
+    "biometric",
+    "third_party_share",
+  ]).notNull(),
+  version: varchar("version", { length: 20 }).default("v1").notNull(),
+  legalBasis: mysqlEnum("legal_basis", [
+    "consentimento",
+    "execucao_contrato",
+    "obrigacao_legal",
+    "interesse_legitimo",
+    "protecao_credito",
+    "tutela_saude",
+  ]).notNull(),
+  accepted: boolean("accepted").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  revokedAt: timestamp("revoked_at"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userTypeIdx: index("idx_consent_user_type").on(table.userId, table.consentType),
+}));
+
+export type ConsentRecord = typeof consentRecords.$inferSelect;
+export type InsertConsentRecord = typeof consentRecords.$inferInsert;
+
+// ============================================================
+// READ AUDIT (logs de leitura de campos sensíveis)
+// ============================================================
+export const readAuditLogs = mysqlTable("read_audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  actorUserId: int("actor_user_id"),
+  resource: varchar("resource", { length: 80 }).notNull(),
+  field: varchar("field", { length: 60 }).notNull(),
+  targetEmployeeId: int("target_employee_id"),
+  scope: mysqlEnum("scope", ["self", "team", "all"]).default("all").notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  metadata: json("metadata"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => ({
+  actorIdx: index("idx_readlog_actor").on(table.actorUserId),
+  targetIdx: index("idx_readlog_target").on(table.targetEmployeeId),
+  resourceIdx: index("idx_readlog_resource").on(table.resource),
+}));
+
+export type ReadAuditLog = typeof readAuditLogs.$inferSelect;
+export type InsertReadAuditLog = typeof readAuditLogs.$inferInsert;

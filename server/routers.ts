@@ -25,6 +25,7 @@ import { recruitmentRouter } from './routers/recruitment';
 import { departmentsRouter } from './routers/departments';
 import { lifecycleRouter } from './routers/lifecycle';
 import { inboxRouter } from './routers/inbox';
+import { lgpdRouter } from './routers/compliance-lgpd';
 import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
@@ -224,9 +225,23 @@ export const appRouter = router({
         const emp = await db.getEmployee(input.id);
         if (!emp) return undefined;
         const viewerEmp = ctx.user ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null) : null;
+        const viewerEmpId = (viewerEmp as any)?.id ?? null;
+        // Audit de leitura sensível: registra apenas quando viewer != target (acesso a dados de terceiro)
+        if (ctx.user && viewerEmpId !== input.id) {
+          const ipAddress = (ctx.req?.ip || (ctx.req as any)?.socket?.remoteAddress || null) as string | null;
+          db.recordReadAudit({
+            actorUserId: ctx.user.id,
+            resource: 'employees',
+            field: 'detail',
+            targetEmployeeId: input.id,
+            scope: ctx.user.role === 'admin' ? 'all' : 'team',
+            ipAddress,
+            metadata: { role: ctx.user.role },
+          } as any).catch(() => undefined);
+        }
         return applyEmployeeMask(emp as any, {
           viewerRole: ctx.user?.role as any,
-          viewerEmployeeId: (viewerEmp as any)?.id ?? null,
+          viewerEmployeeId: viewerEmpId,
         });
       }),
     create: protectedProcedure
@@ -1331,6 +1346,11 @@ export const appRouter = router({
   // INBOX (caixa de entrada unificada)
   // ============================================================
   inbox: inboxRouter,
+
+  // ============================================================
+  // LGPD (consent records + audit de leitura)
+  // ============================================================
+  lgpd: lgpdRouter,
 
   // ============================================================
   // COMPLIANCE PORTARIA 671 (AFD/AFDT/ACJEF)

@@ -44,6 +44,8 @@ import {
   terminationDevolutionItems, InsertTerminationDevolutionItem,
   requests as requestsTable, InsertRequest,
   approvals, InsertApproval,
+  consentRecords, InsertConsentRecord,
+  readAuditLogs, InsertReadAuditLog,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -885,6 +887,100 @@ export async function createApproval(data: InsertApproval) {
     const r = await conn.insert(approvals).values(data);
     return { id: r[0].insertId };
   }, "createApproval");
+}
+
+// ============================================================
+// CONSENT (LGPD)
+// ============================================================
+export async function listUserConsents(userId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(consentRecords)
+      .where(eq(consentRecords.userId, userId))
+      .orderBy(desc(consentRecords.createdAt));
+  }, "listUserConsents");
+}
+
+export async function getActiveConsent(userId: number, consentType: string) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(consentRecords)
+      .where(and(
+        eq(consentRecords.userId, userId),
+        eq(consentRecords.consentType, consentType as any),
+        sql`${consentRecords.revokedAt} IS NULL`
+      ))
+      .orderBy(desc(consentRecords.createdAt))
+      .limit(1);
+    return r[0] ?? null;
+  }, "getActiveConsent");
+}
+
+export async function recordConsent(data: InsertConsentRecord) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    // Revoga consents ativos do mesmo tipo antes (1 ativo por tipo/user)
+    await conn.update(consentRecords)
+      .set({ revokedAt: new Date() })
+      .where(and(
+        eq(consentRecords.userId, data.userId as number),
+        eq(consentRecords.consentType, data.consentType as any),
+        sql`${consentRecords.revokedAt} IS NULL`
+      ));
+    const r = await conn.insert(consentRecords).values(data);
+    return { id: r[0].insertId };
+  }, "recordConsent");
+}
+
+export async function revokeConsent(userId: number, consentType: string) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(consentRecords)
+      .set({ revokedAt: new Date(), accepted: false })
+      .where(and(
+        eq(consentRecords.userId, userId),
+        eq(consentRecords.consentType, consentType as any),
+        sql`${consentRecords.revokedAt} IS NULL`
+      ));
+    return { success: true };
+  }, "revokeConsent");
+}
+
+// ============================================================
+// READ AUDIT (logs de leitura sensível)
+// ============================================================
+export async function recordReadAudit(data: InsertReadAuditLog) {
+  // Async, fire-and-forget — não bloqueia response
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return;
+    await conn.insert(readAuditLogs).values(data);
+  }, "recordReadAudit").catch(() => {/* silent */});
+}
+
+export async function listReadAuditLogs(filter?: {
+  actorUserId?: number;
+  targetEmployeeId?: number;
+  resource?: string;
+  limit?: number;
+}) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const conds: any[] = [];
+    if (filter?.actorUserId) conds.push(eq(readAuditLogs.actorUserId, filter.actorUserId));
+    if (filter?.targetEmployeeId) conds.push(eq(readAuditLogs.targetEmployeeId, filter.targetEmployeeId));
+    if (filter?.resource) conds.push(eq(readAuditLogs.resource, filter.resource));
+    const limit = filter?.limit ?? 200;
+    if (conds.length > 0) {
+      return conn.select().from(readAuditLogs).where(and(...conds)).orderBy(desc(readAuditLogs.timestamp)).limit(limit);
+    }
+    return conn.select().from(readAuditLogs).orderBy(desc(readAuditLogs.timestamp)).limit(limit);
+  }, "listReadAuditLogs");
 }
 
 export async function recordLoginLog(data: {

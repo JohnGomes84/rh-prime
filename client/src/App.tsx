@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { NotificationBell } from "./components/NotificationBell";
 import { NotificationToast } from "./components/NotificationToast";
+import { ConsentBanner } from "./components/ConsentBanner";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { AdminGuard, ManagerGuard } from "./components/RouteGuard";
@@ -49,6 +50,7 @@ const AdmissionDetail = lazy(() => import("./pages/AdmissionDetail"));
 const TerminationList = lazy(() => import("./pages/TerminationList"));
 const TerminationDetail = lazy(() => import("./pages/TerminationDetail"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
 
 function PageLoader() {
@@ -105,6 +107,7 @@ function Router() {
         <Route path="/desligamento" component={guarded(TerminationList, "admin")} />
         <Route path="/desligamento/:id" component={guarded(TerminationDetail, "admin")} />
         <Route path="/inbox" component={Inbox} />
+        <Route path="/privacidade" component={Privacy} />
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
         <Route path="/avaliacoes" component={guarded(ProfessionalAssessment, "manager")} />
         <Route path="/auditoria" component={guarded(Audit, "admin")} />
@@ -132,6 +135,7 @@ function App() {
             <Toaster />
             <NotificationBell />
             <NotificationToast />
+            <ConsentBanner />
             <Router />
           </TooltipProvider>
         </NotificationProvider>

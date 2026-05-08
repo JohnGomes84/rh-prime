@@ -219,6 +219,15 @@ export const appRouter = router({
         await db.deleteEmployee(input.id);
         return { success: true };
       }),
+    linkUser: adminProcedure
+      .input(z.object({ employeeId: z.number().int().positive(), userId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        return db.linkEmployeeToUser(input.employeeId, input.userId);
+      }),
+    me: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) return null;
+      return db.getEmployeeForUser(ctx.user.id, ctx.user.email);
+    }),
     bulkImport: protectedProcedure
       .input(z.object({
         rows: z.array(z.record(z.string(), z.any())).max(2000),

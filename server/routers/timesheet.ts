@@ -5,12 +5,23 @@ import * as db from "../db";
 import { withDBRetry } from "../utils/retry";
 import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine";
 
-function resolveEmployeeId(inputId: number | undefined, ctxUserId: number | undefined): number {
-  const id = inputId ?? ctxUserId;
-  if (!id) {
+async function resolveEmployeeId(
+  inputId: number | undefined,
+  ctxUser: { id: number; email?: string } | undefined
+): Promise<number> {
+  if (inputId) return inputId;
+  if (!ctxUser?.id) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
   }
-  return id;
+  const emp = await db.getEmployeeForUser(ctxUser.id, ctxUser.email);
+  if (!emp) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Seu usuário não está vinculado a nenhum funcionário cadastrado. Acesse o cadastro do funcionário e use 'Vincular ao usuário'.",
+    });
+  }
+  return (emp as any).id;
 }
 
 export const timesheetRouter = router({
@@ -25,7 +36,7 @@ export const timesheetRouter = router({
       notes: z.string().max(2000).optional(),
     }).optional())
     .mutation(async ({ input, ctx }) => {
-      const employeeId = resolveEmployeeId(input?.employeeId, ctx.user?.id);
+      const employeeId = await resolveEmployeeId(input?.employeeId, ctx.user);
 
       const openRecord = await db.getOpenTimeRecord(employeeId);
       if (openRecord) {
@@ -52,7 +63,7 @@ export const timesheetRouter = router({
       notes: z.string().max(2000).optional(),
     }).optional())
     .mutation(async ({ input, ctx }) => {
-      const employeeId = resolveEmployeeId(input?.employeeId, ctx.user?.id);
+      const employeeId = await resolveEmployeeId(input?.employeeId, ctx.user);
 
       const openRecord = await db.getOpenTimeRecord(employeeId);
       if (!openRecord) {
@@ -141,7 +152,11 @@ export const timesheetRouter = router({
       employeeId: z.number().int().positive().optional(),
     }).optional())
     .query(async ({ input, ctx }) => {
-      const id = input?.employeeId ?? ctx.user?.id;
+      let id = input?.employeeId;
+      if (!id && ctx.user) {
+        const emp = await db.getEmployeeForUser(ctx.user.id, ctx.user.email);
+        if (emp) id = (emp as any).id;
+      }
       if (!id) return null;
 
       return withDBRetry(async () => {
@@ -157,7 +172,7 @@ export const timesheetRouter = router({
       endDate: z.date().optional(),
     }).optional())
     .query(async ({ input, ctx }) => {
-      const employeeId = resolveEmployeeId(input?.employeeId, ctx.user?.id);
+      const employeeId = await resolveEmployeeId(input?.employeeId, ctx.user);
       return withDBRetry(async () => {
         return db.listTimeRecords(employeeId, input?.startDate, input?.endDate);
       }, "listTimeRecords");
@@ -170,7 +185,7 @@ export const timesheetRouter = router({
       year: z.number().int().min(2000).max(2100),
     }))
     .query(async ({ input, ctx }) => {
-      const employeeId = resolveEmployeeId(input.employeeId, ctx.user?.id);
+      const employeeId = await resolveEmployeeId(input.employeeId, ctx.user);
       return withDBRetry(async () => {
         return db.getMonthlyTimeSummary(employeeId, input.month, input.year);
       }, "monthlySummary");
@@ -271,8 +286,7 @@ export const timesheetRouter = router({
       endDate: z.string(),
     }))
     .query(async ({ input, ctx }) => {
-      const id = input.employeeId ?? ctx.user?.id;
-      if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
+      const id = await resolveEmployeeId(input.employeeId, ctx.user);
       const start = new Date(input.startDate);
       const end = new Date(input.endDate);
       end.setHours(23, 59, 59, 999);
@@ -339,8 +353,7 @@ export const timesheetRouter = router({
       clockOut: z.string(),
     }))
     .query(async ({ input, ctx }) => {
-      const id = input.employeeId ?? ctx.user?.id;
-      if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
+      const id = await resolveEmployeeId(input.employeeId, ctx.user);
       const rule = await getActiveScheduleRule(id);
       if (!rule) return { rule: null, evaluation: null };
       const evaluation = await evaluateClockRecord({

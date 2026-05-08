@@ -473,6 +473,33 @@ export async function updateCandidate(id: number, data: Partial<InsertCandidate>
   }, { name: "updateCandidate-transaction" });
 }
 
+/**
+ * Resolve o employee correspondente a um user (login). Procura primeiro
+ * por employees.userId; se não houver vínculo, tenta match por email.
+ */
+export async function getEmployeeForUser(userId: number, userEmail?: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const byLink = await db.select().from(employees).where(eq(employees.userId, userId)).limit(1);
+    if (byLink[0]) return byLink[0];
+    if (userEmail) {
+      const byEmail = await db.select().from(employees).where(eq(employees.email, userEmail)).limit(1);
+      if (byEmail[0]) return byEmail[0];
+    }
+    return null;
+  }, "getEmployeeForUser");
+}
+
+export async function linkEmployeeToUser(employeeId: number, userId: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.update(employees).set({ userId }).where(eq(employees.id, employeeId));
+    return { success: true };
+  }, "linkEmployeeToUser");
+}
+
 export async function listBirthdaysThisMonth() {
   return withDBRetry(async () => {
     const db = await getDb();

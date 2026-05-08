@@ -115,6 +115,7 @@ export const employees = mysqlTable("employees", {
   employmentType: mysqlEnum("employmentType", ["CLT", "CLT_Comissao", "Comissionado", "Concursado", "Contrato", "Cooperado", "Efetivo", "Estagio", "Estatutario", "MenorAprendiz", "JovemAprendiz", "PrestadorServico", "Socio", "Temporario", "Outro"]).default("CLT"),
   esocialMatricula: varchar("esocialMatricula", { length: 20 }),
   insalubrityPercentage: mysqlEnum("insalubrityPercentage", ["0", "10", "20", "40"]).default("0"),
+  userId: int("userId"),
   status: mysqlEnum("status", ["Ativo", "Inativo", "Afastado", "Férias"]).default("Ativo").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

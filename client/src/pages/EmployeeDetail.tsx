@@ -175,6 +175,7 @@ export default function EmployeeDetail() {
                 <Button variant="outline" onClick={() => setLocation(`/calculadoras?employeeId=${employee.id}`)}>
                   Calculadoras CLT
                 </Button>
+                <LinkUserButton employeeId={employee.id} currentUserId={employee.userId ?? null} />
               </>
             )}
           </div>
@@ -721,6 +722,60 @@ export default function EmployeeDetail() {
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+function LinkUserButton({ employeeId, currentUserId }: { employeeId: number; currentUserId: number | null }) {
+  const utils = trpc.useUtils();
+  const usersQuery = trpc.users.listUsers.useQuery();
+  const linkMutation = trpc.employees.linkUser.useMutation({
+    onSuccess: () => {
+      toast.success("Usuário vinculado");
+      utils.employees.get.invalidate({ id: employeeId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string>(currentUserId ? String(currentUserId) : "");
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          {currentUserId ? "Trocar usuário vinculado" : "Vincular ao usuário"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Vincular funcionário a usuário</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            O vínculo permite que o usuário logado registre ponto e use as funcionalidades de jornada como este funcionário.
+          </p>
+          <Select value={selected} onValueChange={setSelected}>
+            <SelectTrigger><SelectValue placeholder="Selecione um usuário" /></SelectTrigger>
+            <SelectContent>
+              {((usersQuery.data as any[]) ?? []).map((u: any) => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.email} — {u.name ?? "(sem nome)"} · {u.role}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!selected || linkMutation.isPending}
+              onClick={async () => {
+                await linkMutation.mutateAsync({ employeeId, userId: Number(selected) });
+                setOpen(false);
+              }}
+            >
+              Vincular
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

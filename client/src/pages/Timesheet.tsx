@@ -110,12 +110,53 @@ export default function Timesheet() {
   const isWorking = !!openRecord;
   const isPending = clockInMutation.isPending || clockOutMutation.isPending;
 
+  const captureSelfie = (): Promise<string | undefined> =>
+    new Promise((resolve) => {
+      if (!('mediaDevices' in navigator)) return resolve(undefined);
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 }, audio: false })
+        .then((stream) => {
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.play().catch(() => {/* ignore */});
+          setTimeout(() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 320;
+            canvas.height = 240;
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.drawImage(video, 0, 0, 320, 240);
+            stream.getTracks().forEach((t) => t.stop());
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            resolve(dataUrl);
+          }, 600);
+        })
+        .catch(() => resolve(undefined));
+    });
+
+  const fingerprint = (): string => {
+    const ua = navigator.userAgent;
+    const lang = navigator.language;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const screen = `${window.screen.width}x${window.screen.height}`;
+    const raw = [ua, lang, tz, screen].join('|');
+    let h = 0;
+    for (let i = 0; i < raw.length; i++) h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+    return `dfp_${Math.abs(h).toString(36)}`;
+  };
+
   const handleToggleClock = async () => {
-    const location = await captureLocation();
+    const [location, selfieUrl] = await Promise.all([captureLocation(), captureSelfie()]);
+    const deviceFingerprint = fingerprint();
     if (isWorking) {
-      clockOutMutation.mutate({ notes: location ? `[saída] ${location}` : undefined });
+      clockOutMutation.mutate({
+        notes: location ? `[saída] ${location}` : undefined,
+      });
     } else {
-      clockInMutation.mutate({ location });
+      clockInMutation.mutate({
+        location,
+        selfieUrl,
+        deviceFingerprint,
+      });
     }
   };
 

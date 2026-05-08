@@ -5,6 +5,19 @@ import * as db from "../db";
 import { withDBRetry } from "../utils/retry";
 import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine";
 import { resolveEmployeeIdInScope } from "../utils/scope";
+import { evaluateGeofence } from "../utils/geofence";
+
+async function loadGeofenceConfig(): Promise<{ lat: number; lng: number; radiusM: number } | null> {
+  const settings = (await db.listSettings()) as Array<{ key: string; value: string }>;
+  const map = new Map(settings.map((s) => [s.key, s.value]));
+  const lat = parseFloat(map.get("company.geofence_lat") ?? "");
+  const lng = parseFloat(map.get("company.geofence_lng") ?? "");
+  const radius = parseFloat(map.get("company.geofence_radius_m") ?? "");
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius) || radius <= 0) {
+    return null;
+  }
+  return { lat, lng, radiusM: radius };
+}
 
 async function resolveEmployeeId(
   inputId: number | undefined,
@@ -23,6 +36,8 @@ export const timesheetRouter = router({
       employeeId: z.number().int().positive().optional(),
       location: z.string().max(255).optional(),
       notes: z.string().max(2000).optional(),
+      selfieUrl: z.string().max(500).optional(),
+      deviceFingerprint: z.string().max(120).optional(),
     }).optional())
     .mutation(async ({ input, ctx }) => {
       const employeeId = await resolveEmployeeId(input?.employeeId, ctx.user);
@@ -35,13 +50,19 @@ export const timesheetRouter = router({
         });
       }
 
+      const geofenceCfg = await loadGeofenceConfig().catch(() => null);
+      const geofenceStatus = evaluateGeofence(input?.location, geofenceCfg);
+
       return withDBRetry(async () => {
         return db.createTimeRecord({
           employeeId,
           clockIn: new Date(),
           location: input?.location,
           notes: input?.notes,
-        });
+          selfieUrl: input?.selfieUrl,
+          geofenceStatus: geofenceStatus as any,
+          deviceFingerprint: input?.deviceFingerprint,
+        } as any);
       }, "clockIn");
     }),
 

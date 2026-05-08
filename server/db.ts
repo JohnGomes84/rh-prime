@@ -2124,6 +2124,9 @@ export async function createTimeRecord(data: {
   clockOut?: Date;
   location?: string;
   notes?: string;
+  selfieUrl?: string;
+  geofenceStatus?: "within" | "outside" | "no_geo";
+  deviceFingerprint?: string;
 }) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
@@ -2149,11 +2152,14 @@ export async function createTimeRecord(data: {
         clockOut: data.clockOut,
         location: data.location,
         notes: data.notes,
-        status: "PENDING",
+        status: data.geofenceStatus === "outside" ? "PENDING" : "PENDING",
         nsr,
         previousHash,
         recordHash,
-      });
+        selfieUrl: data.selfieUrl,
+        geofenceStatus: data.geofenceStatus ?? "no_geo",
+        deviceFingerprint: data.deviceFingerprint,
+      } as any);
 
       return { success: true, id: result[0]?.insertId, nsr };
     }, "createTimeRecord");

@@ -155,6 +155,13 @@
       "when": 1778271529276,
       "tag": "0021_mushy_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1778275061419,
+      "tag": "0022_lethal_grey_gargoyle",
+      "breakpoints": true
     }
   ]
 }

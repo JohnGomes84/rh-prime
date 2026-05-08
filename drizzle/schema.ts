@@ -672,6 +672,10 @@ export const timeRecords = mysqlTable("time_records", {
   nsr: int("nsr"),
   previousHash: varchar("previous_hash", { length: 64 }),
   recordHash: varchar("record_hash", { length: 64 }),
+  // Anti-fraude (Fase 7)
+  selfieUrl: varchar("selfie_url", { length: 500 }),
+  geofenceStatus: mysqlEnum("geofence_status", ["within", "outside", "no_geo"]).default("no_geo"),
+  deviceFingerprint: varchar("device_fingerprint", { length: 120 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({

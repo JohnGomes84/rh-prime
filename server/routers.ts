@@ -215,6 +215,10 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => {
         const { applyEmployeeMask } = await import('./utils/data-masking');
+        const { assertEmployeeInScope } = await import('./utils/scope');
+        if (ctx.user) {
+          await assertEmployeeInScope(ctx.user as any, input.id);
+        }
         const emp = await db.getEmployee(input.id);
         if (!emp) return undefined;
         const viewerEmp = ctx.user ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null) : null;
@@ -315,7 +319,11 @@ export const appRouter = router({
       }),
     managerHistory: protectedProcedure
       .input(z.object({ employeeId: z.number().int().positive() }))
-      .query(async ({ input }) => db.listEmployeeManagerHistory(input.employeeId)),
+      .query(async ({ input, ctx }) => {
+        const { assertEmployeeInScope } = await import('./utils/scope');
+        if (ctx.user) await assertEmployeeInScope(ctx.user as any, input.employeeId);
+        return db.listEmployeeManagerHistory(input.employeeId);
+      }),
     me: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user) return null;
       return db.getEmployeeForUser(ctx.user.id, ctx.user.email);
@@ -600,7 +608,11 @@ export const appRouter = router({
   vacations: router({
     list: protectedProcedure
       .input(z.object({ employeeId: z.number().optional() }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        if (input?.employeeId && ctx.user) {
+          const { assertEmployeeInScope } = await import('./utils/scope');
+          await assertEmployeeInScope(ctx.user as any, input.employeeId);
+        }
         return db.listVacations(input?.employeeId);
       }),
     get: protectedProcedure

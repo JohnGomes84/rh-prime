@@ -4,24 +4,13 @@ import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { withDBRetry } from "../utils/retry";
 import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine";
+import { resolveEmployeeIdInScope } from "../utils/scope";
 
 async function resolveEmployeeId(
   inputId: number | undefined,
-  ctxUser: { id: number; email?: string } | undefined
+  ctxUser: { id: number; email?: string; role: string } | undefined
 ): Promise<number> {
-  if (inputId) return inputId;
-  if (!ctxUser?.id) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "ID do funcionário não encontrado" });
-  }
-  const emp = await db.getEmployeeForUser(ctxUser.id, ctxUser.email);
-  if (!emp) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Seu usuário não está vinculado a nenhum funcionário cadastrado. Acesse o cadastro do funcionário e use 'Vincular ao usuário'.",
-    });
-  }
-  return (emp as any).id;
+  return resolveEmployeeIdInScope(inputId, ctxUser as any);
 }
 
 export const timesheetRouter = router({

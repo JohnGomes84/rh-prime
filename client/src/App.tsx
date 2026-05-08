@@ -44,6 +44,8 @@ const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Pay
 const Calculators = lazy(() => import("./pages/Calculators"));
 const JourneyAdmin = lazy(() => import("./pages/JourneyAdmin"));
 const Departments = lazy(() => import("./pages/Departments"));
+const AdmissionList = lazy(() => import("./pages/AdmissionList"));
+const AdmissionDetail = lazy(() => import("./pages/AdmissionDetail"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
 
 function PageLoader() {
@@ -95,6 +97,8 @@ function Router() {
         <Route path="/calculadoras" component={Calculators} />
         <Route path="/jornada-admin" component={guarded(JourneyAdmin, "manager")} />
         <Route path="/departamentos" component={guarded(Departments, "admin")} />
+        <Route path="/admissao" component={guarded(AdmissionList, "admin")} />
+        <Route path="/admissao/:id" component={guarded(AdmissionDetail, "admin")} />
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
         <Route path="/avaliacoes" component={guarded(ProfessionalAssessment, "manager")} />
         <Route path="/auditoria" component={guarded(Audit, "admin")} />

@@ -38,7 +38,6 @@ const SecuritySettings = lazy(() => import("./pages/SecuritySettings").then(m =>
 const SignContracts = lazy(() => import("./pages/SignContracts").then(m => ({ default: (m as any).default || (m as any).SignContracts || (() => null) })));
 const SignASOs = lazy(() => import("./pages/SignASOs").then(m => ({ default: (m as any).default || (m as any).SignASOs || (() => null) })));
 const SignatureAudit = lazy(() => import("./pages/SignatureAudit").then(m => ({ default: (m as any).default || (m as any).SignatureAudit || (() => null) })));
-const TimeTracking = lazy(() => import("./pages/TimeTracking").then(m => ({ default: m.TimeTracking })));
 const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement").then(m => ({ default: m.OvertimeManagement })));
 const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Payslip })));
 const Calculators = lazy(() => import("./pages/Calculators"));
@@ -74,7 +73,6 @@ function Router() {
         <Route path="/relatorios" component={Reports} />
         <Route path="/recrutamento" component={Recruitment} />
         <Route path="/ponto" component={Timesheet} />
-        <Route path="/ponto-novo" component={TimeTracking} />
         <Route path="/horas-extras" component={OvertimeManagement} />
         <Route path="/folha" component={Payroll} />
         <Route path="/holerite" component={Payslip} />

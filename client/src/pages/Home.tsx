@@ -5,13 +5,25 @@ import { trpc } from "@/lib/trpc";
 import { Users, Loader2, Cake, Timer } from "lucide-react";
 import { useRole } from "@/_core/hooks/useRole";
 import { useLocation } from "wouter";
+import { useEffect } from "react";
+
+const REDIRECT_DISMISS_KEY = "rh-prime:home-redirect-dismissed";
 
 export default function Home() {
   const { isLoading: authLoading } = trpc.auth.me.useQuery();
   const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery();
   const { data: birthdays = [] } = trpc.dashboard.birthdays.useQuery();
-  const { isManager } = useRole();
+  const { isManager, role } = useRole();
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (role !== "colaborador") return;
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(REDIRECT_DISMISS_KEY) === "1") return;
+    sessionStorage.setItem(REDIRECT_DISMISS_KEY, "1");
+    setLocation("/ponto");
+  }, [authLoading, role, setLocation]);
 
   if (authLoading) {
     return (
@@ -45,7 +57,7 @@ export default function Home() {
               <p className="text-sm text-gray-700">
                 Registre sua jornada de trabalho.
               </p>
-              <Button onClick={() => setLocation("/ponto-novo")} className="bg-emerald-600 hover:bg-emerald-700">
+              <Button onClick={() => setLocation("/ponto")} className="bg-emerald-600 hover:bg-emerald-700">
                 Registrar agora
               </Button>
             </CardContent>

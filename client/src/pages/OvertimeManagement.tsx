@@ -15,6 +15,7 @@ import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Clock, CheckCircle, XCircle, Plus } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import { toast } from 'sonner';
 
 const formatDateTimeBR = (date: Date) => new Date(date).toLocaleString('pt-BR');
 
@@ -45,30 +46,33 @@ export function OvertimeManagement() {
 
   const requestMutation = trpc.timesheet.requestOvertime.useMutation({
     onSuccess: () => {
-      alert('Solicitação de horas extras enviada!');
+      toast.success('Solicitação de horas extras enviada');
       setShowRequestForm(false);
       setFormData({ timeRecordId: '', overtimeHours: 1, type: '50%', reason: '' });
       refetch();
     },
+    onError: (err) => toast.error(err.message || 'Falha ao solicitar horas extras'),
   });
 
   const approveMutation = trpc.timesheet.approveOvertime.useMutation({
     onSuccess: () => {
-      alert('Horas extras aprovadas!');
+      toast.success('Horas extras aprovadas');
       refetch();
     },
+    onError: (err) => toast.error(err.message || 'Falha ao aprovar'),
   });
 
   const rejectMutation = trpc.timesheet.approveOvertime.useMutation({
     onSuccess: () => {
-      alert('Horas extras rejeitadas!');
+      toast.success('Horas extras rejeitadas');
       refetch();
     },
+    onError: (err) => toast.error(err.message || 'Falha ao rejeitar'),
   });
 
   const handleSubmitRequest = () => {
     if (!user?.id || !formData.timeRecordId) {
-      alert('Preencha todos os campos obrigatórios');
+      toast.error('Preencha todos os campos obrigatórios');
       return;
     }
     requestMutation.mutate({

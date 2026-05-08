@@ -7,6 +7,7 @@ import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Clock, LogIn, LogOut, Calendar } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import { toast } from 'sonner';
 
 const formatDateTimeBR = (date: Date) => new Date(date).toLocaleString('pt-BR');
 
@@ -37,14 +38,27 @@ export function TimeTracking() {
   const clockInMutation = trpc.timesheet.clockIn.useMutation({
     onSuccess: () => {
       setClockInTime(new Date());
-      alert('Entrada registrada com sucesso!');
+      toast.success('Entrada registrada com sucesso');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Falha ao registrar entrada');
     },
   });
 
   const clockOutMutation = trpc.timesheet.clockOut.useMutation({
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setClockOutTime(new Date());
-      alert('Saída registrada com sucesso!');
+      const ev = data?.evaluation;
+      if (ev?.delayMinutes > 0) {
+        toast.warning(`Saída registrada. Atraso de ${ev.delayMinutes}min no início.`);
+      } else if (ev?.overtime?.total > 0) {
+        toast.success(`Saída registrada. ${Math.round(ev.overtime.total)}min de hora extra.`);
+      } else {
+        toast.success('Saída registrada com sucesso');
+      }
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Falha ao registrar saída');
     },
   });
 

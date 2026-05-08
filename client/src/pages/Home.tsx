@@ -1,12 +1,17 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { Users, Loader2, Cake } from "lucide-react";
+import { Users, Loader2, Cake, Timer } from "lucide-react";
+import { useRole } from "@/_core/hooks/useRole";
+import { useLocation } from "wouter";
 
 export default function Home() {
   const { isLoading: authLoading } = trpc.auth.me.useQuery();
   const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery();
   const { data: birthdays = [] } = trpc.dashboard.birthdays.useQuery();
+  const { isManager } = useRole();
+  const [, setLocation] = useLocation();
 
   if (authLoading) {
     return (
@@ -28,20 +33,42 @@ export default function Home() {
           </p>
         </div>
 
-        <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-600" />
-              Sistema de Gestão de RH
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700">
-              O painel agora usa os indicadores reais expostos pelo backend.
-            </p>
-          </CardContent>
-        </Card>
+        {!isManager && (
+          <Card className="border-0 shadow-sm bg-gradient-to-r from-emerald-50 to-teal-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Timer className="h-5 w-5 text-emerald-600" />
+                Bater ponto
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between">
+              <p className="text-sm text-gray-700">
+                Registre sua jornada de trabalho.
+              </p>
+              <Button onClick={() => setLocation("/ponto-novo")} className="bg-emerald-600 hover:bg-emerald-700">
+                Registrar agora
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
+        {isManager && (
+          <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                Sistema de Gestão de RH
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-700">
+                Indicadores em tempo real vindos do backend.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {isManager && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
@@ -115,6 +142,7 @@ export default function Home() {
             </CardContent>
           </Card>
         </div>
+        )}
 
         <Card className="border-0 shadow-sm">
           <CardHeader>

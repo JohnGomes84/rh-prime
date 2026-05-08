@@ -473,6 +473,29 @@ export async function updateCandidate(id: number, data: Partial<InsertCandidate>
   }, { name: "updateCandidate-transaction" });
 }
 
+export async function recordLoginLog(data: {
+  userId?: number | null;
+  email?: string | null;
+  success: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  reason?: string | null;
+}) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return;
+    const { loginLogs } = await import('../drizzle/schema');
+    await conn.insert(loginLogs).values({
+      userId: data.userId ?? null,
+      email: data.email ?? null,
+      success: data.success,
+      ipAddress: data.ipAddress ?? null,
+      userAgent: data.userAgent ?? null,
+      reason: data.reason ?? null,
+    });
+  }, "recordLoginLog");
+}
+
 /**
  * Resolve o employee correspondente a um user (login). Procura primeiro
  * por employees.userId; se não houver vínculo, tenta match por email.

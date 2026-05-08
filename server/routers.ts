@@ -57,13 +57,29 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
+        const ipAddress = (ctx.req?.ip || (ctx.req as any)?.socket?.remoteAddress || null) as string | null;
+        const userAgent = (ctx.req?.headers?.['user-agent'] as string | undefined) ?? null;
         const result = await authLogin(input);
         if (!result) {
+          await db.recordLoginLog({
+            email: input.email,
+            success: false,
+            ipAddress,
+            userAgent,
+            reason: 'Email ou senha inválidos',
+          }).catch(() => undefined);
           throw new TRPCError({
             code: 'UNAUTHORIZED',
             message: 'Email ou senha inválidos',
           });
         }
+        await db.recordLoginLog({
+          userId: result.user.id,
+          email: result.user.email,
+          success: true,
+          ipAddress,
+          userAgent,
+        }).catch(() => undefined);
         setSessionCookie(ctx, result.token);
         return result;
       }),
@@ -137,23 +153,36 @@ export const appRouter = router({
   // ============================================================
   employees: router({
     list: protectedProcedure
-      .input(z.object({ 
+      .input(z.object({
         search: z.string().optional(),
         page: z.number().min(1).default(1).optional(),
         limit: z.number().min(1).max(100).default(20).optional(),
       }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        const { applyEmployeeMaskList } = await import('./utils/data-masking');
         const employees = await db.listEmployees(input?.search);
         const page = input?.page || 1;
         const limit = input?.limit || 20;
         const start = (page - 1) * limit;
         const paged = employees.slice(start, start + limit);
-        return { data: paged, total: employees.length, page, limit, totalPages: Math.ceil(employees.length / limit) };
+        const viewerEmp = ctx.user ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null) : null;
+        const masked = applyEmployeeMaskList(paged, {
+          viewerRole: ctx.user?.role as any,
+          viewerEmployeeId: (viewerEmp as any)?.id ?? null,
+        });
+        return { data: masked, total: employees.length, page, limit, totalPages: Math.ceil(employees.length / limit) };
       }),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return db.getEmployee(input.id);
+      .query(async ({ input, ctx }) => {
+        const { applyEmployeeMask } = await import('./utils/data-masking');
+        const emp = await db.getEmployee(input.id);
+        if (!emp) return undefined;
+        const viewerEmp = ctx.user ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null) : null;
+        return applyEmployeeMask(emp as any, {
+          viewerRole: ctx.user?.role as any,
+          viewerEmployeeId: (viewerEmp as any)?.id ?? null,
+        });
       }),
     create: protectedProcedure
       .input(z.object({

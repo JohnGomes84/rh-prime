@@ -37,6 +37,11 @@ import {
   complianceExports, InsertComplianceExport,
   departments, InsertDepartment,
   employeeManagerHistory, InsertEmployeeManagerHistory,
+  admissionWorkflows, InsertAdmissionWorkflow,
+  admissionChecklistItems, InsertAdmissionChecklistItem,
+  employeeMovements, InsertEmployeeMovement,
+  terminations, InsertTermination,
+  terminationDevolutionItems, InsertTerminationDevolutionItem,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -595,6 +600,204 @@ export async function listEmployeeManagerHistory(employeeId: number) {
       .where(eq(employeeManagerHistory.employeeId, employeeId))
       .orderBy(desc(employeeManagerHistory.startDate));
   }, "listEmployeeManagerHistory");
+}
+
+// ============================================================
+// LIFECYCLE — Admissão
+// ============================================================
+const DEFAULT_ADMISSION_CHECKLIST: Array<{ category: string; itemDescription: string; required: boolean }> = [
+  { category: "Documentos Pessoais", itemDescription: "Cópia do RG", required: true },
+  { category: "Documentos Pessoais", itemDescription: "Cópia do CPF", required: true },
+  { category: "Documentos Pessoais", itemDescription: "Comprovante de residência", required: true },
+  { category: "Documentos Pessoais", itemDescription: "Foto 3x4", required: false },
+  { category: "Documentos Pessoais", itemDescription: "Certidão de nascimento ou casamento", required: false },
+  { category: "Admissão e Registro CLT", itemDescription: "CTPS (digital ou física)", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "Título de eleitor", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "PIS/PASEP", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "Dados bancários / chave PIX", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "Termo de opção de vale-transporte", required: false },
+  { category: "Admissão e Registro CLT", itemDescription: "Reservista (se aplicável)", required: false },
+  { category: "Saúde e Segurança", itemDescription: "ASO Admissional", required: true },
+  { category: "Saúde e Segurança", itemDescription: "Ordem de Serviço (NR-1) assinada", required: true },
+  { category: "Saúde e Segurança", itemDescription: "Ficha de entrega de EPI", required: false },
+  { category: "Termos e Ciência", itemDescription: "Contrato CLT assinado", required: true },
+  { category: "Termos e Ciência", itemDescription: "Regulamento interno (ciência)", required: true },
+  { category: "Termos e Ciência", itemDescription: "Termo de confidencialidade", required: true },
+];
+
+export async function listAdmissionWorkflows(filter?: { status?: string }) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    if (filter?.status) {
+      return conn.select().from(admissionWorkflows)
+        .where(eq(admissionWorkflows.status, filter.status as any))
+        .orderBy(desc(admissionWorkflows.startedAt));
+    }
+    return conn.select().from(admissionWorkflows).orderBy(desc(admissionWorkflows.startedAt));
+  }, "listAdmissionWorkflows");
+}
+
+export async function getAdmissionWorkflow(id: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(admissionWorkflows).where(eq(admissionWorkflows.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getAdmissionWorkflow");
+}
+
+export async function createAdmissionWorkflow(data: InsertAdmissionWorkflow) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const conn = await getDb();
+      if (!conn) throw new Error("DB not available");
+      const r = await conn.insert(admissionWorkflows).values(data);
+      const workflowId = r[0].insertId;
+      // Popular checklist default
+      for (const item of DEFAULT_ADMISSION_CHECKLIST) {
+        await conn.insert(admissionChecklistItems).values({
+          workflowId,
+          category: item.category,
+          itemDescription: item.itemDescription,
+          required: item.required,
+        });
+      }
+      return { id: workflowId };
+    }, "createAdmissionWorkflow");
+  }, { name: "createAdmissionWorkflow-transaction" });
+}
+
+export async function updateAdmissionWorkflow(id: number, data: Partial<InsertAdmissionWorkflow>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(admissionWorkflows).set(data).where(eq(admissionWorkflows.id, id));
+    return { success: true };
+  }, "updateAdmissionWorkflow");
+}
+
+export async function listAdmissionChecklist(workflowId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(admissionChecklistItems)
+      .where(eq(admissionChecklistItems.workflowId, workflowId))
+      .orderBy(asc(admissionChecklistItems.category), asc(admissionChecklistItems.id));
+  }, "listAdmissionChecklist");
+}
+
+export async function updateAdmissionChecklistItem(id: number, data: Partial<InsertAdmissionChecklistItem>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(admissionChecklistItems).set(data).where(eq(admissionChecklistItems.id, id));
+    return { success: true };
+  }, "updateAdmissionChecklistItem");
+}
+
+// ============================================================
+// LIFECYCLE — Movimentação
+// ============================================================
+export async function listEmployeeMovements(employeeId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(employeeMovements)
+      .where(eq(employeeMovements.employeeId, employeeId))
+      .orderBy(desc(employeeMovements.effectiveDate));
+  }, "listEmployeeMovements");
+}
+
+export async function createEmployeeMovement(data: InsertEmployeeMovement) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    const r = await conn.insert(employeeMovements).values(data);
+    return { id: r[0].insertId };
+  }, "createEmployeeMovement");
+}
+
+// ============================================================
+// LIFECYCLE — Desligamento
+// ============================================================
+const DEFAULT_DEVOLUTION_CHECKLIST: string[] = [
+  "Crachá / cartão de acesso",
+  "Notebook / desktop",
+  "Celular corporativo",
+  "EPIs (capacete, óculos, etc.)",
+  "Chaves / cartões de estacionamento",
+  "Uniforme / fardamento",
+  "Material e ferramentas operacionais",
+  "Token / smartcard",
+];
+
+export async function listTerminations(filter?: { status?: string }) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    if (filter?.status) {
+      return conn.select().from(terminations)
+        .where(eq(terminations.status, filter.status as any))
+        .orderBy(desc(terminations.initiatedAt));
+    }
+    return conn.select().from(terminations).orderBy(desc(terminations.initiatedAt));
+  }, "listTerminations");
+}
+
+export async function getTermination(id: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(terminations).where(eq(terminations.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getTermination");
+}
+
+export async function createTermination(data: InsertTermination) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const conn = await getDb();
+      if (!conn) throw new Error("DB not available");
+      const r = await conn.insert(terminations).values(data);
+      const terminationId = r[0].insertId;
+      for (const item of DEFAULT_DEVOLUTION_CHECKLIST) {
+        await conn.insert(terminationDevolutionItems).values({
+          terminationId,
+          itemDescription: item,
+        });
+      }
+      return { id: terminationId };
+    }, "createTermination");
+  }, { name: "createTermination-transaction" });
+}
+
+export async function updateTermination(id: number, data: Partial<InsertTermination>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(terminations).set(data).where(eq(terminations.id, id));
+    return { success: true };
+  }, "updateTermination");
+}
+
+export async function listTerminationDevolution(terminationId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(terminationDevolutionItems)
+      .where(eq(terminationDevolutionItems.terminationId, terminationId))
+      .orderBy(asc(terminationDevolutionItems.id));
+  }, "listTerminationDevolution");
+}
+
+export async function updateTerminationDevolutionItem(id: number, data: Partial<InsertTerminationDevolutionItem>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(terminationDevolutionItems).set(data).where(eq(terminationDevolutionItems.id, id));
+    return { success: true };
+  }, "updateTerminationDevolutionItem");
 }
 
 export async function recordLoginLog(data: {

@@ -23,6 +23,7 @@ import { aiRouter } from './routers/ai';
 import { laborCalcRouter } from './routers/labor-calc';
 import { recruitmentRouter } from './routers/recruitment';
 import { departmentsRouter } from './routers/departments';
+import { lifecycleRouter } from './routers/lifecycle';
 import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
@@ -1319,6 +1320,11 @@ export const appRouter = router({
   // DEPARTMENTS (organização hierárquica)
   // ============================================================
   departments: departmentsRouter,
+
+  // ============================================================
+  // LIFECYCLE (admissão / movimentação / desligamento)
+  // ============================================================
+  lifecycle: lifecycleRouter,
 
   // ============================================================
   // COMPLIANCE PORTARIA 671 (AFD/AFDT/ACJEF)

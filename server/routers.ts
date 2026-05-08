@@ -22,6 +22,7 @@ import { lookupRouter } from './routers/lookup';
 import { aiRouter } from './routers/ai';
 import { laborCalcRouter } from './routers/labor-calc';
 import { recruitmentRouter } from './routers/recruitment';
+import { departmentsRouter } from './routers/departments';
 import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
@@ -44,6 +45,44 @@ export const appRouter = router({
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    session: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) {
+        return {
+          user: null,
+          employee: null,
+          isManager: false,
+          scope: { own: null, subordinates: [] as number[], canSeeAll: false },
+        };
+      }
+      const employee = await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null);
+      const role = ctx.user.role as string;
+      let subordinates: number[] = [];
+      let isManager = false;
+      if (employee) {
+        const subs = await db.getSubordinatesRecursive((employee as any).id).catch(() => new Set<number>());
+        subordinates = Array.from(subs);
+        isManager = subordinates.length > 0 || role === "gestor" || role === "admin";
+      } else if (role === "admin") {
+        isManager = true;
+      }
+      return {
+        user: { id: ctx.user.id, email: ctx.user.email, name: ctx.user.name, role: ctx.user.role },
+        employee: employee
+          ? {
+              id: (employee as any).id,
+              fullName: (employee as any).fullName,
+              departmentId: (employee as any).departmentId,
+              managerId: (employee as any).managerId,
+            }
+          : null,
+        isManager,
+        scope: {
+          own: (employee as any)?.id ?? null,
+          subordinates,
+          canSeeAll: role === "admin",
+        },
+      };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -253,6 +292,30 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.linkEmployeeToUser(input.employeeId, input.userId);
       }),
+    setManager: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+        managerId: z.number().int().positive().nullable(),
+        reason: z.string().max(255).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (input.managerId === input.employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário não pode ser gestor de si mesmo" });
+        }
+        return db.setEmployeeManager(input.employeeId, input.managerId, ctx.user.id, input.reason);
+      }),
+    setDepartment: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+        departmentId: z.number().int().positive().nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateEmployee(input.employeeId, { departmentId: input.departmentId } as any);
+        return { success: true };
+      }),
+    managerHistory: protectedProcedure
+      .input(z.object({ employeeId: z.number().int().positive() }))
+      .query(async ({ input }) => db.listEmployeeManagerHistory(input.employeeId)),
     me: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user) return null;
       return db.getEmployeeForUser(ctx.user.id, ctx.user.email);
@@ -1239,6 +1302,11 @@ export const appRouter = router({
   // RECRUITMENT (vagas + candidatos)
   // ============================================================
   recruitment: recruitmentRouter,
+
+  // ============================================================
+  // DEPARTMENTS (organização hierárquica)
+  // ============================================================
+  departments: departmentsRouter,
 
   // ============================================================
   // COMPLIANCE PORTARIA 671 (AFD/AFDT/ACJEF)

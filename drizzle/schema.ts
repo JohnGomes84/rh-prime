@@ -116,6 +116,8 @@ export const employees = mysqlTable("employees", {
   esocialMatricula: varchar("esocialMatricula", { length: 20 }),
   insalubrityPercentage: mysqlEnum("insalubrityPercentage", ["0", "10", "20", "40"]).default("0"),
   userId: int("userId"),
+  managerId: int("manager_id"),
+  departmentId: int("department_id"),
   status: mysqlEnum("status", ["Ativo", "Inativo", "Afastado", "Férias"]).default("Ativo").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -801,3 +803,39 @@ export const candidates = mysqlTable("candidates", {
 });
 export type Candidate = typeof candidates.$inferSelect;
 export type InsertCandidate = typeof candidates.$inferInsert;
+
+// ============================================================
+// DEPARTMENTS (Departamentos / hierarquia organizacional)
+// ============================================================
+export const departments = mysqlTable("departments", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  parentId: int("parent_id"),
+  headEmployeeId: int("head_employee_id"),
+  costCenter: varchar("cost_center", { length: 50 }),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  parentIdx: index("idx_dept_parent").on(table.parentId),
+}));
+
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = typeof departments.$inferInsert;
+
+// ============================================================
+// EMPLOYEE MANAGER HISTORY (auditoria de troca de gestor)
+// ============================================================
+export const employeeManagerHistory = mysqlTable("employee_manager_history", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id").notNull(),
+  managerId: int("manager_id"),
+  startDate: timestamp("start_date").defaultNow().notNull(),
+  endDate: timestamp("end_date"),
+  changedById: int("changed_by_id"),
+  reason: varchar("reason", { length: 255 }),
+}, (table) => ({
+  employeeIdx: index("idx_emhist_employee").on(table.employeeId),
+}));
+
+export type EmployeeManagerHistory = typeof employeeManagerHistory.$inferSelect;
+export type InsertEmployeeManagerHistory = typeof employeeManagerHistory.$inferInsert;

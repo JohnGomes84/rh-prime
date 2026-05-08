@@ -35,6 +35,8 @@ import {
   candidates, InsertCandidate,
   overtimeAuthorizations, InsertOvertimeAuthorization,
   complianceExports, InsertComplianceExport,
+  departments, InsertDepartment,
+  employeeManagerHistory, InsertEmployeeManagerHistory,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
@@ -471,6 +473,128 @@ export async function updateCandidate(id: number, data: Partial<InsertCandidate>
       await db.update(candidates).set(data).where(eq(candidates.id, id));
     }, "updateCandidate");
   }, { name: "updateCandidate-transaction" });
+}
+
+// ============================================================
+// DEPARTMENTS + HIERARCHY
+// ============================================================
+export async function listDepartments() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(departments).orderBy(asc(departments.name));
+  }, "listDepartments");
+}
+
+export async function createDepartment(data: InsertDepartment) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(departments).values(data);
+      return { id: r[0].insertId };
+    }, "createDepartment");
+  }, { name: "createDepartment-transaction" });
+}
+
+export async function updateDepartment(id: number, data: Partial<InsertDepartment>) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.update(departments).set(data).where(eq(departments.id, id));
+    return { success: true };
+  }, "updateDepartment");
+}
+
+export async function deleteDepartment(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.delete(departments).where(eq(departments.id, id));
+    return { success: true };
+  }, "deleteDepartment");
+}
+
+const SUBORDINATES_CACHE = new Map<number, { ids: Set<number>; cachedAt: number }>();
+const SUBORDINATES_TTL_MS = 60_000;
+
+export async function getSubordinatesRecursive(managerId: number): Promise<Set<number>> {
+  const cached = SUBORDINATES_CACHE.get(managerId);
+  if (cached && Date.now() - cached.cachedAt < SUBORDINATES_TTL_MS) {
+    return cached.ids;
+  }
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return new Set<number>();
+    const result = await db.execute(sql`
+      WITH RECURSIVE tree AS (
+        SELECT id FROM employees WHERE manager_id = ${managerId}
+        UNION ALL
+        SELECT e.id FROM employees e INNER JOIN tree t ON e.manager_id = t.id
+      )
+      SELECT id FROM tree
+    `);
+    const rows = (result as any)[0] ?? result;
+    const ids = new Set<number>((rows as any[]).map((r) => Number(r.id)));
+    SUBORDINATES_CACHE.set(managerId, { ids, cachedAt: Date.now() });
+    return ids;
+  }, "getSubordinatesRecursive");
+}
+
+export function invalidateSubordinatesCache(managerId?: number) {
+  if (managerId === undefined) SUBORDINATES_CACHE.clear();
+  else SUBORDINATES_CACHE.delete(managerId);
+}
+
+export async function setEmployeeManager(employeeId: number, managerId: number | null, changedById?: number, reason?: string) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+
+      const current = await db.select({ managerId: employees.managerId }).from(employees).where(eq(employees.id, employeeId)).limit(1);
+      const previousManagerId = current[0]?.managerId ?? null;
+
+      if (previousManagerId === managerId) return { success: true, unchanged: true };
+
+      // Fecha histórico anterior
+      if (previousManagerId !== null) {
+        await db.update(employeeManagerHistory)
+          .set({ endDate: new Date() })
+          .where(and(
+            eq(employeeManagerHistory.employeeId, employeeId),
+            sql`${employeeManagerHistory.endDate} IS NULL`
+          ));
+      }
+
+      // Atualiza employees.manager_id
+      await db.update(employees).set({ managerId }).where(eq(employees.id, employeeId));
+
+      // Insere novo histórico
+      await db.insert(employeeManagerHistory).values({
+        employeeId,
+        managerId,
+        startDate: new Date(),
+        changedById,
+        reason,
+      });
+
+      // Invalida cache (gestor antigo + novo)
+      invalidateSubordinatesCache();
+
+      return { success: true };
+    }, "setEmployeeManager");
+  }, { name: "setEmployeeManager-transaction" });
+}
+
+export async function listEmployeeManagerHistory(employeeId: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(employeeManagerHistory)
+      .where(eq(employeeManagerHistory.employeeId, employeeId))
+      .orderBy(desc(employeeManagerHistory.startDate));
+  }, "listEmployeeManagerHistory");
 }
 
 export async function recordLoginLog(data: {

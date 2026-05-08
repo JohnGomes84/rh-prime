@@ -127,6 +127,13 @@
       "when": 1778240409580,
       "tag": "0017_overrated_lilith",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1778260119948,
+      "tag": "0018_bent_sentinels",
+      "breakpoints": true
     }
   ]
 }

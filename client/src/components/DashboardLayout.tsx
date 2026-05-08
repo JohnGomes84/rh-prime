@@ -45,6 +45,7 @@ import {
   BarChart3,
   UserSearch,
   UserPlus,
+  UserMinus,
   ClipboardCheck,
   TimerOff,
 } from "lucide-react";
@@ -73,6 +74,7 @@ const menuItems: MenuItem[] = [
   { icon: Building2, label: "Departamentos", path: "/departamentos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: UserPlus, label: "Admissão", path: "/admissao", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
+  { icon: UserMinus, label: "Desligamento", path: "/desligamento", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   // Jornada
   { icon: Timer, label: "Bater Ponto", path: "/ponto", section: "Jornada" },
   { icon: Clock, label: "Banco de Horas", path: "/banco-horas", section: "Jornada" },

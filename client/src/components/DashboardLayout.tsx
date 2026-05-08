@@ -56,40 +56,50 @@ type MenuItem = {
   label: string;
   path: string;
   section?: string;
+  /** Se omitido, visível para todos os logados. */
+  requiredRoles?: Array<"admin" | "gestor" | "colaborador">;
 };
+
+const ADMIN_ONLY = ["admin"] as const;
+const ADMIN_OR_MANAGER = ["admin", "gestor"] as const;
 
 const menuItems: MenuItem[] = [
   // Geral
   { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
-  { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral" },
-  { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral" },
-  { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral" },
+  { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
+  { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   // Jornada
   { icon: Timer, label: "Bater Ponto", path: "/ponto", section: "Jornada" },
   { icon: Clock, label: "Banco de Horas", path: "/banco-horas", section: "Jornada" },
   { icon: TimerOff, label: "Horas Extras", path: "/horas-extras", section: "Jornada" },
-  { icon: Stamp, label: "Jornada — Admin", path: "/jornada-admin", section: "Jornada" },
-  { icon: Shield, label: "Compliance Portaria 671", path: "/compliance-jornada", section: "Jornada" },
+  { icon: Stamp, label: "Jornada — Admin", path: "/jornada-admin", section: "Jornada", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Shield, label: "Compliance Portaria 671", path: "/compliance-jornada", section: "Jornada", requiredRoles: [...ADMIN_ONLY] },
   { icon: CalendarDays, label: "Férias", path: "/ferias", section: "Jornada" },
   // Financeiro
-  { icon: DollarSign, label: "Folha de Pagamento", path: "/folha", section: "Financeiro" },
+  { icon: DollarSign, label: "Folha de Pagamento", path: "/folha", section: "Financeiro", requiredRoles: [...ADMIN_ONLY] },
   { icon: Receipt, label: "Holerite", path: "/holerite", section: "Financeiro" },
   { icon: Calculator, label: "Calculadoras CLT", path: "/calculadoras", section: "Financeiro" },
   // Saúde e Segurança
-  { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude", section: "Saúde" },
-  { icon: ClipboardCheck, label: "Avaliações", path: "/avaliacoes", section: "Saúde" },
+  { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude", section: "Saúde", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: ClipboardCheck, label: "Avaliações", path: "/avaliacoes", section: "Saúde", requiredRoles: [...ADMIN_OR_MANAGER] },
   // Documentos
-  { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos", section: "Documentos" },
-  { icon: FileText, label: "Gerador de Docs", path: "/gerador", section: "Documentos" },
+  { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos", section: "Documentos", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: FileText, label: "Gerador de Docs", path: "/gerador", section: "Documentos", requiredRoles: [...ADMIN_ONLY] },
   // Análise
-  { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Análise" },
-  { icon: FileText, label: "Relatórios", path: "/relatorios", section: "Análise" },
-  { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Análise" },
+  { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: FileText, label: "Relatórios", path: "/relatorios", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Análise", requiredRoles: [...ADMIN_ONLY] },
   // Sistema
-  { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema" },
+  { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Bell, label: "Notificações", path: "/notificacoes", section: "Sistema" },
-  { icon: Settings, label: "Configurações", path: "/configuracoes", section: "Sistema" },
+  { icon: Settings, label: "Configurações", path: "/configuracoes", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
 ];
+
+function filterByRole(items: MenuItem[], role: string | null | undefined): MenuItem[] {
+  if (!role) return items.filter((i) => !i.requiredRoles);
+  return items.filter((i) => !i.requiredRoles || i.requiredRoles.includes(role as any));
+}
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -175,7 +185,8 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find((item) => item.path === location);
+  const visibleMenuItems = filterByRole(menuItems, (user as any)?.role);
+  const activeMenuItem = visibleMenuItems.find((item) => item.path === location);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -245,7 +256,7 @@ function DashboardLayoutContent({
             <SidebarMenu className="px-2 py-1">
               {(() => {
                 let lastSection = '';
-                return menuItems.map((item) => {
+                return visibleMenuItems.map((item) => {
                   const isActive = location === item.path;
                   const showSection = item.section && item.section !== lastSection;
                   if (item.section) lastSection = item.section;

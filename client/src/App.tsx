@@ -42,6 +42,7 @@ const OvertimeManagement = lazy(() => import("./pages/OvertimeManagement").then(
 const Payslip = lazy(() => import("./pages/Payslip").then(m => ({ default: m.Payslip })));
 const Calculators = lazy(() => import("./pages/Calculators"));
 const JourneyAdmin = lazy(() => import("./pages/JourneyAdmin"));
+const Departments = lazy(() => import("./pages/Departments"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
 
 function PageLoader() {
@@ -78,6 +79,7 @@ function Router() {
         <Route path="/holerite" component={Payslip} />
         <Route path="/calculadoras" component={Calculators} />
         <Route path="/jornada-admin" component={JourneyAdmin} />
+        <Route path="/departamentos" component={Departments} />
         <Route path="/compliance-jornada" component={CompliancePortaria} />
         <Route path="/avaliacoes" component={ProfessionalAssessment} />
         <Route path="/auditoria" component={Audit} />

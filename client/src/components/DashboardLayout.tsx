@@ -27,6 +27,7 @@ import {
   PanelLeft,
   Users,
   Briefcase,
+  Building2,
   CalendarDays,
   HeartPulse,
   Clock,
@@ -68,6 +69,7 @@ const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
   { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Building2, label: "Departamentos", path: "/departamentos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   // Jornada
   { icon: Timer, label: "Bater Ponto", path: "/ponto", section: "Jornada" },

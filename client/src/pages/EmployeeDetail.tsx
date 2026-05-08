@@ -41,7 +41,7 @@ import {
   Shield,
   Clock,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 
@@ -251,6 +251,8 @@ export default function EmployeeDetail() {
                   )}
                 </CardContent>
               </Card>
+
+              <HierarchyCard employee={employee} />
 
               <Card className="border-0 shadow-sm">
                 <CardHeader><CardTitle className="text-base">Dados Bancários</CardTitle></CardHeader>
@@ -722,6 +724,131 @@ export default function EmployeeDetail() {
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+function HierarchyCard({ employee }: { employee: any }) {
+  const utils = trpc.useUtils();
+  const employeesQuery = trpc.employees.list.useQuery({});
+  const departmentsQuery = trpc.departments.list.useQuery();
+  const historyQuery = trpc.employees.managerHistory.useQuery({ employeeId: employee.id });
+
+  const employees = useMemo(() => {
+    const data = employeesQuery.data as any;
+    return Array.isArray(data) ? data : data?.data ?? [];
+  }, [employeesQuery.data]);
+
+  const setManager = trpc.employees.setManager.useMutation({
+    onSuccess: () => {
+      toast.success("Gestor atualizado");
+      utils.employees.get.invalidate({ id: employee.id });
+      utils.employees.managerHistory.invalidate({ employeeId: employee.id });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const setDepartment = trpc.employees.setDepartment.useMutation({
+    onSuccess: () => {
+      toast.success("Departamento atualizado");
+      utils.employees.get.invalidate({ id: employee.id });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const currentManager = employee.managerId
+    ? employees.find((e: any) => e.id === employee.managerId)
+    : null;
+  const currentDept = employee.departmentId
+    ? (departmentsQuery.data as any[])?.find((d: any) => d.id === employee.departmentId)
+    : null;
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader><CardTitle className="text-base">Hierarquia e Lotação</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label>Gestor direto</Label>
+            <Select
+              value={employee.managerId ? String(employee.managerId) : "none"}
+              onValueChange={(v) =>
+                setManager.mutate({
+                  employeeId: employee.id,
+                  managerId: v === "none" ? null : Number(v),
+                })
+              }
+              disabled={setManager.isPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Sem gestor —</SelectItem>
+                {employees
+                  .filter((e: any) => e.id !== employee.id)
+                  .map((e: any) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      {e.fullName}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {currentManager && (
+              <p className="text-xs text-muted-foreground mt-1">Atual: {currentManager.fullName}</p>
+            )}
+          </div>
+
+          <div>
+            <Label>Departamento</Label>
+            <Select
+              value={employee.departmentId ? String(employee.departmentId) : "none"}
+              onValueChange={(v) =>
+                setDepartment.mutate({
+                  employeeId: employee.id,
+                  departmentId: v === "none" ? null : Number(v),
+                })
+              }
+              disabled={setDepartment.isPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Sem departamento —</SelectItem>
+                {((departmentsQuery.data as any[]) ?? []).map((d: any) => (
+                  <SelectItem key={d.id} value={String(d.id)}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {currentDept && (
+              <p className="text-xs text-muted-foreground mt-1">Atual: {currentDept.name}</p>
+            )}
+          </div>
+        </div>
+
+        {(historyQuery.data as any[])?.length > 0 && (
+          <div className="border-t pt-3">
+            <p className="text-sm font-medium mb-2">Histórico de gestores</p>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              {(historyQuery.data as any[]).slice(0, 5).map((h: any) => {
+                const mgr = h.managerId ? employees.find((e: any) => e.id === h.managerId) : null;
+                return (
+                  <li key={h.id} className="flex justify-between">
+                    <span>{mgr?.fullName ?? "— sem gestor —"}</span>
+                    <span className="text-xs">
+                      {new Date(h.startDate).toLocaleDateString("pt-BR")}
+                      {h.endDate ? ` – ${new Date(h.endDate).toLocaleDateString("pt-BR")}` : " (atual)"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

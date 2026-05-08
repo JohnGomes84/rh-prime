@@ -254,6 +254,8 @@ export default function EmployeeDetail() {
 
               <HierarchyCard employee={employee} />
 
+              <MovementCard employeeId={employee.id} />
+
               <Card className="border-0 shadow-sm">
                 <CardHeader><CardTitle className="text-base">Dados Bancários</CardTitle></CardHeader>
                 <CardContent>
@@ -724,6 +726,172 @@ export default function EmployeeDetail() {
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+const MOVEMENT_KINDS: Array<{ value: string; label: string }> = [
+  { value: "promocao", label: "Promoção" },
+  { value: "transferencia_dept", label: "Transferência de departamento" },
+  { value: "troca_gestor", label: "Troca de gestor" },
+  { value: "ajuste_salarial", label: "Ajuste salarial" },
+  { value: "mudanca_jornada", label: "Mudança de jornada" },
+  { value: "mudanca_centro_custo", label: "Mudança de centro de custo" },
+  { value: "mudanca_cargo", label: "Mudança de cargo" },
+];
+
+function MovementCard({ employeeId }: { employeeId: number }) {
+  const utils = trpc.useUtils();
+  const list = trpc.lifecycle.movement.listByEmployee.useQuery({ employeeId });
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    kind: "ajuste_salarial",
+    fromValue: "",
+    toValue: "",
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: "",
+  });
+
+  const create = trpc.lifecycle.movement.create.useMutation({
+    onSuccess: () => {
+      toast.success("Movimentação registrada");
+      utils.lifecycle.movement.listByEmployee.invalidate({ employeeId });
+      setOpen(false);
+      setForm({
+        kind: "ajuste_salarial",
+        fromValue: "",
+        toValue: "",
+        effectiveDate: new Date().toISOString().slice(0, 10),
+        reason: "",
+      });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const submit = () => {
+    if (!form.effectiveDate) {
+      toast.error("Informe a data de vigência");
+      return;
+    }
+    create.mutate({
+      employeeId,
+      kind: form.kind as any,
+      fromValue: form.fromValue || undefined,
+      toValue: form.toValue || undefined,
+      effectiveDate: form.effectiveDate,
+      reason: form.reason || undefined,
+    });
+  };
+
+  const items = (list.data as any[]) ?? [];
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Movimentações internas</CardTitle>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Nova
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Registrar movimentação</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Tipo</Label>
+                <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MOVEMENT_KINDS.map((k) => (
+                      <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>De</Label>
+                  <Input
+                    value={form.fromValue}
+                    onChange={(e) => setForm({ ...form, fromValue: e.target.value })}
+                    placeholder="Valor anterior"
+                  />
+                </div>
+                <div>
+                  <Label>Para</Label>
+                  <Input
+                    value={form.toValue}
+                    onChange={(e) => setForm({ ...form, toValue: e.target.value })}
+                    placeholder="Novo valor"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Data de vigência *</Label>
+                <Input
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Motivo / observação</Label>
+                <Input
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={submit} disabled={create.isPending}>
+                  {create.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Registrar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {list.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+          </div>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Nenhuma movimentação registrada.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {items.slice(0, 10).map((m: any) => {
+              const kindLabel = MOVEMENT_KINDS.find((k) => k.value === m.kind)?.label ?? m.kind;
+              return (
+                <li key={m.id} className="border-l-2 border-primary/30 pl-3 py-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="font-medium text-sm">{kindLabel}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(m.effectiveDate).toLocaleDateString("pt-BR")}
+                    </span>
+                  </div>
+                  {(m.fromValue || m.toValue) && (
+                    <p className="text-xs text-muted-foreground">
+                      {m.fromValue ?? "—"} → {m.toValue ?? "—"}
+                    </p>
+                  )}
+                  {m.reason && <p className="text-xs italic mt-1">{m.reason}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

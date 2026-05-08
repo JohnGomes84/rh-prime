@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { trpc } from '@/lib/trpc';
 
 export interface Notification {
   id: string;
@@ -27,7 +28,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [isConnected, setIsConnected] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
 
-  const userId = localStorage.getItem('userId');
+  const meQuery = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  const userId = meQuery.data?.id ? String(meQuery.data.id) : null;
 
   useEffect(() => {
     if (!userId) return;

@@ -177,12 +177,24 @@ export default function AdmissionDetail() {
     onError: (e) => toast.error(e.message),
   });
 
+  const [finalizeFailures, setFinalizeFailures] = useState<string[]>([]);
+
   const finalize = trpc.lifecycle.admission.finalize.useMutation({
     onSuccess: async () => {
       toast.success("Admissão finalizada e vinculada ao funcionário");
+      setFinalizeFailures([]);
       await invalidateAdmissionQueries();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      if (e.data?.code === "PRECONDITION_FAILED") {
+        const lines = e.message.split("\n").map((l) => l.trim()).filter(Boolean);
+        setFinalizeFailures(lines);
+        toast.error(`Finalização bloqueada: ${lines.length} pendência${lines.length === 1 ? "" : "s"}`);
+      } else {
+        setFinalizeFailures([]);
+        toast.error(e.message);
+      }
+    },
   });
 
   const [linkEmpId, setLinkEmpId] = useState<string>("");
@@ -418,6 +430,19 @@ export default function AdmissionDetail() {
                   <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
                     <AlertCircle className="h-3 w-3" /> Complete os itens obrigatórios antes de finalizar.
                   </p>
+                )}
+                {finalizeFailures.length > 0 && (
+                  <div className="mt-2 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs">
+                    <p className="mb-1 flex items-center gap-1 font-semibold text-destructive">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Gate de finalização bloqueou ({finalizeFailures.length}):
+                    </p>
+                    <ul className="ml-5 list-disc space-y-0.5 text-destructive">
+                      {finalizeFailures.map((failure, idx) => (
+                        <li key={idx}>{failure}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             </div>

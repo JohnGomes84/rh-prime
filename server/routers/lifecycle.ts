@@ -6,8 +6,11 @@ import {
   instantiateCatalogForWorkflow,
   listChecklistWithEvidence,
   reviewChecklistItem,
+  syncMirror,
+  validateFinalizationGates,
   waiveChecklistItem,
 } from "../services/admission-checklist.service.js";
+import { TRPCError } from "@trpc/server";
 import { createDocumentRecord, getPrimaryEvidence } from "../services/documents.service.js";
 import { addSignature } from "../services/signatures.service.js";
 import { toDate, toDateOpt } from "../utils/type-converters.js";
@@ -235,11 +238,58 @@ export const lifecycleRouter = router({
     finalize: adminProcedure
       .input(z.object({ id: z.number().int().positive(), employeeId: z.number().int().positive() }))
       .mutation(async ({ input }) => {
-        return db.updateAdmissionWorkflow(input.id, {
+        const workflow = await db.getAdmissionWorkflow(input.id);
+        if (!workflow) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Workflow não encontrado" });
+        }
+
+        const useAdmissionV2 = Boolean((workflow as any).catalogVersion);
+        if (useAdmissionV2) {
+          const gates = await validateFinalizationGates(input.id);
+          if (!gates.passed) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: gates.failures.join("\n"),
+              cause: { failures: gates.failures },
+            });
+          }
+        }
+
+        const updated = await db.updateAdmissionWorkflow(input.id, {
           status: "ACTIVE" as any,
           resultEmployeeId: input.employeeId,
           completedAt: new Date(),
         } as any);
+
+        if (useAdmissionV2) {
+          try {
+            await syncMirror(input.id);
+          } catch (err) {
+            await db.updateAdmissionWorkflow(input.id, {
+              syncStatus: "SYNC_ERROR" as any,
+            } as any);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: `Finalizado, mas sync mirror falhou: ${(err as Error).message}. Use retrySync.`,
+            });
+          }
+        }
+
+        return updated;
+      }),
+
+    retryFinalizationSync: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        assertAdmissionV2Enabled();
+        try {
+          return await syncMirror(input.id);
+        } catch (err) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: (err as Error).message,
+          });
+        }
       }),
   }),
 

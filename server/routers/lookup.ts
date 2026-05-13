@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc.js";
 import {
   lookupCep,
   lookupCnpj,
   listHolidays,
   listStates,
   listCitiesByState,
-} from "../integrations/brasil-api";
+} from "../integrations/brasil-api.js";
 
 export const lookupRouter = router({
   cep: protectedProcedure

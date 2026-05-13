@@ -1,4 +1,4 @@
-import { invokeLLM, type Message } from "../_core/llm";
+import { invokeLLM, type Message } from "../_core/llm.js";
 
 export interface ParsedResume {
   name: string;

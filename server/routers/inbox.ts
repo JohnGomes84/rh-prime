@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure, managerProcedure } from "../_core/trpc";
-import * as db from "../db";
+import { router, protectedProcedure, managerProcedure } from "../_core/trpc.js";
+import * as db from "../db.js";
 
 const REQUEST_KINDS = [
   "ferias",

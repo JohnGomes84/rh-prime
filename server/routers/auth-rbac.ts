@@ -1,13 +1,13 @@
-import { router, publicProcedure, protectedProcedure } from '../_core/trpc';
+import { router, publicProcedure, protectedProcedure } from '../_core/trpc.js';
 import { z } from 'zod';
-import * as db from '../db';
+import * as db from '../db.js';
 import {
   hashPassword,
   verifyPassword,
   createToken,
   validatePasswordStrength,
-} from '../auth/jwt-service';
-import { changePassword as changeOwnPassword } from "../modules/auth/auth-service";
+} from '../auth/jwt-service.js';
+import { changePassword as changeOwnPassword } from "../modules/auth/auth-service.js";
 
 export const authRbacRouter = router({
   /**

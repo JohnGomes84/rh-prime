@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import { ENV } from '../_core/env';
+import bcrypt from 'bcryptjs';
+import { ENV } from '../_core/env.js';
 
 export type UserRole = 'admin' | 'gestor' | 'colaborador' | 'user';
 

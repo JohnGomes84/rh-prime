@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc.js";
 import {
   calcDecimoTerceiro,
   calcFeriasProporcionais,
   calcRescisao,
-} from "../utils/labor-calc";
+} from "../utils/labor-calc.js";
 
 export const laborCalcRouter = router({
   decimoTerceiro: protectedProcedure

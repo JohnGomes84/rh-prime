@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateCPF, validateCNPJ, fetchAddressByCEP } from "./cpf-validator";
+import { validateCPF, validateCNPJ, fetchAddressByCEP } from "./cpf-validator.js";
 
 describe("CPF Validator", () => {
   it("deve validar CPF com formato correto", async () => {

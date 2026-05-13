@@ -1,11 +1,11 @@
-import { router, protectedProcedure, managerProcedure } from "../_core/trpc";
+import { router, protectedProcedure, managerProcedure } from "../_core/trpc.js";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import * as db from "../db";
-import { withDBRetry } from "../utils/retry";
-import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine";
-import { resolveEmployeeIdInScope } from "../utils/scope";
-import { evaluateGeofence } from "../utils/geofence";
+import * as db from "../db.js";
+import { withDBRetry } from "../utils/retry.js";
+import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine.js";
+import { resolveEmployeeIdInScope } from "../utils/scope.js";
+import { evaluateGeofence } from "../utils/geofence.js";
 
 async function loadGeofenceConfig(): Promise<{ lat: number; lng: number; radiusM: number } | null> {
   const settings = (await db.listSettings()) as Array<{ key: string; value: string }>;

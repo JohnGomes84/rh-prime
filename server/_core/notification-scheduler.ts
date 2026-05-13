@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
-import * as db from "../db";
-import { notifications, employees as employeesTable } from "../../drizzle/schema";
+import * as db from "../db.js";
+import { notifications, employees as employeesTable } from "../../drizzle/schema.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 

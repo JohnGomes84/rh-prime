@@ -1,5 +1,5 @@
 import { vi, beforeEach } from "vitest";
-import { memoryDb } from "./db-mock";
+import { memoryDb } from "./db-mock.js";
 
 if (!process.env.JWT_SECRET) {
   process.env.JWT_SECRET = "test-secret-test-secret-test-secret-32+chars";

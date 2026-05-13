@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
-import { parseResumePdf, generateJobDescription } from "../integrations/ai-recruitment";
+import { router, protectedProcedure } from "../_core/trpc.js";
+import { parseResumePdf, generateJobDescription } from "../integrations/ai-recruitment.js";
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 

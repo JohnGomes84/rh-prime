@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { registerWebhook, unregisterWebhook, listWebhooks, triggerWebhook } from "./webhooks";
+import { registerWebhook, unregisterWebhook, listWebhooks, triggerWebhook } from "./webhooks.js";
 
 // Mock fetch
 global.fetch = vi.fn();

@@ -11,7 +11,7 @@ import {
   deleteUser,
   listUsers,
   changePassword,
-} from './auth-service';
+} from './auth-service.js';
 
 describe('Auth Service', () => {
   describe('Password Hashing', () => {

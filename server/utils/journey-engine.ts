@@ -4,7 +4,7 @@
  * horas extras (50%/100%/noturno) e movimento de banco de horas.
  */
 
-import * as db from "../db";
+import * as db from "../db.js";
 
 export interface ScheduleRule {
   scheduleType: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as db from "./db";
+import * as db from "./db.js";
 
 describe("Employees CRUD", () => {
   const validEmployee = {

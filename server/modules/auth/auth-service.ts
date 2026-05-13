@@ -1,11 +1,11 @@
-import * as db from '../../db';
+import * as db from '../../db.js';
 import {
   hashPassword,
   verifyPassword,
   createToken,
   verifyToken as verifyJwtToken,
   type UserRole,
-} from '../../auth/jwt-service';
+} from '../../auth/jwt-service.js';
 
 export interface AuthPayload {
   id: number;

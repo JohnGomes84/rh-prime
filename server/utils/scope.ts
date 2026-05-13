@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import * as db from "../db";
+import * as db from "../db.js";
 
 export interface ScopeUser {
   id: number;

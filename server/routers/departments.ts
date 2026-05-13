@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import * as db from "../db";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc.js";
+import * as db from "../db.js";
 
 export const departmentsRouter = router({
   list: protectedProcedure.query(async () => db.listDepartments()),

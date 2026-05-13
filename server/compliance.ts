@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { getDb } from "./db.js";
 import { eq, and, lte, gte, sql } from "drizzle-orm";
 import {
   pgr,
@@ -6,7 +6,7 @@ import {
   medicalExams,
   trainings,
   employees,
-} from "../drizzle/schema";
+} from "../drizzle/schema.js";
 
 export interface ComplianceReport {
   generatedAt: Date;

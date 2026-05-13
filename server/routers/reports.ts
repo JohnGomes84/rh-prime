@@ -1,12 +1,12 @@
-import { router, protectedProcedure } from '../_core/trpc';
+import { router, protectedProcedure } from '../_core/trpc.js';
 import { z } from 'zod';
-import { getDb } from '../db';
+import { getDb } from '../db.js';
 import {
   timeRecords,
   vacationPeriods,
   absences,
   employees
-} from '../../drizzle/schema';
+} from '../../drizzle/schema.js';
 import { eq, and, gte, lte, count } from 'drizzle-orm';
 
 export const reportsRouter = router({

@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { trpc } from '@/lib/trpc';
 
 export interface Notification {
@@ -26,7 +33,8 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
@@ -38,46 +46,63 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!userId) return;
 
-    // Conectar ao WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws?userId=${userId}`;
-    
-    const websocket = new WebSocket(wsUrl);
+    let cancelled = false;
+    let websocket: WebSocket | null = null;
 
-    websocket.onopen = () => {
-      console.log('[WebSocket] Connected');
-      setIsConnected(true);
+    const connect = () => {
+      if (cancelled) return;
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/ws?userId=${userId}`;
+      websocket = new WebSocket(wsUrl);
+
+      websocket.onopen = () => {
+        console.log('[WebSocket] Connected');
+        reconnectAttemptsRef.current = 0;
+        setIsConnected(true);
+      };
+
+      websocket.onmessage = (event) => {
+        try {
+          const notification: Notification = JSON.parse(event.data);
+          notification.id = `${notification.timestamp}-${Math.random()}`;
+          notification.read = false;
+          setNotifications((prev) => [notification, ...prev]);
+        } catch (error) {
+          console.error('[WebSocket] Failed to parse message:', error);
+        }
+      };
+
+      websocket.onerror = (error) => {
+        console.error('[WebSocket] Error:', error);
+        setIsConnected(false);
+      };
+
+      websocket.onclose = () => {
+        setIsConnected(false);
+        if (cancelled) return;
+
+        reconnectAttemptsRef.current += 1;
+        if (reconnectAttemptsRef.current > 3) {
+          console.warn('[WebSocket] Disabled after repeated disconnects');
+          return;
+        }
+
+        const delayMs = reconnectAttemptsRef.current * 3000;
+        reconnectTimerRef.current = window.setTimeout(connect, delayMs);
+      };
     };
 
-    websocket.onmessage = (event) => {
-      try {
-        const notification: Notification = JSON.parse(event.data);
-        notification.id = `${notification.timestamp}-${Math.random()}`;
-        notification.read = false;
-        setNotifications((prev) => [notification, ...prev]);
-      } catch (error) {
-        console.error('[WebSocket] Failed to parse message:', error);
-      }
-    };
-
-    websocket.onerror = (error) => {
-      console.error('[WebSocket] Error:', error);
-      setIsConnected(false);
-    };
-
-    websocket.onclose = () => {
-      console.log('[WebSocket] Disconnected');
-      setIsConnected(false);
-      // Reconectar após 3 segundos
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
-    };
-
-    setWs(websocket);
+    connect();
 
     return () => {
-      websocket.close();
+      cancelled = true;
+      setIsConnected(false);
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      websocket?.close();
     };
   }, [userId]);
 

@@ -7,6 +7,17 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 
+const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT;
+const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+
+if (typeof document !== "undefined" && analyticsEndpoint && analyticsWebsiteId) {
+  const analyticsScript = document.createElement("script");
+  analyticsScript.defer = true;
+  analyticsScript.src = `${analyticsEndpoint.replace(/\/$/, "")}/umami`;
+  analyticsScript.setAttribute("data-website-id", analyticsWebsiteId);
+  document.head.appendChild(analyticsScript);
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

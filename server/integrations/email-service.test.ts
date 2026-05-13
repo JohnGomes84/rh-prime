@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { sendEmail, generateASOExpiringEmail, generateVacationApprovedEmail, notifyCriticalEvent } from "./email-service";
+import { sendEmail, generateASOExpiringEmail, generateVacationApprovedEmail, notifyCriticalEvent } from "./email-service.js";
 
 // Mock fetch
 global.fetch = vi.fn();

@@ -1,7 +1,7 @@
-import { protectedProcedure, publicProcedure } from "../_core/trpc";
+import { protectedProcedure, publicProcedure } from "../_core/trpc.js";
 import { z } from "zod";
-import { getDb } from "../db";
-import { auditLogs } from "../../drizzle/schema";
+import { getDb } from "../db.js";
+import { auditLogs } from "../../drizzle/schema.js";
 import { desc, eq, and, gte, lte, or, like } from "drizzle-orm";
 
 export const auditRouter = {

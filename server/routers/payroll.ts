@@ -1,7 +1,7 @@
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc.js";
 import { z } from "zod";
-import * as db from "../db";
-import { calculatePayroll } from "../modules/payroll/payroll-calculator";
+import * as db from "../db.js";
+import { calculatePayroll } from "../modules/payroll/payroll-calculator.js";
 
 const monthInput = z.object({
   month: z.number().int().min(1).max(12),

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
-import * as db from "../db";
+import { router, protectedProcedure } from "../_core/trpc.js";
+import * as db from "../db.js";
 
 const stageEnum = z.enum([
   "Triagem",

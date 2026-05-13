@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import * as db from '../db';
+import * as db from '../db.js';
 
 interface NotificationPayload {
   type: 'approval' | 'alert' | 'info' | 'error' | 'Geral' | 'Férias' | 'ASO' | 'Banco de Horas';

@@ -1,5 +1,5 @@
-import { getDb } from "./db";
-import * as schema from "../drizzle/schema";
+import { getDb } from "./db.js";
+import * as schema from "../drizzle/schema.js";
 
 export interface AuditContext {
   userId?: number;

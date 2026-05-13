@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { broadcastNotification, broadcastToRole, broadcastToDepartment } from './notification-events';
+import { broadcastNotification, broadcastToRole, broadcastToDepartment } from './notification-events.js';
 
 describe('WebSocket Notifications', () => {
   describe('broadcastNotification', () => {

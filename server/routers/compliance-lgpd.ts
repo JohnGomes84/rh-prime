@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import * as db from "../db";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc.js";
+import * as db from "../db.js";
 
 const CONSENT_TYPES = [
   "data_processing",

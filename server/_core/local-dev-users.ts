@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { hashPassword } from "../auth/jwt-service";
+import { hashPassword } from "../auth/jwt-service.js";
 
 type LocalUserRole = "admin" | "gestor" | "colaborador" | "user";
 

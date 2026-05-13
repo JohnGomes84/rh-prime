@@ -1,7 +1,7 @@
-import { router, protectedProcedure } from '../_core/trpc';
+import { router, protectedProcedure } from '../_core/trpc.js';
 import { z } from 'zod';
-import { getDb, listAuditLogByCpf } from '../db';
-import { auditLogs } from '../../drizzle/schema';
+import { getDb, listAuditLogByCpf } from '../db.js';
+import { auditLogs } from '../../drizzle/schema.js';
 import { eq } from 'drizzle-orm';
 
 export const auditCpfRouter = router({

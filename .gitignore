@@ -121,3 +121,4 @@ temp/
 # DB backups locais
 backups/
 *.sql.gz
+.vercel

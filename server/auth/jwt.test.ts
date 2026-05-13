@@ -5,7 +5,7 @@ import {
   createToken,
   verifyToken,
   validatePasswordStrength,
-} from './jwt';
+} from './jwt.js';
 
 describe('JWT Service', () => {
   describe('Password Hashing', () => {

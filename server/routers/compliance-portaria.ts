@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import * as db from "../db";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc.js";
+import * as db from "../db.js";
 import {
   buildAfd,
   buildAfdt,
@@ -9,8 +9,8 @@ import {
   type AfdRecord,
   type AfdtRecord,
   type AcjefRow,
-} from "../utils/portaria-671";
-import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine";
+} from "../utils/portaria-671.js";
+import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine.js";
 
 async function loadHeader(periodStart: Date, periodEnd: Date) {
   const company = (await db.listSettings()) as Array<{ key: string; value: string }>;

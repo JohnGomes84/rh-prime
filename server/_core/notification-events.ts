@@ -1,4 +1,4 @@
-import { broadcastNotification, broadcastToRole, broadcastToDepartment } from './websocket';
+import { broadcastNotification, broadcastToRole, broadcastToDepartment } from './websocket.js';
 
 export { broadcastNotification, broadcastToRole, broadcastToDepartment };
 

@@ -23,6 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -156,11 +157,7 @@ export default function AdmissionDetail() {
   const attachEvidenceUrl = trpc.lifecycle.admission.attachEvidenceUrl.useMutation({
     onSuccess: async () => {
       toast.success("Evidência anexada");
-      setAttachTarget(null);
-      setAttachUrl("");
-      setAttachName("");
-      setAttachFileType("");
-      setAttachObservations("");
+      resetAttachState();
       await invalidateAdmissionQueries();
     },
     onError: (e) => toast.error(e.message),
@@ -204,31 +201,87 @@ export default function AdmissionDetail() {
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("approved");
   const [reviewNotes, setReviewNotes] = useState("");
   const [attachTarget, setAttachTarget] = useState<{ id: number; description: string } | null>(null);
+  const [attachMode, setAttachMode] = useState<"url" | "upload">("upload");
   const [attachUrl, setAttachUrl] = useState("");
   const [attachName, setAttachName] = useState("");
   const [attachFileType, setAttachFileType] = useState("");
   const [attachObservations, setAttachObservations] = useState("");
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [signTarget, setSignTarget] = useState<{ id: number; description: string; policy: string } | null>(null);
   const [signSignatoryType, setSignSignatoryType] = useState<SignatoryType>("employee");
   const [signMethod, setSignMethod] = useState<"electronic" | "manuscrita" | "icp_brasil">("electronic");
 
-  const submitAttach = () => {
+  const resetAttachState = () => {
+    setAttachTarget(null);
+    setAttachUrl("");
+    setAttachName("");
+    setAttachFileType("");
+    setAttachObservations("");
+    setAttachFile(null);
+    setAttachMode("upload");
+  };
+
+  const submitAttach = async () => {
     if (!attachTarget) return;
+    const docName = attachName.trim();
+    if (docName.length < 1) {
+      toast.error("Informe o nome do documento");
+      return;
+    }
+
+    if (attachMode === "upload") {
+      if (!attachFile) {
+        toast.error("Selecione um arquivo");
+        return;
+      }
+      if (attachFile.size > 4 * 1024 * 1024) {
+        toast.error("Arquivo maior que 4MB. Use URL externa para arquivos maiores.");
+        return;
+      }
+      try {
+        setUploading(true);
+        const resp = await fetch(
+          `/api/upload-evidence?filename=${encodeURIComponent(attachFile.name)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": attachFile.type || "application/octet-stream" },
+            body: attachFile,
+            credentials: "include",
+          }
+        );
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: resp.statusText }));
+          throw new Error(err.error ?? "Falha no upload");
+        }
+        const blob = (await resp.json()) as { url: string };
+        attachEvidenceUrl.mutate({
+          workflowId: id,
+          itemId: attachTarget.id,
+          fileUrl: blob.url,
+          documentName: docName,
+          fileType: attachFile.name.split(".").pop()?.slice(0, 10) || undefined,
+          observations: attachObservations.trim() || undefined,
+        });
+      } catch (err) {
+        toast.error((err as Error).message);
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
     try {
       new URL(attachUrl);
     } catch {
       toast.error("Informe uma URL válida");
       return;
     }
-    if (attachName.trim().length < 1) {
-      toast.error("Informe o nome do documento");
-      return;
-    }
     attachEvidenceUrl.mutate({
       workflowId: id,
       itemId: attachTarget.id,
       fileUrl: attachUrl.trim(),
-      documentName: attachName.trim(),
+      documentName: docName,
       fileType: attachFileType.trim() || undefined,
       observations: attachObservations.trim() || undefined,
     });
@@ -786,35 +839,72 @@ export default function AdmissionDetail() {
       <Dialog
         open={Boolean(attachTarget)}
         onOpenChange={(open) => {
-          if (!open) {
-            setAttachTarget(null);
-            setAttachUrl("");
-            setAttachName("");
-            setAttachFileType("");
-            setAttachObservations("");
-          }
+          if (!open) resetAttachState();
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Anexar evidência por URL</DialogTitle>
+            <DialogTitle>Anexar evidência</DialogTitle>
             <DialogDescription>{attachTarget?.description}</DialogDescription>
           </DialogHeader>
+          <Tabs value={attachMode} onValueChange={(v) => setAttachMode(v as "url" | "upload")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="upload">Upload de arquivo</TabsTrigger>
+              <TabsTrigger value="url">URL externa</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="upload" className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="attach-file">Arquivo (PDF, JPG, PNG, WEBP, HEIC — máx 4MB)</Label>
+                <Input
+                  id="attach-file"
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setAttachFile(file);
+                    if (file && !attachName) setAttachName(file.name);
+                  }}
+                  disabled={uploading || attachEvidenceUrl.isPending}
+                />
+                {attachFile && (
+                  <p className="text-xs text-muted-foreground">
+                    {attachFile.name} · {(attachFile.size / 1024).toFixed(0)}KB · {attachFile.type || "tipo desconhecido"}
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="url" className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="attach-url">URL do arquivo</Label>
+                <Input
+                  id="attach-url"
+                  type="url"
+                  placeholder="https://…"
+                  value={attachUrl}
+                  onChange={(e) => setAttachUrl(e.target.value)}
+                  disabled={attachEvidenceUrl.isPending}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Link público (Drive, S3, etc) para arquivos &gt; 4MB ou já armazenados externamente.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="attach-type">Tipo (opcional)</Label>
+                <Input
+                  id="attach-type"
+                  value={attachFileType}
+                  onChange={(e) => setAttachFileType(e.target.value)}
+                  placeholder="pdf, jpg, png…"
+                  maxLength={10}
+                  disabled={attachEvidenceUrl.isPending}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="attach-url">URL do arquivo</Label>
-              <Input
-                id="attach-url"
-                type="url"
-                placeholder="https://…"
-                value={attachUrl}
-                onChange={(e) => setAttachUrl(e.target.value)}
-                disabled={attachEvidenceUrl.isPending}
-              />
-              <p className="text-xs text-muted-foreground">
-                Link público para o arquivo (Drive, S3, etc). Upload nativo virá em fase futura.
-              </p>
-            </div>
             <div className="space-y-1">
               <Label htmlFor="attach-name">Nome do documento</Label>
               <Input
@@ -822,18 +912,7 @@ export default function AdmissionDetail() {
                 value={attachName}
                 onChange={(e) => setAttachName(e.target.value)}
                 placeholder="Ex.: RG do candidato.pdf"
-                disabled={attachEvidenceUrl.isPending}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="attach-type">Tipo (opcional)</Label>
-              <Input
-                id="attach-type"
-                value={attachFileType}
-                onChange={(e) => setAttachFileType(e.target.value)}
-                placeholder="pdf, jpg, png…"
-                maxLength={10}
-                disabled={attachEvidenceUrl.isPending}
+                disabled={uploading || attachEvidenceUrl.isPending}
               />
             </div>
             <div className="space-y-1">
@@ -843,24 +922,32 @@ export default function AdmissionDetail() {
                 value={attachObservations}
                 onChange={(e) => setAttachObservations(e.target.value)}
                 rows={2}
-                disabled={attachEvidenceUrl.isPending}
+                disabled={uploading || attachEvidenceUrl.isPending}
               />
             </div>
           </div>
+
           <DialogFooter>
             <Button
               variant="ghost"
-              onClick={() => setAttachTarget(null)}
-              disabled={attachEvidenceUrl.isPending}
+              onClick={resetAttachState}
+              disabled={uploading || attachEvidenceUrl.isPending}
             >
               Cancelar
             </Button>
             <Button
               onClick={submitAttach}
-              disabled={attachEvidenceUrl.isPending || !attachUrl || !attachName}
+              disabled={
+                uploading ||
+                attachEvidenceUrl.isPending ||
+                !attachName ||
+                (attachMode === "upload" ? !attachFile : !attachUrl)
+              }
             >
-              {attachEvidenceUrl.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Anexar
+              {(uploading || attachEvidenceUrl.isPending) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              {uploading ? "Enviando…" : "Anexar"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { employees, overtimeRecords, timeRecords } from "./schema";
+import { employees, overtimeRecords, timeRecords } from "./schema.js";
 
 export const overtimeRecordsRelations = relations(overtimeRecords, ({one}) => ({
 	employee: one(employees, {

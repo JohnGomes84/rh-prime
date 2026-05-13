@@ -1,11 +1,15 @@
-import { router, protectedProcedure } from '../_core/trpc';
+import { router, protectedProcedure } from '../_core/trpc.js';
 import { z } from 'zod';
 import {
   createDigitalSignature,
   validateDocumentSignature,
   getDocumentSignatures,
   exportSignatureCertificate,
-} from '../services/digital-signature-service';
+} from '../services/digital-signature-service.js';
+
+const documentBytesSchema = z
+  .union([z.instanceof(Buffer), z.instanceof(Uint8Array), z.array(z.number().int().min(0).max(255))])
+  .transform((value) => Buffer.from(value));
 
 export const digitalSignatureRouter = router({
   /**
@@ -17,7 +21,7 @@ export const digitalSignatureRouter = router({
     .input(
       z.object({
         documentId: z.number(),
-        documentContent: z.instanceof(Buffer),
+        documentContent: documentBytesSchema,
         cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, 'CPF inválido'),
         signerName: z.string().min(3),
         signerEmail: z.string().email(),
@@ -52,7 +56,7 @@ export const digitalSignatureRouter = router({
     .input(
       z.object({
         documentId: z.number(),
-        documentContent: z.instanceof(Buffer),
+        documentContent: documentBytesSchema,
       })
     )
     .query(async ({ input }) => {

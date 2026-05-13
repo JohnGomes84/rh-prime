@@ -46,14 +46,15 @@ import {
   approvals, InsertApproval,
   consentRecords, InsertConsentRecord,
   readAuditLogs, InsertReadAuditLog,
-} from "../drizzle/schema";
-import { ENV } from './_core/env';
-import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users";
-import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks';
-import { withDBRetry } from './utils/retry';
-import { encryptCPF } from './utils/encryption';
-import { withTransaction } from './utils/transactions';
-import { formatDateTimeBR } from './utils/timezone';
+} from "../drizzle/schema.js";
+import { ENV } from './_core/env.js';
+import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users.js";
+import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks.js';
+import { withDBRetry } from './utils/retry.js';
+import { encryptCPF } from './utils/encryption.js';
+import { withTransaction } from './utils/transactions.js';
+import { formatDateTimeBR } from './utils/timezone.js';
+import { isFeatureEnabled } from "./_core/feature-flags.js";
 import { nanoid } from 'nanoid';
 
 const generateId = () => nanoid(36);
@@ -816,21 +817,25 @@ export async function getAdmissionWorkflow(id: number) {
   }, "getAdmissionWorkflow");
 }
 
-export async function createAdmissionWorkflow(data: InsertAdmissionWorkflow) {
+export async function createAdmissionWorkflow(
+  data: InsertAdmissionWorkflow,
+  options?: { populateDefaultChecklist?: boolean }
+) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
       const conn = await getDb();
       if (!conn) throw new Error("DB not available");
       const r = await conn.insert(admissionWorkflows).values(data);
       const workflowId = r[0].insertId;
-      // Popular checklist default
-      for (const item of DEFAULT_ADMISSION_CHECKLIST) {
-        await conn.insert(admissionChecklistItems).values({
-          workflowId,
-          category: item.category,
-          itemDescription: item.itemDescription,
-          required: item.required,
-        });
+      if (options?.populateDefaultChecklist !== false) {
+        for (const item of DEFAULT_ADMISSION_CHECKLIST) {
+          await conn.insert(admissionChecklistItems).values({
+            workflowId,
+            category: item.category,
+            itemDescription: item.itemDescription,
+            required: item.required,
+          });
+        }
       }
       return { id: workflowId };
     }, "createAdmissionWorkflow");
@@ -1611,6 +1616,9 @@ export async function updateChecklistItem(id: number, data: Partial<InsertCheckl
 }
 
 export async function createDefaultAdmissionChecklist(employeeId: number) {
+  if (isFeatureEnabled("admission-v2")) {
+    return [];
+  }
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const items = [

@@ -1,7 +1,20 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import * as db from "../db";
-import { toDate, toDateOpt } from "../utils/type-converters";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc.js";
+import * as db from "../db.js";
+import { isFeatureEnabled } from "../_core/feature-flags.js";
+import {
+  instantiateCatalogForWorkflow,
+  listChecklistWithEvidence,
+  reviewChecklistItem,
+  waiveChecklistItem,
+} from "../services/admission-checklist.service.js";
+import { toDate, toDateOpt } from "../utils/type-converters.js";
+
+function assertAdmissionV2Enabled() {
+  if (!isFeatureEnabled("admission-v2")) {
+    throw new Error("Feature admission-v2 is not enabled");
+  }
+}
 
 export const lifecycleRouter = router({
   // ============================================================
@@ -37,13 +50,34 @@ export const lifecycleRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
+        const useAdmissionV2 = isFeatureEnabled("admission-v2");
         const data: any = {
           ...input,
           proposedSalary: input.proposedSalary !== undefined ? String(input.proposedSalary) : undefined,
           proposedHireDate: toDateOpt(input.proposedHireDate),
           createdById: ctx.user?.id,
+          catalogVersion: useAdmissionV2 ? "v1.0" : undefined,
         };
-        return db.createAdmissionWorkflow(data);
+        const result = await db.createAdmissionWorkflow(data, {
+          populateDefaultChecklist: !useAdmissionV2,
+        });
+        if (useAdmissionV2 && result?.id) {
+          await instantiateCatalogForWorkflow(result.id, "v1.0");
+        }
+        return result;
+      }),
+
+    checklist: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        assertAdmissionV2Enabled();
+        const workflow = await db.getAdmissionWorkflow(input.id);
+        if (!workflow) return null;
+        const checklist = await listChecklistWithEvidence(input.id);
+        return {
+          workflow,
+          checklist,
+        };
       }),
 
     update: adminProcedure
@@ -79,6 +113,44 @@ export const lifecycleRouter = router({
           documentUrl: input.documentUrl,
           notes: input.notes,
         } as any);
+      }),
+
+    waiveChecklistItem: adminProcedure
+      .input(
+        z.object({
+          workflowId: z.number().int().positive(),
+          itemId: z.number().int().positive(),
+          waivedReason: z.string().min(3),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        assertAdmissionV2Enabled();
+        return waiveChecklistItem(
+          input.workflowId,
+          input.itemId,
+          ctx.user?.id,
+          input.waivedReason
+        );
+      }),
+
+    reviewChecklistItem: adminProcedure
+      .input(
+        z.object({
+          workflowId: z.number().int().positive(),
+          itemId: z.number().int().positive(),
+          reviewStatus: z.enum(["pending", "approved", "rejected"]),
+          reviewNotes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        assertAdmissionV2Enabled();
+        return reviewChecklistItem(
+          input.workflowId,
+          input.itemId,
+          ctx.user?.id,
+          input.reviewStatus,
+          input.reviewNotes
+        );
       }),
 
     finalize: adminProcedure

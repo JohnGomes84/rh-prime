@@ -1,36 +1,38 @@
 import { z } from "zod";
-import { withDBRetry } from "./utils/retry";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, adminProcedure, managerProcedure, router } from "./_core/trpc";
-import * as db from "./db";
-import { storagePut } from "./storage";
+import { withDBRetry } from "./utils/retry.js";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const.js";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { publicProcedure, protectedProcedure, adminProcedure, managerProcedure, router } from "./_core/trpc.js";
+import * as db from "./db.js";
+import { storagePut } from "./storage.js";
 import { nanoid } from "nanoid";
-import { complianceRouter } from "./routers/compliance";
-import { integrationsRouter } from "./routers/integrations";
+import { complianceRouter } from "./routers/compliance.js";
+import { integrationsRouter } from "./routers/integrations.js";
 
-import { auditCpfRouter } from "./routers/audit-cpf";
-import { digitalSignatureRouter } from "./routers/digital-signature";
-import { auditRouter } from "./routers/audit";
-import { timesheetRouter } from './routers/timesheet';
-import { reportsRouter } from './routers/reports';
-import { authRbacRouter } from './routers/auth-rbac';
-import { payrollRouter } from "./routers/payroll";
-import { payslipRouter } from './routers/payslip';
-import { lookupRouter } from './routers/lookup';
-import { aiRouter } from './routers/ai';
-import { laborCalcRouter } from './routers/labor-calc';
-import { recruitmentRouter } from './routers/recruitment';
-import { departmentsRouter } from './routers/departments';
-import { lifecycleRouter } from './routers/lifecycle';
-import { inboxRouter } from './routers/inbox';
-import { lgpdRouter } from './routers/compliance-lgpd';
-import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria';
+import { auditCpfRouter } from "./routers/audit-cpf.js";
+import { digitalSignatureRouter } from "./routers/digital-signature.js";
+import { auditRouter } from "./routers/audit.js";
+import { timesheetRouter } from './routers/timesheet.js';
+import { reportsRouter } from './routers/reports.js';
+import { authRbacRouter } from './routers/auth-rbac.js';
+import { payrollRouter } from "./routers/payroll.js";
+import { payslipRouter } from './routers/payslip.js';
+import { lookupRouter } from './routers/lookup.js';
+import { aiRouter } from './routers/ai.js';
+import { laborCalcRouter } from './routers/labor-calc.js';
+import { recruitmentRouter } from './routers/recruitment.js';
+import { departmentsRouter } from './routers/departments.js';
+import { lifecycleRouter } from './routers/lifecycle.js';
+import { inboxRouter } from './routers/inbox.js';
+import { lgpdRouter } from './routers/compliance-lgpd.js';
+import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria.js';
+import { kanbanRouter } from './routers/kanban.js';
 import { TRPCError } from '@trpc/server';
-import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
-import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service";
-import { validatePasswordStrength } from "./auth/jwt-service";
+import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters.js";
+import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service.js";
+import { validatePasswordStrength } from "./auth/jwt-service.js";
+import { createDocumentRecord } from "./services/documents.service.js";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -869,7 +871,11 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const employee = await db.getEmployee(input.employeeId);
-        return db.createDocument({ ...input, expiryDate: toDateOpt(input.expiryDate), cpf: employee?.cpf || "" });
+        return createDocumentRecord({
+          ...input,
+          expiryDate: toDateOpt(input.expiryDate),
+          cpf: employee?.cpf || "",
+        });
       }),
     delete: managerProcedure
       .input(z.object({ id: z.number() }))
@@ -893,7 +899,7 @@ export const appRouter = router({
         const fileKey = `documents/${input.employeeId}/${nanoid()}-${input.fileName}`;
         const { url } = await storagePut(fileKey, buffer, input.fileType);
         const employee = await db.getEmployee(input.employeeId);
-        return db.createDocument({
+        return createDocumentRecord({
           employeeId: input.employeeId,
           category: input.category,
           documentName: input.documentName,
@@ -1371,6 +1377,11 @@ export const appRouter = router({
   // LABOR CALC (rescisão, 13º, férias proporcionais — BR/CLT)
   // ============================================================
   laborCalc: laborCalcRouter,
+
+  // ============================================================
+  // KANBAN (boards/lists/cards — fase 8)
+  // ============================================================
+  kanban: kanbanRouter,
 
   // ============================================================
   // BUSINESS DAYS (BR working day calculator)

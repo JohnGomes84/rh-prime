@@ -52,6 +52,8 @@ const TerminationDetail = lazy(() => import("./pages/TerminationDetail"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
+const KanbanBoards = lazy(() => import("./pages/KanbanBoards"));
+const KanbanBoard = lazy(() => import("./pages/KanbanBoard"));
 
 function PageLoader() {
   return (
@@ -109,6 +111,8 @@ function Router() {
         <Route path="/inbox" component={Inbox} />
         <Route path="/privacidade" component={Privacy} />
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
+        <Route path="/kanban" component={KanbanBoards} />
+        <Route path="/kanban/:id" component={KanbanBoard} />
         <Route path="/avaliacoes" component={guarded(ProfessionalAssessment, "manager")} />
         <Route path="/auditoria" component={guarded(Audit, "admin")} />
         <Route path="/analytics" component={guarded(PeopleAnalytics, "manager")} />

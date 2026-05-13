@@ -162,6 +162,20 @@
       "when": 1778275061419,
       "tag": "0022_lethal_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1778517588387,
+      "tag": "0023_mixed_viper",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1778626000000,
+      "tag": "0024_onboarding_v2_foundation",
+      "breakpoints": true
     }
   ]
 }

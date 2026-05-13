@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Buffer } from "buffer";
 import DashboardLayout from "@/components/DashboardLayout";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { SignatureModal } from "@/components/SignatureModal";
@@ -29,11 +28,11 @@ export function SignContracts() {
     if (!selected) return;
 
     const response = await fetch(selected.fileUrl);
-    const fileBuffer = Buffer.from(await response.arrayBuffer());
+    const fileBytes = Array.from(new Uint8Array(await response.arrayBuffer()));
 
     await signDocument.mutateAsync({
       documentId: selected.id,
-      documentContent: fileBuffer,
+      documentContent: fileBytes,
       cpf: signatureData.cpf,
       signerName: signatureData.signerName,
       signerEmail: signatureData.signerEmail,

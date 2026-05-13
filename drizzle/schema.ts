@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal, boolean, json, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal, boolean, json, index, uniqueIndex } from "drizzle-orm/mysql-core";
 
 // ============================================================
 // USERS (Auth - tabela do template)
@@ -334,6 +334,11 @@ export const documents = mysqlTable("documents", {
   fileType: varchar("fileType", { length: 10 }),
   fileSize: int("fileSize"),
   expiryDate: date("expiryDate"),
+  origin: varchar("origin", { length: 30 }),
+  admissionWorkflowId: int("admission_workflow_id"),
+  admissionChecklistItemId: int("admission_checklist_item_id"),
+  isPrimaryEvidence: boolean("is_primary_evidence").default(false).notNull(),
+  lifecycleStatus: varchar("lifecycle_status", { length: 20 }).default("stored").notNull(),
   observations: text("observations"),
   uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
 });
@@ -354,10 +359,20 @@ export const checklistItems = mysqlTable("checklist_items", {
   completedDate: date("completedDate"),
   completedBy: varchar("completedBy", { length: 255 }),
   documentId: int("documentId"),
+  sourceWorkflowId: int("sourceWorkflowId"),
+  sourceItemId: int("sourceItemId"),
+  mirrorOrigin: varchar("mirrorOrigin", { length: 50 }),
+  isEditable: boolean("isEditable").default(true).notNull(),
   observations: text("observations"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({
+  employeeMirrorIdx: uniqueIndex("idx_employee_mirror").on(
+    table.employeeId,
+    table.sourceItemId,
+    table.mirrorOrigin
+  ),
+}));
 
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertChecklistItem = typeof checklistItems.$inferInsert;
@@ -471,6 +486,7 @@ export type InsertServiceOrder = typeof serviceOrders.$inferInsert;
 export const documentTemplates = mysqlTable("document_templates", {
   id: int("id").autoincrement().primaryKey(),
   templateName: varchar("templateName", { length: 255 }).notNull(),
+  machineKey: varchar("machine_key", { length: 100 }).unique(),
   templateType: mysqlEnum("templateType", [
     "Termo de Responsabilidade",
     "Declaração de Pendência",
@@ -873,6 +889,8 @@ export const admissionWorkflows = mysqlTable("admission_workflows", {
   createdById: int("created_by_id"),
   approvedById: int("approved_by_id"),
   resultEmployeeId: int("result_employee_id"),
+  syncStatus: varchar("sync_status", { length: 20 }).default("NOT_SYNCED").notNull(),
+  catalogVersion: varchar("catalog_version", { length: 20 }),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -890,20 +908,50 @@ export type InsertAdmissionWorkflow = typeof admissionWorkflows.$inferInsert;
 export const admissionChecklistItems = mysqlTable("admission_checklist_items", {
   id: int("id").autoincrement().primaryKey(),
   workflowId: int("workflow_id").notNull(),
+  code: varchar("code", { length: 100 }),
   category: varchar("category", { length: 80 }).notNull(),
   itemDescription: varchar("item_description", { length: 255 }).notNull(),
+  kind: varchar("kind", { length: 30 }).default("manual_validation").notNull(),
+  status: varchar("status", { length: 30 }).default("PENDING").notNull(),
+  documentPolicy: varchar("document_policy", { length: 30 }).default("none").notNull(),
+  templatePolicy: varchar("template_policy", { length: 30 }).default("none").notNull(),
+  templateKey: varchar("template_key", { length: 100 }),
+  signaturePolicy: varchar("signature_policy", { length: 30 }).default("none").notNull(),
+  reviewPolicy: varchar("review_policy", { length: 30 }).default("manual_review").notNull(),
+  reviewStatus: varchar("review_status", { length: 20 }),
+  reviewedById: int("reviewed_by_id"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
   required: boolean("required").default(true).notNull(),
   completed: boolean("completed").default(false).notNull(),
   documentUrl: varchar("document_url", { length: 500 }),
   notes: text("notes"),
   completedAt: timestamp("completed_at"),
   completedById: int("completed_by_id"),
+  waivedReason: text("waived_reason"),
+  waivedById: int("waived_by_id"),
+  waivedAt: timestamp("waived_at"),
 }, (table) => ({
   workflowIdx: index("idx_admchk_workflow").on(table.workflowId),
+  workflowCodeIdx: uniqueIndex("idx_admchk_workflow_code").on(table.workflowId, table.code),
 }));
 
 export type AdmissionChecklistItem = typeof admissionChecklistItems.$inferSelect;
 export type InsertAdmissionChecklistItem = typeof admissionChecklistItems.$inferInsert;
+export const documentSignatures = mysqlTable("document_signatures", {
+  id: int("id").autoincrement().primaryKey(),
+  documentId: int("documentId").notNull(),
+  signatoryType: varchar("signatoryType", { length: 20 }).notNull(),
+  signatoryId: int("signatoryId").notNull(),
+  signedAt: timestamp("signedAt").defaultNow().notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  signatureMethod: varchar("signatureMethod", { length: 30 }).default("electronic"),
+}, (table) => ({
+  documentIdx: index("idx_docsign_document").on(table.documentId),
+}));
+
+export type DocumentSignature = typeof documentSignatures.$inferSelect;
+export type InsertDocumentSignature = typeof documentSignatures.$inferInsert;
 
 // ============================================================
 // EMPLOYEE MOVEMENTS (Movimentação interna versionada)
@@ -1116,3 +1164,8 @@ export const readAuditLogs = mysqlTable("read_audit_logs", {
 
 export type ReadAuditLog = typeof readAuditLogs.$inferSelect;
 export type InsertReadAuditLog = typeof readAuditLogs.$inferInsert;
+
+// ============================================================
+// KANBAN (boards/lists/cards/labels/members) — fase 8
+// ============================================================
+export * from "./schema-kanban.js";

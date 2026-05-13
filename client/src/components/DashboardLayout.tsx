@@ -49,6 +49,7 @@ import {
   UserMinus,
   ClipboardCheck,
   TimerOff,
+  Kanban,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -75,6 +76,7 @@ const menuItems: MenuItem[] = [
   { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: Building2, label: "Departamentos", path: "/departamentos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Kanban, label: "Kanban", path: "/kanban", section: "Geral" },
   { icon: UserPlus, label: "Admissão", path: "/admissao", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: UserMinus, label: "Desligamento", path: "/desligamento", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   // Jornada

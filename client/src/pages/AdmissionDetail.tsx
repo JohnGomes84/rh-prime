@@ -21,13 +21,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   ArrowLeft,
   CheckCircle2,
+  ExternalLink,
   FileText,
   Loader2,
+  PenLine,
+  Paperclip,
   ShieldAlert,
+  ShieldCheck,
   UserCheck,
   AlertCircle,
 } from "lucide-react";
@@ -35,6 +40,12 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 type ReviewStatus = "pending" | "approved" | "rejected";
+type SignatoryType = "employee" | "company_representative";
+
+const SIGNATORY_LABEL: Record<SignatoryType, string> = {
+  employee: "Funcionário",
+  company_representative: "Empresa",
+};
 
 const STATUS_FLOW = [
   { value: "DRAFT", label: "Rascunho" },
@@ -142,6 +153,30 @@ export default function AdmissionDetail() {
     onError: (e) => toast.error(e.message),
   });
 
+  const attachEvidenceUrl = trpc.lifecycle.admission.attachEvidenceUrl.useMutation({
+    onSuccess: async () => {
+      toast.success("Evidência anexada");
+      setAttachTarget(null);
+      setAttachUrl("");
+      setAttachName("");
+      setAttachFileType("");
+      setAttachObservations("");
+      await invalidateAdmissionQueries();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const signEvidence = trpc.lifecycle.admission.signEvidence.useMutation({
+    onSuccess: async () => {
+      toast.success("Assinatura registrada");
+      setSignTarget(null);
+      setSignSignatoryType("employee");
+      setSignMethod("electronic");
+      await invalidateAdmissionQueries();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const finalize = trpc.lifecycle.admission.finalize.useMutation({
     onSuccess: async () => {
       toast.success("Admissão finalizada e vinculada ao funcionário");
@@ -156,6 +191,46 @@ export default function AdmissionDetail() {
   const [reviewTarget, setReviewTarget] = useState<{ id: number; description: string; currentStatus: string | null } | null>(null);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("approved");
   const [reviewNotes, setReviewNotes] = useState("");
+  const [attachTarget, setAttachTarget] = useState<{ id: number; description: string } | null>(null);
+  const [attachUrl, setAttachUrl] = useState("");
+  const [attachName, setAttachName] = useState("");
+  const [attachFileType, setAttachFileType] = useState("");
+  const [attachObservations, setAttachObservations] = useState("");
+  const [signTarget, setSignTarget] = useState<{ id: number; description: string; policy: string } | null>(null);
+  const [signSignatoryType, setSignSignatoryType] = useState<SignatoryType>("employee");
+  const [signMethod, setSignMethod] = useState<"electronic" | "manuscrita" | "icp_brasil">("electronic");
+
+  const submitAttach = () => {
+    if (!attachTarget) return;
+    try {
+      new URL(attachUrl);
+    } catch {
+      toast.error("Informe uma URL válida");
+      return;
+    }
+    if (attachName.trim().length < 1) {
+      toast.error("Informe o nome do documento");
+      return;
+    }
+    attachEvidenceUrl.mutate({
+      workflowId: id,
+      itemId: attachTarget.id,
+      fileUrl: attachUrl.trim(),
+      documentName: attachName.trim(),
+      fileType: attachFileType.trim() || undefined,
+      observations: attachObservations.trim() || undefined,
+    });
+  };
+
+  const submitSign = () => {
+    if (!signTarget) return;
+    signEvidence.mutate({
+      workflowId: id,
+      itemId: signTarget.id,
+      signatoryType: signSignatoryType,
+      signatureMethod: signMethod,
+    });
+  };
 
   const openReview = (item: any) => {
     setReviewTarget({ id: item.id, description: item.itemDescription, currentStatus: item.reviewStatus ?? null });
@@ -394,7 +469,15 @@ export default function AdmissionDetail() {
                                 item.evidenceDocuments.map((doc: any) => (
                                   <div key={doc.id} className="flex items-center gap-2 text-muted-foreground">
                                     <FileText className="h-3.5 w-3.5" />
-                                    <span>{doc.documentName}</span>
+                                    <a
+                                      href={doc.fileUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="hover:text-foreground inline-flex items-center gap-1"
+                                    >
+                                      {doc.documentName}
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
                                     {doc.isPrimaryEvidence && <Badge variant="secondary">Principal</Badge>}
                                     <span>{formatDate(doc.uploadedAt)}</span>
                                   </div>
@@ -407,6 +490,32 @@ export default function AdmissionDetail() {
                               )}
                             </div>
 
+                            {item.signaturePolicy !== "none" && (
+                              <div className="space-y-1 text-xs">
+                                {item.signatures?.length ? (
+                                  item.signatures.map((sig: any) => (
+                                    <div
+                                      key={sig.id}
+                                      className="flex items-center gap-2 text-emerald-700"
+                                    >
+                                      <ShieldCheck className="h-3.5 w-3.5" />
+                                      <span>
+                                        {SIGNATORY_LABEL[sig.signatoryType as SignatoryType] ?? sig.signatoryType}
+                                      </span>
+                                      <span className="text-muted-foreground">
+                                        ({sig.signatureMethod}) · {formatDate(sig.signedAt)}
+                                      </span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                    <PenLine className="h-3.5 w-3.5" />
+                                    <span>Aguardando assinaturas</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             {item.waivedReason && (
                               <p className="text-xs text-muted-foreground">
                                 Dispensa: {item.waivedReason}
@@ -415,9 +524,36 @@ export default function AdmissionDetail() {
                           </div>
 
                           <div className="flex flex-wrap gap-2 md:justify-end">
-                            <Button variant="outline" size="sm" disabled>
-                              {item.kind === "generate_document" ? "Gerar em breve" : "Anexar em breve"}
-                            </Button>
+                            {item.documentPolicy !== "none" && item.status !== "WAIVED" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={attachEvidenceUrl.isPending}
+                                onClick={() =>
+                                  setAttachTarget({ id: item.id, description: item.itemDescription })
+                                }
+                              >
+                                <Paperclip className="h-3.5 w-3.5 mr-1" />
+                                {item.primaryEvidence ? "Substituir" : "Anexar"}
+                              </Button>
+                            )}
+                            {item.signaturePolicy !== "none" && item.primaryEvidence && item.status !== "WAIVED" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={signEvidence.isPending}
+                                onClick={() =>
+                                  setSignTarget({
+                                    id: item.id,
+                                    description: item.itemDescription,
+                                    policy: item.signaturePolicy,
+                                  })
+                                }
+                              >
+                                <PenLine className="h-3.5 w-3.5 mr-1" />
+                                Assinar
+                              </Button>
+                            )}
                             {item.reviewPolicy === "manual_review" && (
                               <Button
                                 size="sm"
@@ -617,6 +753,183 @@ export default function AdmissionDetail() {
             >
               {reviewItem.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Salvar revisão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(attachTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAttachTarget(null);
+            setAttachUrl("");
+            setAttachName("");
+            setAttachFileType("");
+            setAttachObservations("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Anexar evidência por URL</DialogTitle>
+            <DialogDescription>{attachTarget?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="attach-url">URL do arquivo</Label>
+              <Input
+                id="attach-url"
+                type="url"
+                placeholder="https://…"
+                value={attachUrl}
+                onChange={(e) => setAttachUrl(e.target.value)}
+                disabled={attachEvidenceUrl.isPending}
+              />
+              <p className="text-xs text-muted-foreground">
+                Link público para o arquivo (Drive, S3, etc). Upload nativo virá em fase futura.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="attach-name">Nome do documento</Label>
+              <Input
+                id="attach-name"
+                value={attachName}
+                onChange={(e) => setAttachName(e.target.value)}
+                placeholder="Ex.: RG do candidato.pdf"
+                disabled={attachEvidenceUrl.isPending}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="attach-type">Tipo (opcional)</Label>
+              <Input
+                id="attach-type"
+                value={attachFileType}
+                onChange={(e) => setAttachFileType(e.target.value)}
+                placeholder="pdf, jpg, png…"
+                maxLength={10}
+                disabled={attachEvidenceUrl.isPending}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="attach-obs">Observações (opcional)</Label>
+              <Textarea
+                id="attach-obs"
+                value={attachObservations}
+                onChange={(e) => setAttachObservations(e.target.value)}
+                rows={2}
+                disabled={attachEvidenceUrl.isPending}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setAttachTarget(null)}
+              disabled={attachEvidenceUrl.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={submitAttach}
+              disabled={attachEvidenceUrl.isPending || !attachUrl || !attachName}
+            >
+              {attachEvidenceUrl.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Anexar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(signTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSignTarget(null);
+            setSignSignatoryType("employee");
+            setSignMethod("electronic");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assinar evidência</DialogTitle>
+            <DialogDescription>
+              {signTarget?.description}
+              {signTarget?.policy && (
+                <span className="ml-2 text-xs">
+                  Política: <Badge variant="outline">{signTarget.policy}</Badge>
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Assinar como</Label>
+              <RadioGroup
+                value={signSignatoryType}
+                onValueChange={(v) => setSignSignatoryType(v as SignatoryType)}
+                disabled={signEvidence.isPending}
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="sig-employee" value="employee" />
+                  <Label htmlFor="sig-employee" className="font-normal">
+                    Funcionário
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="sig-company" value="company_representative" />
+                  <Label htmlFor="sig-company" className="font-normal">
+                    Representante da empresa
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <Label>Método</Label>
+              <RadioGroup
+                value={signMethod}
+                onValueChange={(v) => setSignMethod(v as typeof signMethod)}
+                disabled={signEvidence.isPending}
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="met-electronic" value="electronic" />
+                  <Label htmlFor="met-electronic" className="font-normal">
+                    Eletrônica
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="met-manuscrita" value="manuscrita" />
+                  <Label htmlFor="met-manuscrita" className="font-normal">
+                    Manuscrita (digitalizada)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="met-icp" value="icp_brasil" />
+                  <Label htmlFor="met-icp" className="font-normal">
+                    ICP-Brasil
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Registra autoria do usuário logado, IP, data/hora e método. Não substitui assinatura criptográfica.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setSignTarget(null)}
+              disabled={signEvidence.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={submitSign}
+              disabled={signEvidence.isPending}
+            >
+              {signEvidence.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar assinatura
             </Button>
           </DialogFooter>
         </DialogContent>

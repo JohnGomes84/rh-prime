@@ -8,7 +8,22 @@ import {
   reviewChecklistItem,
   waiveChecklistItem,
 } from "../services/admission-checklist.service.js";
+import { createDocumentRecord, getPrimaryEvidence } from "../services/documents.service.js";
+import { addSignature } from "../services/signatures.service.js";
 import { toDate, toDateOpt } from "../utils/type-converters.js";
+
+const ADMISSION_CATEGORY_MAP: Record<string, "Pessoal" | "Contratual" | "Saúde e Segurança" | "Benefícios" | "Termos" | "Treinamentos" | "Outros"> = {
+  documentacao_pessoal: "Pessoal",
+  documentacao_trabalhista: "Contratual",
+  beneficios: "Benefícios",
+  saude_seguranca: "Saúde e Segurança",
+  termos: "Termos",
+  treinamentos: "Treinamentos",
+};
+
+function mapAdmissionCategory(itemCategory: string) {
+  return ADMISSION_CATEGORY_MAP[itemCategory] ?? "Outros";
+}
 
 function assertAdmissionV2Enabled() {
   if (!isFeatureEnabled("admission-v2")) {
@@ -151,6 +166,70 @@ export const lifecycleRouter = router({
           input.reviewStatus,
           input.reviewNotes
         );
+      }),
+
+    attachEvidenceUrl: adminProcedure
+      .input(
+        z.object({
+          workflowId: z.number().int().positive(),
+          itemId: z.number().int().positive(),
+          fileUrl: z.string().url().max(500),
+          documentName: z.string().min(1).max(255),
+          fileType: z.string().max(10).optional(),
+          observations: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        assertAdmissionV2Enabled();
+        const workflow = await db.getAdmissionWorkflow(input.workflowId);
+        if (!workflow) throw new Error("Admission workflow not found");
+
+        const checklist = await listChecklistWithEvidence(input.workflowId);
+        const item = checklist.find((entry) => entry.id === input.itemId);
+        if (!item) throw new Error("Checklist item not found");
+
+        return createDocumentRecord({
+          employeeId: workflow.resultEmployeeId ?? 0,
+          cpf: workflow.candidateCpf ?? "",
+          category: mapAdmissionCategory(item.category),
+          documentName: input.documentName,
+          fileUrl: input.fileUrl,
+          fileType: input.fileType ?? null,
+          origin: "external_url",
+          admissionWorkflowId: input.workflowId,
+          admissionChecklistItemId: input.itemId,
+          isPrimaryEvidence: true,
+          observations: input.observations ?? null,
+        } as any);
+      }),
+
+    signEvidence: adminProcedure
+      .input(
+        z.object({
+          workflowId: z.number().int().positive(),
+          itemId: z.number().int().positive(),
+          signatoryType: z.enum(["employee", "company_representative"]),
+          signatureMethod: z.enum(["electronic", "manuscrita", "icp_brasil"]).default("electronic"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        assertAdmissionV2Enabled();
+        const primary = await getPrimaryEvidence(input.itemId);
+        if (!primary) {
+          throw new Error("Anexe a evidência principal antes de assinar");
+        }
+
+        const signatoryId = ctx.user?.id;
+        if (!signatoryId) throw new Error("Signatário não identificado");
+
+        const ip = (ctx as any)?.req?.ip ?? null;
+        return addSignature({
+          documentId: primary.id,
+          signatoryType: input.signatoryType,
+          signatoryId,
+          signatureMethod: input.signatureMethod,
+          ipAddress: ip,
+        } as any);
       }),
 
     finalize: adminProcedure

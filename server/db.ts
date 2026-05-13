@@ -1,5 +1,6 @@
 import { eq, desc, asc, and, gte, lte, sql, like, or, count, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2";
 import {
   InsertUser, users,
   employees, InsertEmployee,
@@ -61,12 +62,29 @@ const generateId = () => nanoid(36);
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+let _pool: mysql.Pool | null = null;
+
 export async function getDb() {
   if (_db) return _db;
   const url = process.env.DATABASE_URL;
   if (!url) return null;
   try {
-    _db = drizzle(url);
+    const needsTls = /tidbcloud\.com|sslmode=require|ssl=true/i.test(url);
+    _pool = mysql.createPool({
+      uri: url,
+      connectionLimit: Number(process.env.DB_POOL_LIMIT ?? 4),
+      idleTimeout: 30_000,
+      enableKeepAlive: true,
+      ...(needsTls
+        ? {
+            ssl: {
+              minVersion: "TLSv1.2",
+              rejectUnauthorized: true,
+            },
+          }
+        : {}),
+    });
+    _db = drizzle(_pool);
     return _db;
   } catch (error) {
     console.error("[Database] Failed to initialize drizzle:", error);

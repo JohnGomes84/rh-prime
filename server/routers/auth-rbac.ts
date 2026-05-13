@@ -1,14 +1,13 @@
-import { router, publicProcedure, protectedProcedure } from '../_core/trpc';
+import { router, publicProcedure, protectedProcedure } from '../_core/trpc.js';
 import { z } from 'zod';
-import { getDb } from '../db';
-import { users } from '../../drizzle/schema';
-import { eq } from 'drizzle-orm';
+import * as db from '../db.js';
 import {
   hashPassword,
   verifyPassword,
   createToken,
   validatePasswordStrength,
-} from '../auth/jwt-service';
+} from '../auth/jwt-service.js';
+import { changePassword as changeOwnPassword } from "../modules/auth/auth-service.js";
 
 export const authRbacRouter = router({
   /**
@@ -22,17 +21,7 @@ export const authRbacRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-
-      // Buscar usuário
-      const result = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, input.email))
-        .limit(1);
-
-      const user = result[0];
+      const user = await db.getUser(input.email);
       if (!user || !user.passwordHash) {
         throw new Error('Email ou senha inválidos');
       }
@@ -75,23 +64,13 @@ export const authRbacRouter = router({
         throw new Error('Apenas administradores podem criar usuários');
       }
 
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-
-      // Validar força da senha
       const passwordValidation = validatePasswordStrength(input.password);
       if (!passwordValidation.valid) {
         throw new Error(passwordValidation.errors.join(', '));
       }
 
-      // Verificar se email já existe
-      const existing = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, input.email))
-        .limit(1);
-
-      if (existing.length > 0) {
+      const existing = await db.getUser(input.email);
+      if (existing) {
         throw new Error('Email já cadastrado');
       }
 
@@ -99,7 +78,7 @@ export const authRbacRouter = router({
       const passwordHash = await hashPassword(input.password);
 
       // Criar usuário
-      const result = await db.insert(users).values({
+      const user = await db.createUser({
         email: input.email,
         passwordHash,
         name: input.name,
@@ -109,7 +88,7 @@ export const authRbacRouter = router({
 
       return {
         success: true,
-        userId: (result)[0],
+        userId: user?.id ?? 0,
       };
     }),
 
@@ -125,45 +104,14 @@ export const authRbacRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error('Não autenticado');
-
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-
-      // Buscar usuário
-      const result = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, ctx.user.id))
-        .limit(1);
-
-      const user = result[0];
-      if (!user || !user.passwordHash) {
-        throw new Error('Usuário não encontrado');
-      }
-
-      // Verificar senha atual
-      const passwordValid = await verifyPassword(input.currentPassword, user.passwordHash);
-      if (!passwordValid) {
+      const passwordChanged = await changeOwnPassword(
+        ctx.user.id,
+        input.currentPassword,
+        input.newPassword
+      );
+      if (!passwordChanged) {
         throw new Error('Senha atual inválida');
       }
-
-      // Validar força da nova senha
-      const passwordValidation = validatePasswordStrength(input.newPassword);
-      if (!passwordValidation.valid) {
-        throw new Error(passwordValidation.errors.join(', '));
-      }
-
-      // Hash da nova senha
-      const newPasswordHash = await hashPassword(input.newPassword);
-
-      // Atualizar
-      await db
-        .update(users)
-        .set({
-          passwordHash: newPasswordHash,
-        })
-        .where(eq(users.id, ctx.user.id));
-
       return { success: true };
     }),
 
@@ -175,20 +123,14 @@ export const authRbacRouter = router({
       throw new Error('Apenas administradores podem listar usuários');
     }
 
-    const db = await getDb();
-    if (!db) throw new Error('Database not available');
-
-    const result = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        createdAt: users.createdAt,
-      })
-      .from(users);
-
-    return result;
+    const result = await db.listUsers();
+    return result.map(user => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      createdAt: user.createdAt,
+    }));
   }),
 
   /**
@@ -206,13 +148,7 @@ export const authRbacRouter = router({
         throw new Error('Apenas administradores podem alterar roles');
       }
 
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-
-      await db
-        .update(users)
-        .set({ role: input.role })
-        .where(eq(users.id, input.userId));
+      await db.updateUser(input.userId, { role: input.role });
 
       return { success: true };
     }),

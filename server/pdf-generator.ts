@@ -10,7 +10,7 @@ import {
   BorderStyle,
   WidthType,
 } from "docx";
-import { ComplianceReport } from "./compliance";
+import { ComplianceReport } from "./compliance.js";
 
 export async function generateCompliancePDF(
   report: ComplianceReport

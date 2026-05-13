@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "8c5c3c8c-c949-4130-9003-c81d74e9d622",
+  "id": "2530a8b9-d2ba-45b0-ad82-c7ed061bee4d",
   "prevId": "a34ec07e-64ab-4c27-8975-72ecaff31a65",
   "tables": {
     "absences": {
@@ -301,119 +301,6 @@
       "compositePrimaryKeys": {
         "benefits_id": {
           "name": "benefits_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "candidates": {
-      "name": "candidates",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "jobOpeningId": {
-          "name": "jobOpeningId",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phone": {
-          "name": "phone",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resumeUrl": {
-          "name": "resumeUrl",
-          "type": "varchar(500)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "linkedinUrl": {
-          "name": "linkedinUrl",
-          "type": "varchar(500)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "stage": {
-          "name": "stage",
-          "type": "enum('Triagem','Entrevista RH','Entrevista Tecnica','Entrevista Final','Aprovado','Reprovado','Desistiu')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'Triagem'"
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "rating": {
-          "name": "rating",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "appliedAt": {
-          "name": "appliedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "candidates_id": {
-          "name": "candidates_id",
           "columns": [
             "id"
           ]
@@ -1744,142 +1631,6 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "job_openings": {
-      "name": "job_openings",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "department": {
-          "name": "department",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "positionId": {
-          "name": "positionId",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "requirements": {
-          "name": "requirements",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "salaryMin": {
-          "name": "salaryMin",
-          "type": "decimal(10,2)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "salaryMax": {
-          "name": "salaryMax",
-          "type": "decimal(10,2)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "vacancies": {
-          "name": "vacancies",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "status": {
-          "name": "status",
-          "type": "enum('Aberta','Em Andamento','Fechada','Cancelada')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'Aberta'"
-        },
-        "priority": {
-          "name": "priority",
-          "type": "enum('Baixa','Normal','Alta','Urgente')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'Normal'"
-        },
-        "openedAt": {
-          "name": "openedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "closedAt": {
-          "name": "closedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdBy": {
-          "name": "createdBy",
-          "type": "varchar(36)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "job_openings_id": {
-          "name": "job_openings_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
     "leaves": {
       "name": "leaves",
       "columns": {
@@ -2266,21 +2017,21 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": true
         },
         "employee_id": {
           "name": "employee_id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "time_record_id": {
           "name": "time_record_id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -2313,6 +2064,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "status": {
           "name": "status",
           "type": "enum('PENDING','APPROVED','REJECTED')",
@@ -2323,7 +2081,7 @@
         },
         "approved_by_id": {
           "name": "approved_by_id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -3126,14 +2884,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": true
         },
         "employee_id": {
           "name": "employee_id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -3159,6 +2917,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "location": {
+          "name": "location",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "status": {
           "name": "status",
           "type": "enum('PENDING','APPROVED','REJECTED')",
@@ -3169,7 +2941,7 @@
         },
         "approved_by_id": {
           "name": "approved_by_id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -3183,7 +2955,7 @@
         },
         "updated_by_id": {
           "name": "updated_by_id",
-          "type": "varchar(36)",
+          "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

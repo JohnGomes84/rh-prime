@@ -1,5 +1,5 @@
 import { mysqlTable, varchar, decimal, datetime, int, text, mysqlEnum, boolean } from 'drizzle-orm/mysql-core';
-import { employees } from '../../../drizzle/schema';
+import { employees } from '../../../drizzle/schema.js';
 
 // Estrutura salarial base
 export const salaryStructure = mysqlTable('salary_structure', {

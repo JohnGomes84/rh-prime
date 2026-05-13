@@ -3,9 +3,9 @@
  * Usa jsPDF para gerar PDF completo com dados do funcionário e cálculos CLT 2026
  */
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
-import * as db from "../db";
-import { calculatePayroll } from "../modules/payroll/payroll-calculator";
+import { protectedProcedure, router } from "../_core/trpc.js";
+import * as db from "../db.js";
+import { calculatePayroll } from "../modules/payroll/payroll-calculator.js";
 import { jsPDF } from "jspdf";
 
 export const payslipRouter = router({

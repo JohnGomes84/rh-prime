@@ -5,29 +5,45 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc';
 import { AlertCircle } from 'lucide-react';
+import { getLoginUrl, isOAuthConfigured } from '@/const';
 
 export function Login() {
   const [, setLocation] = useLocation();
-  const [loginMethod, setLoginMethod] = useState<'oauth' | 'jwt'>('oauth');
+  const oauthEnabled = isOAuthConfigured();
+  const [loginMethod, setLoginMethod] = useState<'oauth' | 'jwt' | 'register'>(oauthEnabled ? 'oauth' : 'jwt');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleOAuthLogin = () => {
-    window.location.href = `/api/oauth/authorize?redirect_uri=${window.location.origin}`;
+    window.location.href = getLoginUrl();
   };
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
+    onSuccess: () => {
       setLocation('/');
     },
     onError: (error) => {
-      const errorMessage = error.data?.code === 'UNAUTHORIZED' 
+      const errorMessage = error.data?.code === 'UNAUTHORIZED'
         ? 'Email ou senha invalidos'
         : error.message || 'Erro ao fazer login';
       setError(errorMessage);
+      setIsLoading(false);
+    },
+  });
+
+  const registerMutation = trpc.auth.register.useMutation({
+    onSuccess: () => {
+      setLocation('/');
+    },
+    onError: (error) => {
+      const code = error.data?.code;
+      let msg = error.message || 'Erro ao cadastrar';
+      if (code === 'FORBIDDEN') msg = 'Email não autorizado para cadastro. Contate o administrador.';
+      else if (code === 'BAD_REQUEST') msg = error.message || 'Email já cadastrado ou senha fraca.';
+      setError(msg);
       setIsLoading(false);
     },
   });
@@ -44,6 +60,30 @@ export function Login() {
     }
 
     loginMutation.mutate({ email, password });
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    if (!email || !password || !name) {
+      setError('Email, nome e senha sao obrigatorios');
+      setIsLoading(false);
+      return;
+    }
+    if (name.length < 3) {
+      setError('Nome deve ter no minimo 3 caracteres');
+      setIsLoading(false);
+      return;
+    }
+
+    registerMutation.mutate({ email, password, name });
+  };
+
+  const switchTab = (next: 'oauth' | 'jwt' | 'register') => {
+    setError('');
+    setLoginMethod(next);
   };
 
   return (
@@ -65,24 +105,35 @@ export function Login() {
           {/* Tab Selector */}
           <div className="flex gap-2 border-b">
             <button
-              onClick={() => setLoginMethod('oauth')}
+              onClick={() => oauthEnabled && switchTab('oauth')}
               className={`flex-1 py-2 text-sm font-medium border-b-2 transition ${
                 loginMethod === 'oauth'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
+              disabled={!oauthEnabled}
             >
               Manus OAuth
             </button>
             <button
-              onClick={() => setLoginMethod('jwt')}
+              onClick={() => switchTab('jwt')}
               className={`flex-1 py-2 text-sm font-medium border-b-2 transition ${
                 loginMethod === 'jwt'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              Email/Senha
+              Entrar
+            </button>
+            <button
+              onClick={() => switchTab('register')}
+              className={`flex-1 py-2 text-sm font-medium border-b-2 transition ${
+                loginMethod === 'register'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Cadastrar
             </button>
           </div>
 
@@ -90,12 +141,15 @@ export function Login() {
           {loginMethod === 'oauth' && (
             <div className="space-y-4">
               <p className="text-gray-600 text-sm">
-                Acesse o sistema com sua conta Manus
+                {oauthEnabled
+                  ? 'Acesse o sistema com sua conta Manus'
+                  : 'OAuth local não configurado. Use Email/Senha para desenvolvimento.'}
               </p>
 
               <Button
                 onClick={handleOAuthLogin}
                 className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                disabled={!oauthEnabled}
               >
                 Entrar com Manus OAuth
               </Button>
@@ -158,6 +212,80 @@ export function Login() {
               >
                 {isLoading ? 'Entrando...' : 'Entrar'}
               </Button>
+            </form>
+          )}
+
+          {/* Register */}
+          {loginMethod === 'register' && (
+            <form onSubmit={handleRegister} className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label htmlFor="reg-email" className="text-sm font-medium text-gray-700">
+                  Email
+                </label>
+                <Input
+                  id="reg-email"
+                  type="email"
+                  placeholder="seu@mlservicoseco.com.br"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="reg-name" className="text-sm font-medium text-gray-700">
+                  Nome completo
+                </label>
+                <Input
+                  id="reg-name"
+                  type="text"
+                  placeholder="Seu nome"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={isLoading}
+                  minLength={3}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="reg-password" className="text-sm font-medium text-gray-700">
+                  Senha
+                </label>
+                <Input
+                  id="reg-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  minLength={8}
+                  required
+                />
+                <p className="text-xs text-gray-500">
+                  Mínimo 8 caracteres, com maiúscula, minúscula, número e caractere especial.
+                </p>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Cadastrando...' : 'Cadastrar'}
+              </Button>
+
+              <p className="text-xs text-gray-500 text-center">
+                Cadastro restrito a emails autorizados pela administração.
+              </p>
             </form>
           )}
         </CardContent>

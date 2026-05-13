@@ -1,6 +1,6 @@
-import { protectedProcedure, router } from "../_core/trpc";
-import { generateComplianceReport } from "../compliance";
-import { generateCompliancePDF } from "../pdf-generator";
+import { protectedProcedure, router } from "../_core/trpc.js";
+import { generateComplianceReport } from "../compliance.js";
+import { generateCompliancePDF } from "../pdf-generator.js";
 import { z } from "zod";
 
 export const complianceRouter = router({

@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { validateEmployeeForm, formatCPF, formatPhone } from "@/lib/validation";
-import { Plus, Search, Eye, Loader2, AlertCircle, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, Loader2, AlertCircle, Trash2, Upload, CheckCircle2, XCircle, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -41,6 +42,110 @@ export default function Employees() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
+
+  // Address state for CEP autofill + state/city dropdowns
+  const [addressZip, setAddressZip] = useState("");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressNeighborhood, setAddressNeighborhood] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
+
+  const { data: states = [] } = trpc.lookup.states.useQuery(undefined, {
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+  const { data: cities = [] } = trpc.lookup.cities.useQuery(
+    { uf: addressState },
+    { enabled: addressState.length === 2, staleTime: 24 * 60 * 60 * 1000 }
+  );
+  const trpcUtils = trpc.useUtils();
+
+  const onCepBlur = async () => {
+    const digits = addressZip.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const data = await trpcUtils.lookup.cep.fetch({ cep: digits });
+      if (data) {
+        if (data.street) setAddressStreet(data.street);
+        if (data.neighborhood) setAddressNeighborhood(data.neighborhood);
+        if (data.state) setAddressState(data.state);
+        if (data.city) setAddressCity(data.city);
+        toast.success("Endereço preenchido pelo CEP");
+      } else {
+        toast.error("CEP não encontrado");
+      }
+    } catch {
+      toast.error("Falha ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  const resetAddress = () => {
+    setAddressZip("");
+    setAddressStreet("");
+    setAddressNeighborhood("");
+    setAddressCity("");
+    setAddressState("");
+  };
+
+  // Bulk import state
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<any | null>(null);
+  const [importFileName, setImportFileName] = useState("");
+  const bulkImport = trpc.employees.bulkImport.useMutation();
+
+  const handleSpreadsheetSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportPreview(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]!];
+      if (!ws) {
+        toast.error("Planilha vazia");
+        return;
+      }
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: false });
+      if (rows.length === 0) {
+        toast.error("Nenhuma linha encontrada");
+        return;
+      }
+      if (rows.length > 2000) {
+        toast.error("Máximo 2000 linhas por importação");
+        return;
+      }
+      const result = await bulkImport.mutateAsync({ rows: rows as any[], dryRun: true });
+      setImportPreview(result);
+    } catch (err: any) {
+      toast.error("Falha ao ler planilha: " + (err?.message ?? String(err)));
+    }
+  };
+
+  const handleCommitImport = async () => {
+    if (!importPreview) return;
+    const validRows = importPreview.results
+      .filter((r: any) => r.status === "valid")
+      .map((r: any) => r.data);
+    if (validRows.length === 0) {
+      toast.error("Nenhuma linha válida para importar");
+      return;
+    }
+    try {
+      const result = await bulkImport.mutateAsync({ rows: validRows, dryRun: false });
+      toast.success(`${result.inserted} funcionários importados; ${result.skipped} ignorados; ${result.failed?.length ?? 0} falhas`);
+      utils.employees.list.invalidate();
+      utils.dashboard.stats.invalidate();
+      setImportDialogOpen(false);
+      setImportPreview(null);
+      setImportFileName("");
+    } catch (err: any) {
+      toast.error("Falha ao importar: " + (err?.message ?? String(err)));
+    }
+  };
 
   const { data: employeesResult, isLoading } = trpc.employees.list.useQuery(
     search ? { search } : undefined
@@ -55,6 +160,7 @@ export default function Employees() {
       setGender("");
       setMaritalStatus("");
       setErrors({});
+      resetAddress();
       setDialogOpen(false);
       toast.success("Funcionário cadastrado com sucesso!");
     },
@@ -159,13 +265,124 @@ export default function Employees() {
               Cadastro e gestão de colaboradores
             </p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Funcionário
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar planilha
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Importar funcionários de planilha</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                    <p className="font-medium flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" /> Formatos aceitos: XLSX, XLS, CSV
+                    </p>
+                    <p className="text-muted-foreground">
+                      Cabeçalhos esperados (português ou inglês):{" "}
+                      <code className="text-xs">nome, cpf, rg, email, telefone, data nascimento, genero,
+                      estado civil, logradouro, numero, complemento, bairro, cidade, estado, cep, status</code>.
+                      Apenas <strong>nome</strong> e <strong>cpf</strong> são obrigatórios.
+                    </p>
+                  </div>
+
+                  <Input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleSpreadsheetSelect}
+                    disabled={bulkImport.isPending}
+                  />
+                  {importFileName && <p className="text-xs text-muted-foreground">Arquivo: {importFileName}</p>}
+
+                  {bulkImport.isPending && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Validando linhas...
+                    </div>
+                  )}
+
+                  {importPreview && (
+                    <>
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="rounded-md border p-2">
+                          <p className="text-xs text-muted-foreground">Total</p>
+                          <p className="text-lg font-bold">{importPreview.total}</p>
+                        </div>
+                        <div className="rounded-md border border-green-200 bg-green-50 p-2">
+                          <p className="text-xs text-green-700">Válidas</p>
+                          <p className="text-lg font-bold text-green-700">{importPreview.valid}</p>
+                        </div>
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-2">
+                          <p className="text-xs text-amber-700">Duplicadas</p>
+                          <p className="text-lg font-bold text-amber-700">{importPreview.duplicate}</p>
+                        </div>
+                        <div className="rounded-md border border-red-200 bg-red-50 p-2">
+                          <p className="text-xs text-red-700">Inválidas</p>
+                          <p className="text-lg font-bold text-red-700">{importPreview.invalid}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border max-h-72 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-muted">
+                            <tr>
+                              <th className="text-left p-2">#</th>
+                              <th className="text-left p-2">Status</th>
+                              <th className="text-left p-2">Nome</th>
+                              <th className="text-left p-2">CPF</th>
+                              <th className="text-left p-2">Erros</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importPreview.results.map((r: any) => (
+                              <tr key={r.index} className="border-t">
+                                <td className="p-2">{r.index + 1}</td>
+                                <td className="p-2">
+                                  {r.status === "valid" && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                  {r.status === "duplicate" && <AlertCircle className="w-4 h-4 text-amber-600" />}
+                                  {r.status === "invalid" && <XCircle className="w-4 h-4 text-red-600" />}
+                                </td>
+                                <td className="p-2">{r.data.fullName ?? "—"}</td>
+                                <td className="p-2 font-mono">{r.data.cpf ?? "—"}</td>
+                                <td className="p-2 text-muted-foreground">{r.errors.join("; ")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={() => { setImportPreview(null); setImportFileName(""); }}>
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={handleCommitImport}
+                          disabled={importPreview.valid === 0 || bulkImport.isPending}
+                        >
+                          {bulkImport.isPending ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importando...</>
+                          ) : (
+                            <>Importar {importPreview.valid} válidas</>
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Funcionário
+                </Button>
+              </DialogTrigger>
             <DialogContent ref={dialogContentRef} className="max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Cadastrar Novo Funcionário</DialogTitle>
@@ -347,9 +564,25 @@ export default function Employees() {
                     Endereço
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="addressZip">CEP {cepLoading && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}</Label>
+                      <Input
+                        id="addressZip"
+                        name="addressZip"
+                        placeholder="00000-000"
+                        value={addressZip}
+                        onChange={(e) => setAddressZip(e.target.value)}
+                        onBlur={onCepBlur}
+                      />
+                    </div>
                     <div className="sm:col-span-2">
                       <Label htmlFor="addressStreet">Logradouro</Label>
-                      <Input id="addressStreet" name="addressStreet" />
+                      <Input
+                        id="addressStreet"
+                        name="addressStreet"
+                        value={addressStreet}
+                        onChange={(e) => setAddressStreet(e.target.value)}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="addressNumber">Número</Label>
@@ -361,19 +594,36 @@ export default function Employees() {
                     </div>
                     <div>
                       <Label htmlFor="addressNeighborhood">Bairro</Label>
-                      <Input id="addressNeighborhood" name="addressNeighborhood" />
-                    </div>
-                    <div>
-                      <Label htmlFor="addressCity">Cidade</Label>
-                      <Input id="addressCity" name="addressCity" />
+                      <Input
+                        id="addressNeighborhood"
+                        name="addressNeighborhood"
+                        value={addressNeighborhood}
+                        onChange={(e) => setAddressNeighborhood(e.target.value)}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="addressState">Estado</Label>
-                      <Input id="addressState" name="addressState" placeholder="UF" maxLength={2} />
+                      <input type="hidden" name="addressState" value={addressState} />
+                      <Select value={addressState} onValueChange={(v) => { setAddressState(v); setAddressCity(""); }}>
+                        <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>
+                          {states.map((s: any) => (
+                            <SelectItem key={s.id} value={s.sigla}>{s.sigla} — {s.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
-                      <Label htmlFor="addressZip">CEP</Label>
-                      <Input id="addressZip" name="addressZip" placeholder="00000-000" />
+                      <Label htmlFor="addressCity">Cidade</Label>
+                      <input type="hidden" name="addressCity" value={addressCity} />
+                      <Select value={addressCity} onValueChange={setAddressCity} disabled={!addressState}>
+                        <SelectTrigger><SelectValue placeholder={addressState ? "Selecione" : "Selecione UF primeiro"} /></SelectTrigger>
+                        <SelectContent>
+                          {cities.map((c: any) => (
+                            <SelectItem key={c.id} value={c.nome}>{c.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -481,6 +731,7 @@ export default function Employees() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Search */}

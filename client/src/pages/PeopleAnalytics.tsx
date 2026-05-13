@@ -5,11 +5,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { Users, TrendingDown, TrendingUp, Clock, DollarSign, AlertTriangle, Calendar, BarChart3 } from "lucide-react";
 import DashboardLayout from '@/components/DashboardLayout';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  AreaChart,
+  Area,
+} from "recharts";
 
 export default function PeopleAnalytics() {
   const [period, setPeriod] = useState("12");
   const employeesQuery = trpc.employees.list.useQuery({});
   const vacationsQuery = trpc.vacations.list.useQuery({});
+  const months = parseInt(period) || 12;
+  const turnoverQuery = trpc.dashboard.turnover.useQuery({ months });
+  const absenteeismQuery = trpc.dashboard.absenteeism.useQuery({ months });
+  const headcountQuery = trpc.dashboard.headcount.useQuery({ months });
+  const pendingByManagerQuery = trpc.dashboard.pendingByManager.useQuery();
+  const approvalLatencyQuery = trpc.dashboard.approvalLatency.useQuery({ days: 30 });
+  const hourBankQuery = trpc.dashboard.hourBankDistribution.useQuery();
+  const tardinessQuery = trpc.dashboard.tardinessByDepartment.useQuery({ months: 3 });
+  const docComplianceQuery = trpc.dashboard.documentCompliance.useQuery();
+  const vacationRisksQuery = trpc.dashboard.vacationDeadlineRisks.useQuery();
 
   const employees = useMemo(() => employeesQuery.data?.data || employeesQuery.data || [], [employeesQuery.data]);
   const vacations = useMemo(() => vacationsQuery.data || [], [vacationsQuery.data]);
@@ -305,6 +329,208 @@ export default function PeopleAnalytics() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Charts: turnover + absenteísmo + headcount */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Admissões vs Demissões ({months} meses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={turnoverQuery.data ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="hires" name="Admissões" fill="#10b981" />
+                <Bar dataKey="terminations" name="Demissões" fill="#ef4444" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Absenteísmo ({months} meses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={absenteeismQuery.data ?? []} stackOffset="sign">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="justified" name="Justificadas" stackId="a" fill="#3b82f6" />
+                <Bar dataKey="unjustified" name="Não justificadas" stackId="a" fill="#f59e0b" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" /> Evolução de headcount ({months} meses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={headcountQuery.data ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Area type="monotone" dataKey="active" name="Ativos" stroke="#6366f1" fill="#a5b4fc" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* OPS analytics — Fase 6 */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Pendências por gestor
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(pendingByManagerQuery.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Sem pendências.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={(pendingByManagerQuery.data as any[]) ?? []} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis dataKey="managerName" type="category" width={120} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="pendingRequests" name="Solicitações" fill="#3b82f6" stackId="p" />
+                  <Bar dataKey="pendingTimeRecords" name="Pontos" fill="#f59e0b" stackId="p" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4" /> Tempo médio de aprovação (30 dias)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center h-[260px]">
+            <div className="text-center">
+              <p className="text-5xl font-bold">{approvalLatencyQuery.data?.avgHours ?? 0}h</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {approvalLatencyQuery.data?.totalApproved ?? 0} solicitações aprovadas
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4" /> Saldo de banco de horas (top 15)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(hourBankQuery.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Sem saldos ativos.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={((hourBankQuery.data as any[]) ?? []).slice(0, 15)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis dataKey="employeeName" type="category" width={120} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar
+                    dataKey="totalBalance"
+                    name="Horas"
+                    fill="#10b981"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Atrasos por departamento (3m)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(tardinessQuery.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Sem dados.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={(tardinessQuery.data as any[]) ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="departmentName" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="tardinessCount" name="Atrasos" fill="#ef4444" />
+                  <Bar dataKey="employeeCount" name="Funcionários" fill="#94a3b8" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" /> Taxa de admissão completa
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center h-[260px]">
+            <div className="text-center">
+              <p className="text-5xl font-bold text-emerald-600">
+                {docComplianceQuery.data?.rate ?? 0}%
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {docComplianceQuery.data?.withCompleteAdmission ?? 0} / {docComplianceQuery.data?.totalEmployees ?? 0} funcionários ativos
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calendar className="h-4 w-4" /> Férias com prazo crítico (≤90d)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(vacationRisksQuery.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Nenhum prazo crítico.</p>
+            ) : (
+              <ul className="space-y-1 max-h-[240px] overflow-y-auto">
+                {((vacationRisksQuery.data as any[]) ?? []).map((v: any) => (
+                  <li key={v.vacationId} className="flex justify-between text-sm py-1 border-b last:border-0">
+                    <span>{v.employeeName}</span>
+                    <span className={v.daysRemaining < 30 ? "text-red-600 font-semibold" : v.daysRemaining < 60 ? "text-amber-600" : "text-muted-foreground"}>
+                      {v.daysRemaining} dias
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
     </DashboardLayout>
   );

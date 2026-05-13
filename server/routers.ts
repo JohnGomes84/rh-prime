@@ -1,24 +1,45 @@
 import { z } from "zod";
-import { withDBRetry } from "./utils/retry";
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
-import * as db from "./db";
-import { storagePut } from "./storage";
+import { withDBRetry } from "./utils/retry.js";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const.js";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { publicProcedure, protectedProcedure, adminProcedure, managerProcedure, router } from "./_core/trpc.js";
+import * as db from "./db.js";
+import { storagePut } from "./storage.js";
 import { nanoid } from "nanoid";
-import { complianceRouter } from "./routers/compliance";
-import { integrationsRouter } from "./routers/integrations";
+import { complianceRouter } from "./routers/compliance.js";
+import { integrationsRouter } from "./routers/integrations.js";
 
-import { auditCpfRouter } from "./routers/audit-cpf";
-import { digitalSignatureRouter } from "./routers/digital-signature";
-import { auditRouter } from "./routers/audit";
-import { timesheetRouter } from './routers/timesheet';
-import { reportsRouter } from './routers/reports';
-import { payslipRouter } from './routers/payslip';
+import { auditCpfRouter } from "./routers/audit-cpf.js";
+import { digitalSignatureRouter } from "./routers/digital-signature.js";
+import { auditRouter } from "./routers/audit.js";
+import { timesheetRouter } from './routers/timesheet.js';
+import { reportsRouter } from './routers/reports.js';
+import { authRbacRouter } from './routers/auth-rbac.js';
+import { payrollRouter } from "./routers/payroll.js";
+import { payslipRouter } from './routers/payslip.js';
+import { lookupRouter } from './routers/lookup.js';
+import { aiRouter } from './routers/ai.js';
+import { laborCalcRouter } from './routers/labor-calc.js';
+import { recruitmentRouter } from './routers/recruitment.js';
+import { departmentsRouter } from './routers/departments.js';
+import { lifecycleRouter } from './routers/lifecycle.js';
+import { inboxRouter } from './routers/inbox.js';
+import { lgpdRouter } from './routers/compliance-lgpd.js';
+import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria.js';
+import { kanbanRouter } from './routers/kanban.js';
 import { TRPCError } from '@trpc/server';
-import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters";
-import { login as authLogin, register as authRegister } from "./modules/auth/auth-service";
+import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters.js";
+import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service.js";
+import { validatePasswordStrength } from "./auth/jwt-service.js";
+import { createDocumentRecord } from "./services/documents.service.js";
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function setSessionCookie(ctx: { req: any; res: any }, token: string) {
+  const opts = getSessionCookieOptions(ctx.req);
+  ctx.res.cookie(COOKIE_NAME, token, { ...opts, maxAge: SEVEN_DAYS_MS });
+}
 
 
 // ============================================================
@@ -29,6 +50,44 @@ export const appRouter = router({
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    session: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) {
+        return {
+          user: null,
+          employee: null,
+          isManager: false,
+          scope: { own: null, subordinates: [] as number[], canSeeAll: false },
+        };
+      }
+      const employee = await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null);
+      const role = ctx.user.role as string;
+      let subordinates: number[] = [];
+      let isManager = false;
+      if (employee) {
+        const subs = await db.getSubordinatesRecursive((employee as any).id).catch(() => new Set<number>());
+        subordinates = Array.from(subs);
+        isManager = subordinates.length > 0 || role === "gestor" || role === "admin";
+      } else if (role === "admin") {
+        isManager = true;
+      }
+      return {
+        user: { id: ctx.user.id, email: ctx.user.email, name: ctx.user.name, role: ctx.user.role },
+        employee: employee
+          ? {
+              id: (employee as any).id,
+              fullName: (employee as any).fullName,
+              departmentId: (employee as any).departmentId,
+              managerId: (employee as any).managerId,
+            }
+          : null,
+        isManager,
+        scope: {
+          own: (employee as any)?.id ?? null,
+          subordinates,
+          canSeeAll: role === "admin",
+        },
+      };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -38,17 +97,34 @@ export const appRouter = router({
       .input(
         z.object({
           email: z.string().email(),
-          password: z.string().min(6),
+          password: z.string().min(1),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        const ipAddress = (ctx.req?.ip || (ctx.req as any)?.socket?.remoteAddress || null) as string | null;
+        const userAgent = (ctx.req?.headers?.['user-agent'] as string | undefined) ?? null;
         const result = await authLogin(input);
         if (!result) {
+          await db.recordLoginLog({
+            email: input.email,
+            success: false,
+            ipAddress,
+            userAgent,
+            reason: 'Email ou senha inválidos',
+          }).catch(() => undefined);
           throw new TRPCError({
             code: 'UNAUTHORIZED',
             message: 'Email ou senha inválidos',
           });
         }
+        await db.recordLoginLog({
+          userId: result.user.id,
+          email: result.user.email,
+          success: true,
+          ipAddress,
+          userAgent,
+        }).catch(() => undefined);
+        setSessionCookie(ctx, result.token);
         return result;
       }),
     register: publicProcedure
@@ -59,17 +135,35 @@ export const appRouter = router({
           name: z.string().min(3),
         })
       )
-      .mutation(async ({ input }) => {
-        const result = await authRegister(input);
+      .mutation(async ({ input, ctx }) => {
+        const strength = validatePasswordStrength(input.password);
+        if (!strength.valid) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: strength.errors.join('; '),
+          });
+        }
+        let result;
+        try {
+          result = await authRegister(input);
+        } catch (err) {
+          if (err instanceof RegisterEmailNotAllowedError) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: err.message });
+          }
+          throw err;
+        }
         if (!result) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Email já cadastrado ou erro ao registrar',
+            message: 'Email já cadastrado com senha definida',
           });
         }
+        setSessionCookie(ctx, result.token);
         return result;
       }),
   }),
+
+  users: authRbacRouter,
 
   // ============================================================
   // DASHBOARD
@@ -78,6 +172,34 @@ export const appRouter = router({
     stats: protectedProcedure.query(async () => {
       return db.getDashboardStats();
     }),
+    birthdays: protectedProcedure.query(async () => {
+      return db.listBirthdaysThisMonth();
+    }),
+    turnover: protectedProcedure
+      .input(z.object({ months: z.number().int().min(3).max(36).default(12) }).optional())
+      .query(async ({ input }) => {
+        return db.getTurnoverMonthly(input?.months ?? 12);
+      }),
+    absenteeism: protectedProcedure
+      .input(z.object({ months: z.number().int().min(3).max(36).default(12) }).optional())
+      .query(async ({ input }) => {
+        return db.getAbsenteeismMonthly(input?.months ?? 12);
+      }),
+    headcount: protectedProcedure
+      .input(z.object({ months: z.number().int().min(3).max(36).default(12) }).optional())
+      .query(async ({ input }) => {
+        return db.getHeadcountEvolution(input?.months ?? 12);
+      }),
+    pendingByManager: protectedProcedure.query(async () => db.getPendingByManager()),
+    approvalLatency: protectedProcedure
+      .input(z.object({ days: z.number().int().min(7).max(365).default(30) }).optional())
+      .query(async ({ input }) => db.getApprovalLatency(input?.days ?? 30)),
+    hourBankDistribution: protectedProcedure.query(async () => db.getHourBankDistribution()),
+    tardinessByDepartment: protectedProcedure
+      .input(z.object({ months: z.number().int().min(1).max(24).default(3) }).optional())
+      .query(async ({ input }) => db.getTardinessByDepartment(input?.months ?? 3)),
+    documentCompliance: protectedProcedure.query(async () => db.getDocumentComplianceRate()),
+    vacationDeadlineRisks: protectedProcedure.query(async () => db.getVacationDeadlineRisks()),
   }),
 
   // ============================================================
@@ -85,23 +207,54 @@ export const appRouter = router({
   // ============================================================
   employees: router({
     list: protectedProcedure
-      .input(z.object({ 
+      .input(z.object({
         search: z.string().optional(),
         page: z.number().min(1).default(1).optional(),
         limit: z.number().min(1).max(100).default(20).optional(),
       }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        const { applyEmployeeMaskList } = await import('./utils/data-masking');
         const employees = await db.listEmployees(input?.search);
         const page = input?.page || 1;
         const limit = input?.limit || 20;
         const start = (page - 1) * limit;
         const paged = employees.slice(start, start + limit);
-        return { data: paged, total: employees.length, page, limit, totalPages: Math.ceil(employees.length / limit) };
+        const viewerEmp = ctx.user ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null) : null;
+        const masked = applyEmployeeMaskList(paged, {
+          viewerRole: ctx.user?.role as any,
+          viewerEmployeeId: (viewerEmp as any)?.id ?? null,
+        });
+        return { data: masked, total: employees.length, page, limit, totalPages: Math.ceil(employees.length / limit) };
       }),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return db.getEmployee(input.id);
+      .query(async ({ input, ctx }) => {
+        const { applyEmployeeMask } = await import('./utils/data-masking');
+        const { assertEmployeeInScope } = await import('./utils/scope');
+        if (ctx.user) {
+          await assertEmployeeInScope(ctx.user as any, input.id);
+        }
+        const emp = await db.getEmployee(input.id);
+        if (!emp) return undefined;
+        const viewerEmp = ctx.user ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null) : null;
+        const viewerEmpId = (viewerEmp as any)?.id ?? null;
+        // Audit de leitura sensível: registra apenas quando viewer != target (acesso a dados de terceiro)
+        if (ctx.user && viewerEmpId !== input.id) {
+          const ipAddress = (ctx.req?.ip || (ctx.req as any)?.socket?.remoteAddress || null) as string | null;
+          db.recordReadAudit({
+            actorUserId: ctx.user.id,
+            resource: 'employees',
+            field: 'detail',
+            targetEmployeeId: input.id,
+            scope: ctx.user.role === 'admin' ? 'all' : 'team',
+            ipAddress,
+            metadata: { role: ctx.user.role },
+          } as any).catch(() => undefined);
+        }
+        return applyEmployeeMask(emp as any, {
+          viewerRole: ctx.user?.role as any,
+          viewerEmployeeId: viewerEmpId,
+        });
       }),
     create: protectedProcedure
       .input(z.object({
@@ -161,11 +314,209 @@ export const appRouter = router({
         await db.updateEmployee(input.id, convertUpdateData(input.data));
         return { success: true };
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteEmployee(input.id);
         return { success: true };
+      }),
+    linkUser: adminProcedure
+      .input(z.object({ employeeId: z.number().int().positive(), userId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        return db.linkEmployeeToUser(input.employeeId, input.userId);
+      }),
+    setManager: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+        managerId: z.number().int().positive().nullable(),
+        reason: z.string().max(255).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (input.managerId === input.employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário não pode ser gestor de si mesmo" });
+        }
+        return db.setEmployeeManager(input.employeeId, input.managerId, ctx.user.id, input.reason);
+      }),
+    setDepartment: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+        departmentId: z.number().int().positive().nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateEmployee(input.employeeId, { departmentId: input.departmentId } as any);
+        return { success: true };
+      }),
+    managerHistory: protectedProcedure
+      .input(z.object({ employeeId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        const { assertEmployeeInScope } = await import('./utils/scope');
+        if (ctx.user) await assertEmployeeInScope(ctx.user as any, input.employeeId);
+        return db.listEmployeeManagerHistory(input.employeeId);
+      }),
+    me: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) return null;
+      return db.getEmployeeForUser(ctx.user.id, ctx.user.email);
+    }),
+    bulkImport: protectedProcedure
+      .input(z.object({
+        rows: z.array(z.record(z.string(), z.any())).max(2000),
+        dryRun: z.boolean().default(true),
+      }))
+      .mutation(async ({ input }) => {
+        const sanitizeDigits = (s: string) => String(s ?? "").replace(/\D/g, "");
+        const validateCpfChecksum = (cpf: string): boolean => {
+          if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+          let sum = 0;
+          for (let i = 1; i <= 9; i++) sum += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+          let rem = (sum * 10) % 11;
+          if (rem === 10 || rem === 11) rem = 0;
+          if (rem !== parseInt(cpf.substring(9, 10))) return false;
+          sum = 0;
+          for (let i = 1; i <= 10; i++) sum += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+          rem = (sum * 10) % 11;
+          if (rem === 10 || rem === 11) rem = 0;
+          return rem === parseInt(cpf.substring(10, 11));
+        };
+
+        const existing = await db.listEmployees();
+        const existingCpfs = new Set((existing as any[]).map((e) => sanitizeDigits(e.cpf ?? "")));
+        const seenCpfs = new Set<string>();
+
+        const FIELD_ALIASES: Record<string, string> = {
+          "nome": "fullName",
+          "nome completo": "fullName",
+          "fullname": "fullName",
+          "cpf": "cpf",
+          "rg": "rg",
+          "email": "email",
+          "e-mail": "email",
+          "telefone": "phone",
+          "phone": "phone",
+          "celular": "phone",
+          "data nascimento": "birthDate",
+          "data de nascimento": "birthDate",
+          "nascimento": "birthDate",
+          "birthdate": "birthDate",
+          "genero": "gender",
+          "gênero": "gender",
+          "estado civil": "maritalStatus",
+          "logradouro": "addressStreet",
+          "rua": "addressStreet",
+          "numero": "addressNumber",
+          "número": "addressNumber",
+          "complemento": "addressComplement",
+          "bairro": "addressNeighborhood",
+          "cidade": "addressCity",
+          "estado": "addressState",
+          "uf": "addressState",
+          "cep": "addressZip",
+          "status": "status",
+        };
+
+        const normalizeKey = (k: string) => k.trim().toLowerCase();
+        const normalizeRow = (raw: Record<string, any>): Record<string, any> => {
+          const out: Record<string, any> = {};
+          for (const [k, v] of Object.entries(raw)) {
+            const target = FIELD_ALIASES[normalizeKey(k)] ?? k;
+            out[target] = typeof v === "string" ? v.trim() : v;
+          }
+          return out;
+        };
+
+        const VALID_GENDERS = new Set(["M", "F", "Outro"]);
+        const VALID_MARITAL = new Set(["Solteiro", "Casado", "Divorciado", "Viúvo", "União Estável"]);
+        const VALID_STATUS = new Set(["Ativo", "Inativo", "Afastado", "Demitido", "Em Férias"]);
+
+        const results: Array<{
+          index: number;
+          status: "valid" | "invalid" | "duplicate";
+          errors: string[];
+          data: Record<string, any>;
+        }> = [];
+
+        for (let i = 0; i < input.rows.length; i++) {
+          const row = normalizeRow(input.rows[i]!);
+          const errors: string[] = [];
+
+          if (!row.fullName || String(row.fullName).length < 2) {
+            errors.push("Nome obrigatório");
+          }
+          const cpf = sanitizeDigits(row.cpf ?? "");
+          if (!cpf) {
+            errors.push("CPF obrigatório");
+          } else if (cpf.length !== 11) {
+            errors.push("CPF deve ter 11 dígitos");
+          } else if (!validateCpfChecksum(cpf)) {
+            errors.push("CPF inválido (dígitos verificadores)");
+          }
+          row.cpf = cpf;
+
+          if (row.gender && !VALID_GENDERS.has(row.gender)) {
+            errors.push(`Gênero inválido: ${row.gender}`);
+          }
+          if (row.maritalStatus && !VALID_MARITAL.has(row.maritalStatus)) {
+            errors.push(`Estado civil inválido: ${row.maritalStatus}`);
+          }
+          if (row.status && !VALID_STATUS.has(row.status)) {
+            errors.push(`Status inválido: ${row.status}`);
+          }
+          if (row.addressState && String(row.addressState).length !== 2) {
+            errors.push("UF deve ter 2 letras");
+          }
+
+          if (row.birthDate) {
+            const d = new Date(row.birthDate);
+            if (isNaN(d.getTime())) {
+              errors.push("Data de nascimento inválida");
+            } else {
+              row.birthDate = d.toISOString().slice(0, 10);
+            }
+          }
+
+          let status: "valid" | "invalid" | "duplicate" = errors.length > 0 ? "invalid" : "valid";
+          if (status === "valid" && cpf) {
+            if (existingCpfs.has(cpf)) {
+              status = "duplicate";
+              errors.push("CPF já cadastrado no sistema");
+            } else if (seenCpfs.has(cpf)) {
+              status = "duplicate";
+              errors.push("CPF duplicado neste arquivo");
+            }
+            seenCpfs.add(cpf);
+          }
+
+          results.push({ index: i, status, errors, data: row });
+        }
+
+        if (input.dryRun) {
+          return {
+            dryRun: true,
+            total: results.length,
+            valid: results.filter((r) => r.status === "valid").length,
+            invalid: results.filter((r) => r.status === "invalid").length,
+            duplicate: results.filter((r) => r.status === "duplicate").length,
+            results,
+          };
+        }
+
+        let inserted = 0;
+        const failed: Array<{ index: number; error: string }> = [];
+        for (const r of results) {
+          if (r.status !== "valid") continue;
+          try {
+            await db.createEmployee(r.data as any);
+            inserted++;
+          } catch (err: any) {
+            failed.push({ index: r.index, error: err?.message ?? String(err) });
+          }
+        }
+        return {
+          dryRun: false,
+          total: results.length,
+          inserted,
+          skipped: results.length - inserted,
+          failed,
+        };
       }),
   }),
 
@@ -199,7 +550,7 @@ export const appRouter = router({
         await db.updatePosition(input.id, input.data);
         return { success: true };
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deletePosition(input.id);
@@ -232,9 +583,22 @@ export const appRouter = router({
         workSchedule: z.string().optional(),
         weeklyHours: z.string().optional(),
         salary: z.string().optional(),
+        // Jornada
+        scheduleType: z.enum(["5x2", "6x1", "12x36", "parcial_30h", "parcial_25h", "flexivel", "intermitente"]).default("5x2"),
+        workDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/).default("08:00"),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/).default("17:00"),
+        lunchBreakMinutes: z.number().int().min(0).max(240).default(60),
+        toleranceMinutes: z.number().int().min(0).max(60).default(5),
+        hourBankEnabled: z.boolean().default(false),
+        nightShiftEnabled: z.boolean().default(false),
       }))
       .mutation(async ({ input }) => {
-        return db.createContract({ ...input, hireDate: toDate(input.hireDate), experienceEndDate: toDateOpt(input.experienceEndDate) });
+        return db.createContract({
+          ...input,
+          hireDate: toDate(input.hireDate),
+          experienceEndDate: toDateOpt(input.experienceEndDate),
+        });
       }),
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
@@ -273,7 +637,11 @@ export const appRouter = router({
   vacations: router({
     list: protectedProcedure
       .input(z.object({ employeeId: z.number().optional() }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        if (input?.employeeId && ctx.user) {
+          const { assertEmployeeInScope } = await import('./utils/scope');
+          await assertEmployeeInScope(ctx.user as any, input.employeeId);
+        }
         return db.listVacations(input?.employeeId);
       }),
     get: protectedProcedure
@@ -503,9 +871,13 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const employee = await db.getEmployee(input.employeeId);
-        return db.createDocument({ ...input, expiryDate: toDateOpt(input.expiryDate), cpf: employee?.cpf || "" });
+        return createDocumentRecord({
+          ...input,
+          expiryDate: toDateOpt(input.expiryDate),
+          cpf: employee?.cpf || "",
+        });
       }),
-    delete: protectedProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteDocument(input.id);
@@ -527,7 +899,7 @@ export const appRouter = router({
         const fileKey = `documents/${input.employeeId}/${nanoid()}-${input.fileName}`;
         const { url } = await storagePut(fileKey, buffer, input.fileType);
         const employee = await db.getEmployee(input.employeeId);
-        return db.createDocument({
+        return createDocumentRecord({
           employeeId: input.employeeId,
           category: input.category,
           documentName: input.documentName,
@@ -825,11 +1197,33 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createHoliday({ ...input, date: toDate(input.date) });
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteHoliday(input.id);
         return { success: true };
+      }),
+    importYear: adminProcedure
+      .input(z.object({ year: z.number().int().min(1900).max(2100) }))
+      .mutation(async ({ input }) => {
+        const { listHolidays: fetchHolidays } = await import('./integrations/brasil-api');
+        const remote = await fetchHolidays(input.year);
+        const existing = await db.listHolidays();
+        const existingDates = new Set(
+          existing.map((h: any) => new Date(h.date).toISOString().slice(0, 10))
+        );
+        let created = 0;
+        for (const h of remote) {
+          if (existingDates.has(h.date)) continue;
+          await db.createHoliday({
+            name: h.name,
+            date: toDate(h.date),
+            type: 'Nacional',
+            recurring: false,
+          });
+          created++;
+        }
+        return { fetched: remote.length, created, skipped: remote.length - created };
       }),
   }),
 
@@ -845,7 +1239,7 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getSetting(input.key);
       }),
-    upsert: protectedProcedure
+    upsert: adminProcedure
       .input(z.object({ key: z.string(), value: z.string(), description: z.string().optional() }))
       .mutation(async ({ input }) => {
         await db.upsertSetting(input.key, input.value, input.description);
@@ -875,7 +1269,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createDependent({ ...input, birthDate: toDateOpt(input.birthDate) });
       }),
-    delete: protectedProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteDependent(input.id);
@@ -933,9 +1327,87 @@ export const appRouter = router({
   // ============================================================
   reports: reportsRouter,
   // ============================================================
+  // PAYROLL
+  // ============================================================
+  payroll: payrollRouter,
+  // ============================================================
   // PAYSLIP (Holerite PDF)
   // ============================================================
   payslip: payslipRouter,
+  // ============================================================
+  // LOOKUP (Brasil API: CEP, CNPJ, Feriados, IBGE)
+  // ============================================================
+  lookup: lookupRouter,
+  // ============================================================
+  // AI (resume parser, job description generator)
+  // ============================================================
+  ai: aiRouter,
+
+  // ============================================================
+  // RECRUITMENT (vagas + candidatos)
+  // ============================================================
+  recruitment: recruitmentRouter,
+
+  // ============================================================
+  // DEPARTMENTS (organização hierárquica)
+  // ============================================================
+  departments: departmentsRouter,
+
+  // ============================================================
+  // LIFECYCLE (admissão / movimentação / desligamento)
+  // ============================================================
+  lifecycle: lifecycleRouter,
+
+  // ============================================================
+  // INBOX (caixa de entrada unificada)
+  // ============================================================
+  inbox: inboxRouter,
+
+  // ============================================================
+  // LGPD (consent records + audit de leitura)
+  // ============================================================
+  lgpd: lgpdRouter,
+
+  // ============================================================
+  // COMPLIANCE PORTARIA 671 (AFD/AFDT/ACJEF)
+  // ============================================================
+  compliancePortaria: compliancePortariaRouter,
+
+  // ============================================================
+  // LABOR CALC (rescisão, 13º, férias proporcionais — BR/CLT)
+  // ============================================================
+  laborCalc: laborCalcRouter,
+
+  // ============================================================
+  // KANBAN (boards/lists/cards — fase 8)
+  // ============================================================
+  kanban: kanbanRouter,
+
+  // ============================================================
+  // BUSINESS DAYS (BR working day calculator)
+  // ============================================================
+  businessDays: router({
+    count: protectedProcedure
+      .input(z.object({ startDate: z.string(), endDate: z.string() }))
+      .query(async ({ input }) => {
+        const { countBusinessDays } = await import("./utils/business-days");
+        const days = await countBusinessDays(input.startDate, input.endDate);
+        return { days };
+      }),
+    add: protectedProcedure
+      .input(z.object({ startDate: z.string(), businessDays: z.number().int() }))
+      .query(async ({ input }) => {
+        const { addBusinessDays } = await import("./utils/business-days");
+        const result = await addBusinessDays(input.startDate, input.businessDays);
+        return { date: result.toISOString().slice(0, 10) };
+      }),
+    isBusinessDay: protectedProcedure
+      .input(z.object({ date: z.string() }))
+      .query(async ({ input }) => {
+        const { isBusinessDay } = await import("./utils/business-days");
+        return { isBusinessDay: await isBusinessDay(input.date) };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

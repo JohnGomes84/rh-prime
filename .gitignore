@@ -14,6 +14,14 @@ build/
 .env.test.local
 .env.production.local
 
+# Local dev fixtures (contain hashed credentials)
+.local-dev-users.json
+
+# Codex/agent runtime logs
+.codex-*.log
+.codex-*.out.log
+.codex-*.err.log
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -108,3 +116,9 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+.claude/
+
+# DB backups locais
+backups/
+*.sql.gz
+.vercel

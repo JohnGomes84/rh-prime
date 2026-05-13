@@ -15,71 +15,80 @@ import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Clock, CheckCircle, XCircle, Plus } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import { toast } from 'sonner';
 
 const formatDateTimeBR = (date: Date) => new Date(date).toLocaleString('pt-BR');
 
 export function OvertimeManagement() {
   const { user } = useAuth();
   const [showRequestForm, setShowRequestForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    timeRecordId: number | '';
+    overtimeHours: number;
+    type: '50%' | '100%' | 'NOTURNO';
+    reason: string;
+  }>({
     timeRecordId: '',
     overtimeHours: 1,
-    type: '50%' as const,
+    type: '50%',
     reason: '',
   });
 
   const { data: requests = [], isLoading, refetch } = trpc.timesheet.listOvertimeRequests.useQuery(
-    { employeeId: String(user?.id || '') },
+    { employeeId: user?.id },
     { enabled: !!user?.id }
   );
 
   const { data: stats } = trpc.timesheet.overtimeStats.useQuery(
-    { employeeId: String(user?.id || '') },
+    { employeeId: user?.id },
     { enabled: !!user?.id }
   );
 
   const requestMutation = trpc.timesheet.requestOvertime.useMutation({
     onSuccess: () => {
-      alert('Solicitação de horas extras enviada!');
+      toast.success('Solicitação de horas extras enviada');
       setShowRequestForm(false);
       setFormData({ timeRecordId: '', overtimeHours: 1, type: '50%', reason: '' });
       refetch();
     },
+    onError: (err) => toast.error(err.message || 'Falha ao solicitar horas extras'),
   });
 
   const approveMutation = trpc.timesheet.approveOvertime.useMutation({
     onSuccess: () => {
-      alert('Horas extras aprovadas!');
+      toast.success('Horas extras aprovadas');
       refetch();
     },
+    onError: (err) => toast.error(err.message || 'Falha ao aprovar'),
   });
 
   const rejectMutation = trpc.timesheet.approveOvertime.useMutation({
     onSuccess: () => {
-      alert('Horas extras rejeitadas!');
+      toast.success('Horas extras rejeitadas');
       refetch();
     },
+    onError: (err) => toast.error(err.message || 'Falha ao rejeitar'),
   });
 
   const handleSubmitRequest = () => {
     if (!user?.id || !formData.timeRecordId) {
-      alert('Preencha todos os campos obrigatórios');
+      toast.error('Preencha todos os campos obrigatórios');
       return;
     }
     requestMutation.mutate({
-      employeeId: String(user.id),
-      timeRecordId: formData.timeRecordId,
+      employeeId: user.id,
+      timeRecordId: Number(formData.timeRecordId),
       overtimeHours: formData.overtimeHours,
       type: formData.type,
       reason: formData.reason,
     });
   };
 
-  const handleApprove = (overtimeId: string) => {
+  const handleApprove = (overtimeId: number) => {
     approveMutation.mutate({ overtimeId, approved: true });
   };
 
-  const handleReject = (overtimeId: string) => {
+  const handleReject = (overtimeId: number) => {
     rejectMutation.mutate({ overtimeId, approved: false });
   };
 
@@ -137,7 +146,7 @@ export function OvertimeManagement() {
                 id="timeRecordId"
                 placeholder="Selecione o registro"
                 value={formData.timeRecordId}
-                onChange={(e) => setFormData({ ...formData, timeRecordId: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, timeRecordId: e.target.value === '' ? '' : Number(e.target.value) })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">

@@ -31,13 +31,30 @@ import {
   dashboardSettings, InsertDashboardSetting,
   timeRecords, InsertTimeRecord,
   overtimeRecords, InsertOvertimeRecord,
-} from "../drizzle/schema";
-import { ENV } from './_core/env';
-import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks';
-import { withDBRetry } from './utils/retry';
-import { encryptCPF } from './utils/encryption';
-import { withTransaction } from './utils/transactions';
-import { formatDateTimeBR } from './utils/timezone';
+  jobOpenings, InsertJobOpening,
+  candidates, InsertCandidate,
+  overtimeAuthorizations, InsertOvertimeAuthorization,
+  complianceExports, InsertComplianceExport,
+  departments, InsertDepartment,
+  employeeManagerHistory, InsertEmployeeManagerHistory,
+  admissionWorkflows, InsertAdmissionWorkflow,
+  admissionChecklistItems, InsertAdmissionChecklistItem,
+  employeeMovements, InsertEmployeeMovement,
+  terminations, InsertTermination,
+  terminationDevolutionItems, InsertTerminationDevolutionItem,
+  requests as requestsTable, InsertRequest,
+  approvals, InsertApproval,
+  consentRecords, InsertConsentRecord,
+  readAuditLogs, InsertReadAuditLog,
+} from "../drizzle/schema.js";
+import { ENV } from './_core/env.js';
+import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users.js";
+import { triggerWebhook, onEmployeeCreated } from './integrations/webhooks.js';
+import { withDBRetry } from './utils/retry.js';
+import { encryptCPF } from './utils/encryption.js';
+import { withTransaction } from './utils/transactions.js';
+import { formatDateTimeBR } from './utils/timezone.js';
+import { isFeatureEnabled } from "./_core/feature-flags.js";
 import { nanoid } from 'nanoid';
 
 const generateId = () => nanoid(36);
@@ -45,15 +62,16 @@ const generateId = () => nanoid(36);
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+  if (_db) return _db;
+  const url = process.env.DATABASE_URL;
+  if (!url) return null;
+  try {
+    _db = drizzle(url);
+    return _db;
+  } catch (error) {
+    console.error("[Database] Failed to initialize drizzle:", error);
+    throw error;
   }
-  return _db;
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]!; }
@@ -68,6 +86,17 @@ function futureDateStr(days: number) {
 // ============================================================
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.email) throw new Error("User email is required for upsert");
+  if (isLocalDevUsersEnabled()) {
+    await localDevUsers.upsertUser({
+      email: user.email,
+      openId: user.openId,
+      name: user.name,
+      loginMethod: user.loginMethod,
+      role: user.role,
+      passwordHash: user.passwordHash,
+    });
+    return;
+  }
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
   try {
@@ -90,6 +119,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 export async function getUserByOpenId(openId: string) {
+  if (isLocalDevUsersEnabled()) {
+    return localDevUsers.getUserByOpenId(openId);
+  }
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
@@ -154,6 +186,1042 @@ export async function deleteEmployee(id: number) {
       await db.delete(employees).where(eq(employees.id, id));
     }, "deleteEmployee");
   }, { name: "deleteEmployee-transaction" });
+}
+
+// ============================================================
+// ANALYTICS OPERACIONAIS — Fase 6
+// ============================================================
+export async function getPendingByManager() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        m.id AS manager_id,
+        m.fullName AS manager_name,
+        COUNT(DISTINCT r.id) AS pending_requests,
+        COUNT(DISTINCT t.id) AS pending_time_records,
+        (COUNT(DISTINCT r.id) + COUNT(DISTINCT t.id)) AS total_pending
+      FROM employees e
+      INNER JOIN employees m ON e.manager_id = m.id
+      LEFT JOIN requests r ON r.employee_id = e.id AND r.status = 'PENDING'
+      LEFT JOIN time_records t ON t.employee_id = e.id AND t.status = 'PENDING'
+      GROUP BY m.id, m.fullName
+      HAVING total_pending > 0
+      ORDER BY total_pending DESC
+      LIMIT 50
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      managerId: r.manager_id,
+      managerName: r.manager_name,
+      pendingRequests: Number(r.pending_requests) || 0,
+      pendingTimeRecords: Number(r.pending_time_records) || 0,
+      totalPending: Number(r.total_pending) || 0,
+    }));
+  }, "getPendingByManager");
+}
+
+export async function getApprovalLatency(days: number = 30) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return { medianHours: 0, avgHours: 0, totalApproved: 0 };
+    const result = await conn.execute(sql`
+      SELECT
+        AVG(TIMESTAMPDIFF(HOUR, created_at, resolved_at)) AS avg_hours,
+        COUNT(*) AS total_approved
+      FROM requests
+      WHERE status = 'APPROVED'
+        AND resolved_at IS NOT NULL
+        AND created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    `);
+    const rows = (result as any)[0] ?? result;
+    const r = rows[0] ?? {};
+    return {
+      avgHours: Math.round((Number(r.avg_hours) || 0) * 10) / 10,
+      totalApproved: Number(r.total_approved) || 0,
+    };
+  }, "getApprovalLatency");
+}
+
+export async function getHourBankDistribution() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        e.id AS employee_id,
+        e.fullName AS employee_name,
+        COALESCE(SUM(CAST(tb.hoursBalance AS DECIMAL(10,2))), 0) AS total_balance
+      FROM employees e
+      LEFT JOIN time_bank tb ON tb.employeeId = e.id AND tb.status = 'Ativo'
+      WHERE e.status = 'Ativo'
+      GROUP BY e.id, e.fullName
+      HAVING total_balance != 0
+      ORDER BY total_balance DESC
+      LIMIT 100
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      employeeId: r.employee_id,
+      employeeName: r.employee_name,
+      totalBalance: Number(r.total_balance) || 0,
+    }));
+  }, "getHourBankDistribution");
+}
+
+export async function getTardinessByDepartment(months: number = 3) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        d.id AS department_id,
+        d.name AS department_name,
+        COUNT(DISTINCT t.id) AS tardiness_count,
+        COUNT(DISTINCT e.id) AS employee_count
+      FROM departments d
+      LEFT JOIN employees e ON e.department_id = d.id AND e.status = 'Ativo'
+      LEFT JOIN time_records t ON t.employee_id = e.id
+        AND t.status = 'PENDING'
+        AND t.notes LIKE '%Atraso%'
+        AND t.created_at >= DATE_SUB(NOW(), INTERVAL ${months} MONTH)
+      WHERE d.active = 1
+      GROUP BY d.id, d.name
+      ORDER BY tardiness_count DESC
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      departmentId: r.department_id,
+      departmentName: r.department_name,
+      tardinessCount: Number(r.tardiness_count) || 0,
+      employeeCount: Number(r.employee_count) || 0,
+    }));
+  }, "getTardinessByDepartment");
+}
+
+export async function getDocumentComplianceRate() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return { totalEmployees: 0, withCompleteAdmission: 0, rate: 0 };
+    const result = await conn.execute(sql`
+      SELECT
+        (SELECT COUNT(*) FROM employees WHERE status = 'Ativo') AS total,
+        (SELECT COUNT(DISTINCT result_employee_id)
+         FROM admission_workflows
+         WHERE status = 'ACTIVE' AND result_employee_id IS NOT NULL) AS with_admission
+    `);
+    const rows = (result as any)[0] ?? result;
+    const r = rows[0] ?? {};
+    const total = Number(r.total) || 0;
+    const withAdm = Number(r.with_admission) || 0;
+    return {
+      totalEmployees: total,
+      withCompleteAdmission: withAdm,
+      rate: total > 0 ? Math.round((withAdm / total) * 1000) / 10 : 0,
+    };
+  }, "getDocumentComplianceRate");
+}
+
+export async function getVacationDeadlineRisks() {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const result = await conn.execute(sql`
+      SELECT
+        v.id AS vacation_id,
+        v.employeeId AS employee_id,
+        e.fullName AS employee_name,
+        v.concessionLimit AS concession_limit,
+        DATEDIFF(v.concessionLimit, CURDATE()) AS days_remaining
+      FROM vacations v
+      INNER JOIN employees e ON e.id = v.employeeId
+      WHERE v.status = 'Pendente'
+        AND v.concessionLimit IS NOT NULL
+        AND v.concessionLimit <= DATE_ADD(CURDATE(), INTERVAL 90 DAY)
+      ORDER BY v.concessionLimit ASC
+      LIMIT 50
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      vacationId: r.vacation_id,
+      employeeId: r.employee_id,
+      employeeName: r.employee_name,
+      concessionLimit: r.concession_limit,
+      daysRemaining: Number(r.days_remaining) || 0,
+    }));
+  }, "getVacationDeadlineRisks");
+}
+
+export async function getTurnoverMonthly(months: number = 12) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = await db.execute(sql`
+      SELECT
+        DATE_FORMAT(month_date, '%Y-%m') AS ym,
+        SUM(CASE WHEN type = 'hire' THEN 1 ELSE 0 END) AS hires,
+        SUM(CASE WHEN type = 'termination' THEN 1 ELSE 0 END) AS terminations
+      FROM (
+        SELECT DATE_FORMAT(hireDate, '%Y-%m-01') AS month_date, 'hire' AS type FROM contracts WHERE hireDate IS NOT NULL
+        UNION ALL
+        SELECT DATE_FORMAT(terminationDate, '%Y-%m-01') AS month_date, 'termination' AS type FROM contracts WHERE terminationDate IS NOT NULL
+      ) t
+      WHERE month_date >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL ${months} MONTH), '%Y-%m-01')
+      GROUP BY ym
+      ORDER BY ym
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      month: r.ym,
+      hires: Number(r.hires) || 0,
+      terminations: Number(r.terminations) || 0,
+    }));
+  }, "getTurnoverMonthly");
+}
+
+export async function getAbsenteeismMonthly(months: number = 12) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = await db.execute(sql`
+      SELECT
+        DATE_FORMAT(absenceDate, '%Y-%m') AS ym,
+        COUNT(*) AS total,
+        SUM(CASE WHEN justified = 1 THEN 1 ELSE 0 END) AS justified,
+        SUM(CASE WHEN justified = 0 THEN 1 ELSE 0 END) AS unjustified
+      FROM absences
+      WHERE absenceDate >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL ${months} MONTH), '%Y-%m-01')
+      GROUP BY ym
+      ORDER BY ym
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({
+      month: r.ym,
+      total: Number(r.total) || 0,
+      justified: Number(r.justified) || 0,
+      unjustified: Number(r.unjustified) || 0,
+    }));
+  }, "getAbsenteeismMonthly");
+}
+
+export async function getHeadcountEvolution(months: number = 12) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = await db.execute(sql`
+      WITH RECURSIVE month_series AS (
+        SELECT DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL ${months} MONTH), '%Y-%m-01') AS month_start
+        UNION ALL
+        SELECT DATE_ADD(month_start, INTERVAL 1 MONTH) FROM month_series
+        WHERE month_start < DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+      )
+      SELECT
+        DATE_FORMAT(ms.month_start, '%Y-%m') AS ym,
+        (
+          SELECT COUNT(*) FROM contracts c
+          WHERE c.hireDate <= LAST_DAY(ms.month_start)
+            AND (c.terminationDate IS NULL OR c.terminationDate > LAST_DAY(ms.month_start))
+        ) AS active
+      FROM month_series ms
+      ORDER BY ms.month_start
+    `);
+    const rows = (result as any)[0] ?? result;
+    return (rows as any[]).map((r) => ({ month: r.ym, active: Number(r.active) || 0 }));
+  }, "getHeadcountEvolution");
+}
+
+// ============================================================
+// OVERTIME AUTHORIZATIONS (Pré-autorização de horas extras)
+// ============================================================
+export async function listOvertimeAuthorizations(filter?: { employeeId?: number; date?: string; consumed?: boolean }) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const conds: any[] = [];
+    if (filter?.employeeId) conds.push(eq(overtimeAuthorizations.employeeId, filter.employeeId));
+    if (filter?.date) conds.push(eq(overtimeAuthorizations.authorizedDate, filter.date as any));
+    if (filter?.consumed !== undefined) conds.push(eq(overtimeAuthorizations.consumed, filter.consumed));
+    if (conds.length > 0) {
+      return db.select().from(overtimeAuthorizations).where(and(...conds)).orderBy(desc(overtimeAuthorizations.authorizedDate));
+    }
+    return db.select().from(overtimeAuthorizations).orderBy(desc(overtimeAuthorizations.authorizedDate)).limit(200);
+  }, "listOvertimeAuthorizations");
+}
+
+export async function createOvertimeAuthorization(data: InsertOvertimeAuthorization) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(overtimeAuthorizations).values(data);
+      return { id: r[0].insertId };
+    }, "createOvertimeAuthorization");
+  }, { name: "createOvertimeAuthorization-transaction" });
+}
+
+export async function findOvertimeAuthorizationFor(employeeId: number, date: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db
+      .select()
+      .from(overtimeAuthorizations)
+      .where(and(
+        eq(overtimeAuthorizations.employeeId, employeeId),
+        eq(overtimeAuthorizations.authorizedDate, date as any),
+        eq(overtimeAuthorizations.consumed, false)
+      ))
+      .limit(1);
+    return r[0] ?? null;
+  }, "findOvertimeAuthorizationFor");
+}
+
+export async function consumeOvertimeAuthorization(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return;
+    await db.update(overtimeAuthorizations).set({ consumed: true }).where(eq(overtimeAuthorizations.id, id));
+  }, "consumeOvertimeAuthorization");
+}
+
+export async function bulkUpdateTimeRecordStatus(ids: number[], status: "PENDING" | "APPROVED" | "REJECTED", approvedById?: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return { updated: 0 };
+    if (ids.length === 0) return { updated: 0 };
+    await db
+      .update(timeRecords)
+      .set({
+        status,
+        approvedById,
+        approvedAt: new Date(),
+      })
+      .where(sql`${timeRecords.id} IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})`);
+    return { updated: ids.length };
+  }, "bulkUpdateTimeRecordStatus");
+}
+
+export async function listAllTimeRecords(startDate: Date, endDate: Date) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select({
+        id: timeRecords.id,
+        employeeId: timeRecords.employeeId,
+        clockIn: timeRecords.clockIn,
+        clockOut: timeRecords.clockOut,
+        hoursWorked: timeRecords.hoursWorked,
+        status: timeRecords.status,
+        nsr: timeRecords.nsr,
+        recordHash: timeRecords.recordHash,
+        previousHash: timeRecords.previousHash,
+        cpf: employees.cpf,
+        fullName: employees.fullName,
+      })
+      .from(timeRecords)
+      .innerJoin(employees, eq(timeRecords.employeeId, employees.id))
+      .where(and(
+        sql`${timeRecords.clockIn} >= ${startDate}`,
+        sql`${timeRecords.clockIn} <= ${endDate}`,
+      ))
+      .orderBy(asc(timeRecords.nsr), asc(timeRecords.clockIn));
+  }, "listAllTimeRecords");
+}
+
+export async function listComplianceExports() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(complianceExports).orderBy(desc(complianceExports.generatedAt)).limit(100);
+  }, "listComplianceExports");
+}
+
+export async function recordComplianceExport(data: InsertComplianceExport) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return { id: 0 };
+    const r = await db.insert(complianceExports).values(data);
+    return { id: r[0].insertId };
+  }, "recordComplianceExport");
+}
+
+export async function getTimesheetReport(employeeId: number, startDate: Date, endDate: Date) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(timeRecords)
+      .where(and(
+        eq(timeRecords.employeeId, employeeId),
+        sql`${timeRecords.clockIn} >= ${startDate}`,
+        sql`${timeRecords.clockIn} <= ${endDate}`,
+      ))
+      .orderBy(asc(timeRecords.clockIn));
+  }, "getTimesheetReport");
+}
+
+// ============================================================
+// JOB OPENINGS (Vagas)
+// ============================================================
+export async function listJobOpenings(status?: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const query = db.select().from(jobOpenings).orderBy(desc(jobOpenings.openedAt));
+    if (status) return query.where(eq(jobOpenings.status, status as any));
+    return query;
+  }, "listJobOpenings");
+}
+
+export async function getJobOpening(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db.select().from(jobOpenings).where(eq(jobOpenings.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getJobOpening");
+}
+
+export async function createJobOpening(data: InsertJobOpening) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(jobOpenings).values(data);
+      return { id: r[0].insertId };
+    }, "createJobOpening");
+  }, { name: "createJobOpening-transaction" });
+}
+
+export async function updateJobOpening(id: number, data: Partial<InsertJobOpening>) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(jobOpenings).set(data).where(eq(jobOpenings.id, id));
+    }, "updateJobOpening");
+  }, { name: "updateJobOpening-transaction" });
+}
+
+// ============================================================
+// CANDIDATES
+// ============================================================
+export async function listCandidates(jobOpeningId?: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    if (jobOpeningId) {
+      return db.select().from(candidates)
+        .where(eq(candidates.jobOpeningId, jobOpeningId))
+        .orderBy(desc(candidates.appliedAt));
+    }
+    return db.select().from(candidates).orderBy(desc(candidates.appliedAt));
+  }, "listCandidates");
+}
+
+export async function getCandidate(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db.select().from(candidates).where(eq(candidates.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getCandidate");
+}
+
+export async function createCandidate(data: InsertCandidate) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(candidates).values(data);
+      return { id: r[0].insertId };
+    }, "createCandidate");
+  }, { name: "createCandidate-transaction" });
+}
+
+export async function updateCandidate(id: number, data: Partial<InsertCandidate>) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db.update(candidates).set(data).where(eq(candidates.id, id));
+    }, "updateCandidate");
+  }, { name: "updateCandidate-transaction" });
+}
+
+// ============================================================
+// DEPARTMENTS + HIERARCHY
+// ============================================================
+export async function listDepartments() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(departments).orderBy(asc(departments.name));
+  }, "listDepartments");
+}
+
+export async function createDepartment(data: InsertDepartment) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      const r = await db.insert(departments).values(data);
+      return { id: r[0].insertId };
+    }, "createDepartment");
+  }, { name: "createDepartment-transaction" });
+}
+
+export async function updateDepartment(id: number, data: Partial<InsertDepartment>) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.update(departments).set(data).where(eq(departments.id, id));
+    return { success: true };
+  }, "updateDepartment");
+}
+
+export async function deleteDepartment(id: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.delete(departments).where(eq(departments.id, id));
+    return { success: true };
+  }, "deleteDepartment");
+}
+
+const SUBORDINATES_CACHE = new Map<number, { ids: Set<number>; cachedAt: number }>();
+const SUBORDINATES_TTL_MS = 60_000;
+
+export async function getSubordinatesRecursive(managerId: number): Promise<Set<number>> {
+  const cached = SUBORDINATES_CACHE.get(managerId);
+  if (cached && Date.now() - cached.cachedAt < SUBORDINATES_TTL_MS) {
+    return cached.ids;
+  }
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return new Set<number>();
+    const result = await db.execute(sql`
+      WITH RECURSIVE tree AS (
+        SELECT id FROM employees WHERE manager_id = ${managerId}
+        UNION ALL
+        SELECT e.id FROM employees e INNER JOIN tree t ON e.manager_id = t.id
+      )
+      SELECT id FROM tree
+    `);
+    const rows = (result as any)[0] ?? result;
+    const ids = new Set<number>((rows as any[]).map((r) => Number(r.id)));
+    SUBORDINATES_CACHE.set(managerId, { ids, cachedAt: Date.now() });
+    return ids;
+  }, "getSubordinatesRecursive");
+}
+
+export function invalidateSubordinatesCache(managerId?: number) {
+  if (managerId === undefined) SUBORDINATES_CACHE.clear();
+  else SUBORDINATES_CACHE.delete(managerId);
+}
+
+export async function setEmployeeManager(employeeId: number, managerId: number | null, changedById?: number, reason?: string) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+
+      const current = await db.select({ managerId: employees.managerId }).from(employees).where(eq(employees.id, employeeId)).limit(1);
+      const previousManagerId = current[0]?.managerId ?? null;
+
+      if (previousManagerId === managerId) return { success: true, unchanged: true };
+
+      // Fecha histórico anterior
+      if (previousManagerId !== null) {
+        await db.update(employeeManagerHistory)
+          .set({ endDate: new Date() })
+          .where(and(
+            eq(employeeManagerHistory.employeeId, employeeId),
+            sql`${employeeManagerHistory.endDate} IS NULL`
+          ));
+      }
+
+      // Atualiza employees.manager_id
+      await db.update(employees).set({ managerId }).where(eq(employees.id, employeeId));
+
+      // Insere novo histórico
+      await db.insert(employeeManagerHistory).values({
+        employeeId,
+        managerId,
+        startDate: new Date(),
+        changedById,
+        reason,
+      });
+
+      // Invalida cache (gestor antigo + novo)
+      invalidateSubordinatesCache();
+
+      return { success: true };
+    }, "setEmployeeManager");
+  }, { name: "setEmployeeManager-transaction" });
+}
+
+export async function listEmployeeManagerHistory(employeeId: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(employeeManagerHistory)
+      .where(eq(employeeManagerHistory.employeeId, employeeId))
+      .orderBy(desc(employeeManagerHistory.startDate));
+  }, "listEmployeeManagerHistory");
+}
+
+// ============================================================
+// LIFECYCLE — Admissão
+// ============================================================
+const DEFAULT_ADMISSION_CHECKLIST: Array<{ category: string; itemDescription: string; required: boolean }> = [
+  { category: "Documentos Pessoais", itemDescription: "Cópia do RG", required: true },
+  { category: "Documentos Pessoais", itemDescription: "Cópia do CPF", required: true },
+  { category: "Documentos Pessoais", itemDescription: "Comprovante de residência", required: true },
+  { category: "Documentos Pessoais", itemDescription: "Foto 3x4", required: false },
+  { category: "Documentos Pessoais", itemDescription: "Certidão de nascimento ou casamento", required: false },
+  { category: "Admissão e Registro CLT", itemDescription: "CTPS (digital ou física)", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "Título de eleitor", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "PIS/PASEP", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "Dados bancários / chave PIX", required: true },
+  { category: "Admissão e Registro CLT", itemDescription: "Termo de opção de vale-transporte", required: false },
+  { category: "Admissão e Registro CLT", itemDescription: "Reservista (se aplicável)", required: false },
+  { category: "Saúde e Segurança", itemDescription: "ASO Admissional", required: true },
+  { category: "Saúde e Segurança", itemDescription: "Ordem de Serviço (NR-1) assinada", required: true },
+  { category: "Saúde e Segurança", itemDescription: "Ficha de entrega de EPI", required: false },
+  { category: "Termos e Ciência", itemDescription: "Contrato CLT assinado", required: true },
+  { category: "Termos e Ciência", itemDescription: "Regulamento interno (ciência)", required: true },
+  { category: "Termos e Ciência", itemDescription: "Termo de confidencialidade", required: true },
+];
+
+export async function listAdmissionWorkflows(filter?: { status?: string }) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    if (filter?.status) {
+      return conn.select().from(admissionWorkflows)
+        .where(eq(admissionWorkflows.status, filter.status as any))
+        .orderBy(desc(admissionWorkflows.startedAt));
+    }
+    return conn.select().from(admissionWorkflows).orderBy(desc(admissionWorkflows.startedAt));
+  }, "listAdmissionWorkflows");
+}
+
+export async function getAdmissionWorkflow(id: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(admissionWorkflows).where(eq(admissionWorkflows.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getAdmissionWorkflow");
+}
+
+export async function createAdmissionWorkflow(
+  data: InsertAdmissionWorkflow,
+  options?: { populateDefaultChecklist?: boolean }
+) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const conn = await getDb();
+      if (!conn) throw new Error("DB not available");
+      const r = await conn.insert(admissionWorkflows).values(data);
+      const workflowId = r[0].insertId;
+      if (options?.populateDefaultChecklist !== false) {
+        for (const item of DEFAULT_ADMISSION_CHECKLIST) {
+          await conn.insert(admissionChecklistItems).values({
+            workflowId,
+            category: item.category,
+            itemDescription: item.itemDescription,
+            required: item.required,
+          });
+        }
+      }
+      return { id: workflowId };
+    }, "createAdmissionWorkflow");
+  }, { name: "createAdmissionWorkflow-transaction" });
+}
+
+export async function updateAdmissionWorkflow(id: number, data: Partial<InsertAdmissionWorkflow>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(admissionWorkflows).set(data).where(eq(admissionWorkflows.id, id));
+    return { success: true };
+  }, "updateAdmissionWorkflow");
+}
+
+export async function listAdmissionChecklist(workflowId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(admissionChecklistItems)
+      .where(eq(admissionChecklistItems.workflowId, workflowId))
+      .orderBy(asc(admissionChecklistItems.category), asc(admissionChecklistItems.id));
+  }, "listAdmissionChecklist");
+}
+
+export async function updateAdmissionChecklistItem(id: number, data: Partial<InsertAdmissionChecklistItem>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(admissionChecklistItems).set(data).where(eq(admissionChecklistItems.id, id));
+    return { success: true };
+  }, "updateAdmissionChecklistItem");
+}
+
+// ============================================================
+// LIFECYCLE — Movimentação
+// ============================================================
+export async function listEmployeeMovements(employeeId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(employeeMovements)
+      .where(eq(employeeMovements.employeeId, employeeId))
+      .orderBy(desc(employeeMovements.effectiveDate));
+  }, "listEmployeeMovements");
+}
+
+export async function createEmployeeMovement(data: InsertEmployeeMovement) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    const r = await conn.insert(employeeMovements).values(data);
+    return { id: r[0].insertId };
+  }, "createEmployeeMovement");
+}
+
+// ============================================================
+// LIFECYCLE — Desligamento
+// ============================================================
+const DEFAULT_DEVOLUTION_CHECKLIST: string[] = [
+  "Crachá / cartão de acesso",
+  "Notebook / desktop",
+  "Celular corporativo",
+  "EPIs (capacete, óculos, etc.)",
+  "Chaves / cartões de estacionamento",
+  "Uniforme / fardamento",
+  "Material e ferramentas operacionais",
+  "Token / smartcard",
+];
+
+export async function listTerminations(filter?: { status?: string }) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    if (filter?.status) {
+      return conn.select().from(terminations)
+        .where(eq(terminations.status, filter.status as any))
+        .orderBy(desc(terminations.initiatedAt));
+    }
+    return conn.select().from(terminations).orderBy(desc(terminations.initiatedAt));
+  }, "listTerminations");
+}
+
+export async function getTermination(id: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(terminations).where(eq(terminations.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getTermination");
+}
+
+export async function createTermination(data: InsertTermination) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const conn = await getDb();
+      if (!conn) throw new Error("DB not available");
+      const r = await conn.insert(terminations).values(data);
+      const terminationId = r[0].insertId;
+      for (const item of DEFAULT_DEVOLUTION_CHECKLIST) {
+        await conn.insert(terminationDevolutionItems).values({
+          terminationId,
+          itemDescription: item,
+        });
+      }
+      return { id: terminationId };
+    }, "createTermination");
+  }, { name: "createTermination-transaction" });
+}
+
+export async function updateTermination(id: number, data: Partial<InsertTermination>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(terminations).set(data).where(eq(terminations.id, id));
+    return { success: true };
+  }, "updateTermination");
+}
+
+export async function listTerminationDevolution(terminationId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(terminationDevolutionItems)
+      .where(eq(terminationDevolutionItems.terminationId, terminationId))
+      .orderBy(asc(terminationDevolutionItems.id));
+  }, "listTerminationDevolution");
+}
+
+export async function updateTerminationDevolutionItem(id: number, data: Partial<InsertTerminationDevolutionItem>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(terminationDevolutionItems).set(data).where(eq(terminationDevolutionItems.id, id));
+    return { success: true };
+  }, "updateTerminationDevolutionItem");
+}
+
+// ============================================================
+// REQUESTS / INBOX
+// ============================================================
+const SLA_DEFAULT_DAYS: Record<string, number> = {
+  ferias: 7,
+  atestado: 5,
+  ajuste_ponto: 3,
+  abono: 5,
+  horas_extras: 2,
+  declaracao: 7,
+  adiantamento: 3,
+  outro: 7,
+};
+
+export async function createRequest(data: InsertRequest) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    const slaDays = SLA_DEFAULT_DAYS[data.kind as string] ?? 5;
+    const slaDueAt = data.slaDueAt ?? new Date(Date.now() + slaDays * 24 * 60 * 60 * 1000);
+    const r = await conn.insert(requestsTable).values({ ...data, slaDueAt } as any);
+    return { id: r[0].insertId };
+  }, "createRequest");
+}
+
+export async function listRequests(filter?: {
+  employeeId?: number;
+  employeeIds?: number[];
+  status?: string;
+  kind?: string;
+}) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const conds: any[] = [];
+    if (filter?.employeeId) conds.push(eq(requestsTable.employeeId, filter.employeeId));
+    if (filter?.employeeIds && filter.employeeIds.length > 0) {
+      conds.push(sql`${requestsTable.employeeId} IN (${sql.join(filter.employeeIds.map((i) => sql`${i}`), sql`, `)})`);
+    }
+    if (filter?.status) conds.push(eq(requestsTable.status, filter.status as any));
+    if (filter?.kind) conds.push(eq(requestsTable.kind, filter.kind as any));
+
+    const query = conn.select().from(requestsTable);
+    if (conds.length > 0) {
+      return query.where(and(...conds)).orderBy(desc(requestsTable.priority), asc(requestsTable.slaDueAt), desc(requestsTable.createdAt)).limit(200);
+    }
+    return query.orderBy(desc(requestsTable.priority), asc(requestsTable.slaDueAt), desc(requestsTable.createdAt)).limit(200);
+  }, "listRequests");
+}
+
+export async function getRequest(id: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(requestsTable).where(eq(requestsTable.id, id)).limit(1);
+    return r[0] ?? null;
+  }, "getRequest");
+}
+
+export async function updateRequest(id: number, data: Partial<InsertRequest>) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(requestsTable).set(data).where(eq(requestsTable.id, id));
+    return { success: true };
+  }, "updateRequest");
+}
+
+export async function listApprovals(requestId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(approvals).where(eq(approvals.requestId, requestId)).orderBy(asc(approvals.level));
+  }, "listApprovals");
+}
+
+export async function createApproval(data: InsertApproval) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    const r = await conn.insert(approvals).values(data);
+    return { id: r[0].insertId };
+  }, "createApproval");
+}
+
+// ============================================================
+// CONSENT (LGPD)
+// ============================================================
+export async function listUserConsents(userId: number) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    return conn.select().from(consentRecords)
+      .where(eq(consentRecords.userId, userId))
+      .orderBy(desc(consentRecords.createdAt));
+  }, "listUserConsents");
+}
+
+export async function getActiveConsent(userId: number, consentType: string) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return null;
+    const r = await conn.select().from(consentRecords)
+      .where(and(
+        eq(consentRecords.userId, userId),
+        eq(consentRecords.consentType, consentType as any),
+        sql`${consentRecords.revokedAt} IS NULL`
+      ))
+      .orderBy(desc(consentRecords.createdAt))
+      .limit(1);
+    return r[0] ?? null;
+  }, "getActiveConsent");
+}
+
+export async function recordConsent(data: InsertConsentRecord) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    // Revoga consents ativos do mesmo tipo antes (1 ativo por tipo/user)
+    await conn.update(consentRecords)
+      .set({ revokedAt: new Date() })
+      .where(and(
+        eq(consentRecords.userId, data.userId as number),
+        eq(consentRecords.consentType, data.consentType as any),
+        sql`${consentRecords.revokedAt} IS NULL`
+      ));
+    const r = await conn.insert(consentRecords).values(data);
+    return { id: r[0].insertId };
+  }, "recordConsent");
+}
+
+export async function revokeConsent(userId: number, consentType: string) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) throw new Error("DB not available");
+    await conn.update(consentRecords)
+      .set({ revokedAt: new Date(), accepted: false })
+      .where(and(
+        eq(consentRecords.userId, userId),
+        eq(consentRecords.consentType, consentType as any),
+        sql`${consentRecords.revokedAt} IS NULL`
+      ));
+    return { success: true };
+  }, "revokeConsent");
+}
+
+// ============================================================
+// READ AUDIT (logs de leitura sensível)
+// ============================================================
+export async function recordReadAudit(data: InsertReadAuditLog) {
+  // Async, fire-and-forget — não bloqueia response
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return;
+    await conn.insert(readAuditLogs).values(data);
+  }, "recordReadAudit").catch(() => {/* silent */});
+}
+
+export async function listReadAuditLogs(filter?: {
+  actorUserId?: number;
+  targetEmployeeId?: number;
+  resource?: string;
+  limit?: number;
+}) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return [];
+    const conds: any[] = [];
+    if (filter?.actorUserId) conds.push(eq(readAuditLogs.actorUserId, filter.actorUserId));
+    if (filter?.targetEmployeeId) conds.push(eq(readAuditLogs.targetEmployeeId, filter.targetEmployeeId));
+    if (filter?.resource) conds.push(eq(readAuditLogs.resource, filter.resource));
+    const limit = filter?.limit ?? 200;
+    if (conds.length > 0) {
+      return conn.select().from(readAuditLogs).where(and(...conds)).orderBy(desc(readAuditLogs.timestamp)).limit(limit);
+    }
+    return conn.select().from(readAuditLogs).orderBy(desc(readAuditLogs.timestamp)).limit(limit);
+  }, "listReadAuditLogs");
+}
+
+export async function recordLoginLog(data: {
+  userId?: number | null;
+  email?: string | null;
+  success: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  reason?: string | null;
+}) {
+  return withDBRetry(async () => {
+    const conn = await getDb();
+    if (!conn) return;
+    const { loginLogs } = await import('../drizzle/schema');
+    await conn.insert(loginLogs).values({
+      userId: data.userId ?? null,
+      email: data.email ?? null,
+      success: data.success,
+      ipAddress: data.ipAddress ?? null,
+      userAgent: data.userAgent ?? null,
+      reason: data.reason ?? null,
+    });
+  }, "recordLoginLog");
+}
+
+/**
+ * Resolve o employee correspondente a um user (login). Procura primeiro
+ * por employees.userId; se não houver vínculo, tenta match por email.
+ */
+export async function getEmployeeForUser(userId: number, userEmail?: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const byLink = await db.select().from(employees).where(eq(employees.userId, userId)).limit(1);
+    if (byLink[0]) return byLink[0];
+    if (userEmail) {
+      const byEmail = await db.select().from(employees).where(eq(employees.email, userEmail)).limit(1);
+      if (byEmail[0]) return byEmail[0];
+    }
+    return null;
+  }, "getEmployeeForUser");
+}
+
+export async function linkEmployeeToUser(employeeId: number, userId: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.update(employees).set({ userId }).where(eq(employees.id, employeeId));
+    return { success: true };
+  }, "linkEmployeeToUser");
+}
+
+export async function listBirthdaysThisMonth() {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const month = new Date().getMonth() + 1;
+    return db.select({
+      id: employees.id,
+      fullName: employees.fullName,
+      birthDate: employees.birthDate,
+      email: employees.email,
+      phone: employees.phone,
+    })
+      .from(employees)
+      .where(and(
+        sql`MONTH(${employees.birthDate}) = ${month}`,
+        eq(employees.status, "Ativo")
+      ))
+      .orderBy(sql`DAY(${employees.birthDate})`);
+  }, "listBirthdaysThisMonth");
 }
 
 export async function countEmployees() {
@@ -548,6 +1616,9 @@ export async function updateChecklistItem(id: number, data: Partial<InsertCheckl
 }
 
 export async function createDefaultAdmissionChecklist(employeeId: number) {
+  if (isFeatureEnabled("admission-v2")) {
+    return [];
+  }
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const items = [
@@ -1032,44 +2103,88 @@ export async function getDashboardStats() {
 // ============================================================
 // TIME RECORDS (CONTROLE DE PONTO)
 // ============================================================
+export async function getNextNsr(): Promise<number> {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return 1;
+    const r = await db.select({ max: sql<number>`COALESCE(MAX(${timeRecords.nsr}), 0)` }).from(timeRecords);
+    return Number(r[0]?.max ?? 0) + 1;
+  }, "getNextNsr");
+}
+
+export async function getLastRecordHash(): Promise<string | null> {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const r = await db
+      .select({ hash: timeRecords.recordHash })
+      .from(timeRecords)
+      .where(sql`${timeRecords.recordHash} IS NOT NULL`)
+      .orderBy(desc(timeRecords.nsr))
+      .limit(1);
+    return r[0]?.hash ?? null;
+  }, "getLastRecordHash");
+}
+
 export async function createTimeRecord(data: {
-  employeeId: string;
+  employeeId: number;
   clockIn: Date;
   clockOut?: Date;
   location?: string;
   notes?: string;
+  selfieUrl?: string;
+  geofenceStatus?: "within" | "outside" | "no_geo";
+  deviceFingerprint?: string;
 }) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
-      
+
+      const { computeRecordHash } = await import("./utils/portaria-671");
+      const employee = await db.select({ cpf: employees.cpf }).from(employees).where(eq(employees.id, data.employeeId)).limit(1);
+      const cpf = employee[0]?.cpf ?? "00000000000";
+      const nsr = await getNextNsr();
+      const previousHash = await getLastRecordHash();
+      const recordHash = computeRecordHash({
+        previousHash,
+        nsr,
+        employeeCpf: cpf,
+        clockTimestampISO: data.clockIn.toISOString(),
+        type: "IN",
+      });
+
       const result = await db.insert(timeRecords).values({
-        id: nanoid(36),
         employeeId: data.employeeId,
         clockIn: data.clockIn,
         clockOut: data.clockOut,
-        status: "PENDING",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      
-      return { success: true, id: result[0]?.insertId };
+        location: data.location,
+        notes: data.notes,
+        status: data.geofenceStatus === "outside" ? "PENDING" : "PENDING",
+        nsr,
+        previousHash,
+        recordHash,
+        selfieUrl: data.selfieUrl,
+        geofenceStatus: data.geofenceStatus ?? "no_geo",
+        deviceFingerprint: data.deviceFingerprint,
+      } as any);
+
+      return { success: true, id: result[0]?.insertId, nsr };
     }, "createTimeRecord");
   }, { name: "createTimeRecord-transaction" });
 }
 
 export async function listTimeRecords(
-  employeeId: string,
+  employeeId: number,
   startDate?: Date,
   endDate?: Date
 ) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return [];
-    
+
     const conditions = [eq(timeRecords.employeeId, employeeId)];
-    
+
     if (startDate && endDate) {
       conditions.push(
         and(
@@ -1078,26 +2193,26 @@ export async function listTimeRecords(
         ) as any
       );
     }
-    
+
     return db.select().from(timeRecords).where(and(...conditions.filter(Boolean))).orderBy(desc(timeRecords.clockIn));
   }, "listTimeRecords");
 }
 
-export async function getTimeRecord(id: string) {
+export async function getTimeRecord(id: number) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return null;
-    
+
     const result = await db.select().from(timeRecords).where(eq(timeRecords.id, id));
     return result[0] || null;
   }, "getTimeRecord");
 }
 
-export async function getOpenTimeRecord(employeeId: string) {
+export async function getOpenTimeRecord(employeeId: number) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return null;
-    
+
     const result = await db.select().from(timeRecords)
       .where(
         and(
@@ -1111,7 +2226,7 @@ export async function getOpenTimeRecord(employeeId: string) {
   }, "getOpenTimeRecord");
 }
 
-export async function updateTimeRecord(id: string, data: Record<string, any>) {
+export async function updateTimeRecord(id: number, data: Record<string, any>) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
       const db = await getDb();
@@ -1127,7 +2242,7 @@ export async function updateTimeRecord(id: string, data: Record<string, any>) {
 }
 
 export async function getMonthlyTimeSummary(
-  employeeId: string,
+  employeeId: number,
   month: number,
   year: number
 ) {
@@ -1168,8 +2283,8 @@ export async function getMonthlyTimeSummary(
 // OVERTIME RECORDS (HORAS EXTRAS)
 // ============================================================
 export async function createOvertimeRequest(data: {
-  employeeId: string;
-  timeRecordId: string;
+  employeeId: number;
+  timeRecordId: number;
   overtimeHours: number;
   type: "50%" | "100%" | "NOTURNO";
   reason?: string;
@@ -1178,34 +2293,32 @@ export async function createOvertimeRequest(data: {
     return withDBRetry(async () => {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
-      
+
       const multipliers: Record<string, number> = {
         "50%": 1.5,
         "100%": 2.0,
         "NOTURNO": 1.2,
       };
-      
-      const multiplier = multipliers[data.type];
-      
+      const multiplier = multipliers[data.type] ?? 1;
+
       const result = await db.insert(overtimeRecords).values({
-        id: nanoid(36),
         employeeId: data.employeeId,
         timeRecordId: data.timeRecordId,
-        overtimeHours: data.overtimeHours,
-        multiplier,
+        hoursWorked: String(data.overtimeHours),
+        overtimeHours: String(data.overtimeHours),
+        multiplier: String(multiplier),
         type: data.type,
+        reason: data.reason,
         status: "PENDING",
-        createdAt: new Date(),
-        updatedAt: new Date(),
       } as any);
-      
+
       return { success: true, id: result[0]?.insertId };
     }, "createOvertimeRequest");
   }, { name: "createOvertimeRequest-transaction" });
 }
 
 export async function listOvertimeRequests(
-  employeeId?: string,
+  employeeId?: number,
   status?: "PENDING" | "APPROVED" | "REJECTED"
 ) {
   return withDBRetry(async () => {
@@ -1230,7 +2343,7 @@ export async function listOvertimeRequests(
   }, "listOvertimeRequests");
 }
 
-export async function updateOvertimeRequest(id: string, data: Record<string, any>) {
+export async function updateOvertimeRequest(id: number, data: Record<string, any>) {
   return withTransaction(async () => {
     return withDBRetry(async () => {
       const db = await getDb();
@@ -1246,7 +2359,7 @@ export async function updateOvertimeRequest(id: string, data: Record<string, any
 }
 
 export async function getOvertimeStats(
-  employeeId?: string,
+  employeeId?: number,
   month?: number,
   year?: number
 ) {
@@ -1309,6 +2422,9 @@ export async function getOvertimeStats(
 // ============================================================
 export async function getUser(email: string) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.getUser(email);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1319,6 +2435,9 @@ export async function getUser(email: string) {
 
 export async function getUserById(id: number) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.getUserById(id);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1335,6 +2454,9 @@ export async function createUser(data: {
   loginMethod?: string;
 }) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.createUser(data);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1358,6 +2480,9 @@ export async function updateUser(id: number, data: Partial<{
   role: string;
 }>) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.updateUser(id, data as any);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1367,6 +2492,9 @@ export async function updateUser(id: number, data: Partial<{
 
 export async function deleteUser(id: number) {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.deleteUser(id);
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
     
@@ -1376,9 +2504,30 @@ export async function deleteUser(id: number) {
 
 export async function listUsers() {
   return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.listUsers();
+    }
     const db = await getDb();
     if (!db) throw new Error("DB not available");
-    
     return db.select().from(users);
   }, "listUsers");
+}
+
+export async function getUsersByRole(role: string) {
+  return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      return localDevUsers.getUsersByRole(role);
+    }
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(users).where(eq(users.role, role as any));
+  }, "getUsersByRole");
+}
+
+export async function getUsersByDepartment(_departmentId: string) {
+  if (isLocalDevUsersEnabled()) {
+    return localDevUsers.getUsersByDepartment(_departmentId);
+  }
+  // Schema currently lacks departments table — return empty until added
+  return [] as Array<typeof users.$inferSelect>;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { broadcastNotification, broadcastToRole, broadcastToDepartment } from './notification-events';
+import { broadcastNotification, broadcastToRole, broadcastToDepartment } from './notification-events.js';
 
 describe('WebSocket Notifications', () => {
   describe('broadcastNotification', () => {
@@ -8,7 +8,7 @@ describe('WebSocket Notifications', () => {
         type: 'approval',
         title: '✅ Horas Extras Aprovadas',
         message: 'João Silva teve 2h de horas extras aprovadas.',
-        userId: 'user-123',
+        userId: 123,
         data: { employeeName: 'João Silva', hours: 2 },
         timestamp: Date.now(),
       });
@@ -21,7 +21,7 @@ describe('WebSocket Notifications', () => {
         type: 'alert',
         title: '⏰ Ponto Atrasado',
         message: 'Maria Santos registrou ponto com 15 minutos de atraso.',
-        userId: 'user-456',
+        userId: 456,
         data: { employeeName: 'Maria Santos', minutesLate: 15 },
         timestamp: Date.now(),
       });
@@ -34,7 +34,7 @@ describe('WebSocket Notifications', () => {
         type: 'error',
         title: '❌ Horas Extras Rejeitadas',
         message: 'Horas extras de Pedro Costa foram rejeitadas.',
-        userId: 'user-789',
+        userId: 789,
         data: { employeeName: 'Pedro Costa', status: 'rejected' },
         timestamp: Date.now(),
       });
@@ -47,7 +47,7 @@ describe('WebSocket Notifications', () => {
         type: 'info',
         title: '💰 Folha Processada',
         message: 'Folha de abril de Ana Silva foi processada.',
-        userId: 'user-101',
+        userId: 101,
         data: { employeeName: 'Ana Silva', month: 'abril' },
         timestamp: Date.now(),
       });
@@ -114,7 +114,7 @@ describe('WebSocket Notifications', () => {
         type: 'approval' as const,
         title: 'Test Title',
         message: 'Test Message',
-        userId: 'user-123',
+        userId: 123,
         data: { key: 'value' },
         timestamp: Date.now(),
       };

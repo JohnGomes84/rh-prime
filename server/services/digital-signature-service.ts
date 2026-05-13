@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { getDb, createAuditEntry } from '../db';
-import { digitalSignatures, documents } from '../../drizzle/schema';
+import { getDb, createAuditEntry } from '../db.js';
+import { digitalSignatures, documents } from '../../drizzle/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**

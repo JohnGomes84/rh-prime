@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
-import { validateCPF, validateCNPJ, fetchAddressByCEP } from "../integrations/cpf-validator";
-import { sendEmail } from "../integrations/email-service";
-import { registerWebhook, triggerWebhook, unregisterWebhook, listWebhooks } from "../integrations/webhooks";
+import { protectedProcedure, router } from "../_core/trpc.js";
+import { validateCPF, validateCNPJ, fetchAddressByCEP } from "../integrations/cpf-validator.js";
+import { sendEmail } from "../integrations/email-service.js";
+import { registerWebhook, triggerWebhook, unregisterWebhook, listWebhooks } from "../integrations/webhooks.js";
 
 export const integrationsRouter = router({
   // CEP Integration

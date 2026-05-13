@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { logAudit, extractAuditContext } from "./audit-middleware";
+import { logAudit, extractAuditContext } from "./audit-middleware.js";
 
 describe("Audit Middleware", () => {
   describe("logAudit", () => {

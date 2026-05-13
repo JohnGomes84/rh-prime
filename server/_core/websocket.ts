@@ -1,14 +1,14 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import * as dbHelpers from '../db';
+import * as db from '../db.js';
 
 interface NotificationPayload {
-  type: 'approval' | 'alert' | 'info' | 'error';
+  type: 'approval' | 'alert' | 'info' | 'error' | 'Geral' | 'Férias' | 'ASO' | 'Banco de Horas';
   title: string;
   message: string;
-  userId?: string;
+  userId?: number;
   data?: Record<string, any>;
-  timestamp: number;
+  timestamp?: number;
 }
 
 interface ClientConnection {
@@ -51,7 +51,6 @@ export function setupWebSocket(server: Server) {
     });
   });
 
-  // Heartbeat para manter conexões vivas
   setInterval(() => {
     clients.forEach((client) => {
       if (!client.isAlive) {
@@ -68,49 +67,39 @@ export function setupWebSocket(server: Server) {
 }
 
 export async function broadcastNotification(payload: NotificationPayload) {
-  // Salvar no banco de dados via audit log
   if (payload.userId) {
     try {
-      await dbHelpers.createAuditEntry({
-        action: 'notification',
-        resourceType: payload.type,
-        resourceId: payload.userId,
-        userId: payload.userId as any,
-        details: JSON.stringify({ title: payload.title, message: payload.message, data: payload.data }),
-      } as any);
-    } catch (e) { /* ignore */ }
+      await db.createNotification({
+        type: (payload.type as any) ?? 'Geral',
+        title: payload.title,
+        message: payload.message,
+        severity: 'Info',
+      });
+    } catch (err) {
+      console.warn('[WebSocket] Persist notification failed:', err);
+    }
   }
 
-  // Enviar via WebSocket se usuário está conectado
-  if (payload.userId && clients.has(payload.userId)) {
-    const client = clients.get(payload.userId)!;
+  const key = payload.userId !== undefined ? String(payload.userId) : '';
+  if (key && clients.has(key)) {
+    const client = clients.get(key)!;
     if (client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(JSON.stringify(payload));
+      client.ws.send(JSON.stringify({ ...payload, timestamp: payload.timestamp ?? Date.now() }));
     }
   }
 }
 
 export async function broadcastToRole(role: string, payload: NotificationPayload) {
-  try {
-    const users = await dbHelpers.listUsers();
-    const filtered = users.filter((u: any) => u.role === role);
-    for (const user of filtered) {
-      await broadcastNotification({
-        ...payload,
-        userId: String(user.id),
-      });
-    }
-  } catch (e) { /* ignore */ }
+  const usersList = await db.getUsersByRole(role);
+  for (const user of usersList) {
+    await broadcastNotification({ ...payload, userId: user.id });
+  }
 }
 
 export async function broadcastToDepartment(departmentId: string, payload: NotificationPayload) {
-  // Broadcast to all connected clients (department filter not available)
-  const users: any[] = [];
-  for (const user of users) {
-    await broadcastNotification({
-      ...payload,
-      userId: user.id,
-    });
+  const usersList = await db.getUsersByDepartment(departmentId);
+  for (const user of usersList) {
+    await broadcastNotification({ ...payload, userId: user.id });
   }
 }
 

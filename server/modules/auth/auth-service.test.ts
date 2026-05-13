@@ -11,7 +11,7 @@ import {
   deleteUser,
   listUsers,
   changePassword,
-} from './auth-service';
+} from './auth-service.js';
 
 describe('Auth Service', () => {
   describe('Password Hashing', () => {
@@ -225,7 +225,7 @@ describe('Auth Service', () => {
 
       const registerResult = await register({
         email,
-        oldPassword,
+        password: oldPassword,
         name: 'Change Password Test',
       });
 

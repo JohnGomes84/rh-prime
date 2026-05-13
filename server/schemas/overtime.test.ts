@@ -4,7 +4,7 @@ import {
   overtimeRequestSchema,
   overtimeApprovalSchema,
   overtimeCalculationSchema,
-} from './overtime';
+} from './overtime.js';
 
 describe('Schemas de RH Prime - Ponto e Horas Extras', () => {
   // ============================================================

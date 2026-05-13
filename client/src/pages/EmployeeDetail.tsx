@@ -41,7 +41,7 @@ import {
   Shield,
   Clock,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 
@@ -170,7 +170,13 @@ export default function EmployeeDetail() {
                 </Button>
               </>
             ) : (
-              <Button variant="outline" onClick={() => setEditing(true)}>Editar Dados</Button>
+              <>
+                <Button variant="outline" onClick={() => setEditing(true)}>Editar Dados</Button>
+                <Button variant="outline" onClick={() => setLocation(`/calculadoras?employeeId=${employee.id}`)}>
+                  Calculadoras CLT
+                </Button>
+                <LinkUserButton employeeId={employee.id} currentUserId={employee.userId ?? null} />
+              </>
             )}
           </div>
         </div>
@@ -234,12 +240,21 @@ export default function EmployeeDetail() {
                       <InfoRow label="Gênero" value={employee.gender} />
                       <InfoRow label="Estado Civil" value={employee.maritalStatus} />
                       <InfoRow label="E-mail" value={employee.email} />
-                      <InfoRow label="Telefone" value={employee.phone} />
+                      <InfoRow
+                        label="Telefone"
+                        value={employee.phone}
+                        href={employee.phone ? `https://wa.me/55${String(employee.phone).replace(/\D/g, "")}` : undefined}
+                        hrefLabel="WhatsApp"
+                      />
                       <InfoRow label="Status" value={employee.status} />
                     </div>
                   )}
                 </CardContent>
               </Card>
+
+              <HierarchyCard employee={employee} />
+
+              <MovementCard employeeId={employee.id} />
 
               <Card className="border-0 shadow-sm">
                 <CardHeader><CardTitle className="text-base">Dados Bancários</CardTitle></CardHeader>
@@ -278,6 +293,10 @@ export default function EmployeeDetail() {
                     <form onSubmit={(e) => {
                       e.preventDefault();
                       const fd = new FormData(e.currentTarget);
+                      const workDays: number[] = [];
+                      for (let i = 0; i < 7; i++) {
+                        if (fd.get(`workDay_${i}`)) workDays.push(i);
+                      }
                       createContractMutation.mutate({
                         employeeId: empId,
                         contractType: fd.get("contractType") as "CLT" | "Experiência" | "Temporário" | "Estágio",
@@ -285,6 +304,14 @@ export default function EmployeeDetail() {
                         positionId: fd.get("positionId") ? Number(fd.get("positionId")) : undefined,
                         salary: fd.get("salary") ? String(fd.get("salary")) : undefined,
                         weeklyHours: fd.get("weeklyHours") ? String(fd.get("weeklyHours")) : undefined,
+                        scheduleType: (fd.get("scheduleType") as any) || "5x2",
+                        workDays: workDays.length > 0 ? workDays : [1, 2, 3, 4, 5],
+                        startTime: (fd.get("startTime") as string) || "08:00",
+                        endTime: (fd.get("endTime") as string) || "17:00",
+                        lunchBreakMinutes: Number(fd.get("lunchBreakMinutes")) || 60,
+                        toleranceMinutes: Number(fd.get("toleranceMinutes")) || 5,
+                        hourBankEnabled: !!fd.get("hourBankEnabled"),
+                        nightShiftEnabled: !!fd.get("nightShiftEnabled"),
                       });
                     }} className="space-y-4">
                       <div>
@@ -318,6 +345,67 @@ export default function EmployeeDetail() {
                         <div><Label>Salário (R$)</Label><Input name="salary" type="number" step="0.01" /></div>
                         <div><Label>Carga Horária Semanal</Label><Input name="weeklyHours" type="number" defaultValue={44} /></div>
                       </div>
+
+                      {/* Jornada */}
+                      <div className="border-t pt-3 space-y-3">
+                        <h4 className="text-sm font-semibold">Jornada de Trabalho</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>Tipo de escala</Label>
+                            <Select name="scheduleType" defaultValue="5x2">
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="5x2">5x2 (Seg-Sex)</SelectItem>
+                                <SelectItem value="6x1">6x1 (folga semanal)</SelectItem>
+                                <SelectItem value="12x36">12x36</SelectItem>
+                                <SelectItem value="parcial_30h">Parcial 30h</SelectItem>
+                                <SelectItem value="parcial_25h">Parcial 25h</SelectItem>
+                                <SelectItem value="flexivel">Flexível</SelectItem>
+                                <SelectItem value="intermitente">Intermitente</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Almoço (minutos)</Label>
+                            <Input name="lunchBreakMinutes" type="number" defaultValue={60} />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="block mb-1">Dias da semana</Label>
+                          <div className="flex gap-3 text-sm">
+                            {[
+                              { i: 0, l: "Dom" },
+                              { i: 1, l: "Seg" },
+                              { i: 2, l: "Ter" },
+                              { i: 3, l: "Qua" },
+                              { i: 4, l: "Qui" },
+                              { i: 5, l: "Sex" },
+                              { i: 6, l: "Sáb" },
+                            ].map((d) => (
+                              <label key={d.i} className="flex items-center gap-1">
+                                <input type="checkbox" name={`workDay_${d.i}`} defaultChecked={d.i >= 1 && d.i <= 5} />
+                                {d.l}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div><Label>Início</Label><Input name="startTime" type="time" defaultValue="08:00" /></div>
+                          <div><Label>Fim</Label><Input name="endTime" type="time" defaultValue="17:00" /></div>
+                          <div><Label>Tolerância (min)</Label><Input name="toleranceMinutes" type="number" defaultValue={5} /></div>
+                        </div>
+                        <div className="flex gap-4 text-sm">
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="hourBankEnabled" />
+                            Banco de horas habilitado
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="nightShiftEnabled" />
+                            Adicional noturno
+                          </label>
+                        </div>
+                      </div>
+
                       <div className="flex justify-end gap-2 pt-2">
                         <Button type="button" variant="outline" onClick={() => setContractDialog(false)}>Cancelar</Button>
                         <Button type="submit" disabled={createContractMutation.isPending}>
@@ -641,11 +729,378 @@ export default function EmployeeDetail() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+const MOVEMENT_KINDS: Array<{ value: string; label: string }> = [
+  { value: "promocao", label: "Promoção" },
+  { value: "transferencia_dept", label: "Transferência de departamento" },
+  { value: "troca_gestor", label: "Troca de gestor" },
+  { value: "ajuste_salarial", label: "Ajuste salarial" },
+  { value: "mudanca_jornada", label: "Mudança de jornada" },
+  { value: "mudanca_centro_custo", label: "Mudança de centro de custo" },
+  { value: "mudanca_cargo", label: "Mudança de cargo" },
+];
+
+function MovementCard({ employeeId }: { employeeId: number }) {
+  const utils = trpc.useUtils();
+  const list = trpc.lifecycle.movement.listByEmployee.useQuery({ employeeId });
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    kind: "ajuste_salarial",
+    fromValue: "",
+    toValue: "",
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: "",
+  });
+
+  const create = trpc.lifecycle.movement.create.useMutation({
+    onSuccess: () => {
+      toast.success("Movimentação registrada");
+      utils.lifecycle.movement.listByEmployee.invalidate({ employeeId });
+      setOpen(false);
+      setForm({
+        kind: "ajuste_salarial",
+        fromValue: "",
+        toValue: "",
+        effectiveDate: new Date().toISOString().slice(0, 10),
+        reason: "",
+      });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const submit = () => {
+    if (!form.effectiveDate) {
+      toast.error("Informe a data de vigência");
+      return;
+    }
+    create.mutate({
+      employeeId,
+      kind: form.kind as any,
+      fromValue: form.fromValue || undefined,
+      toValue: form.toValue || undefined,
+      effectiveDate: form.effectiveDate,
+      reason: form.reason || undefined,
+    });
+  };
+
+  const items = (list.data as any[]) ?? [];
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Movimentações internas</CardTitle>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Nova
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Registrar movimentação</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Tipo</Label>
+                <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MOVEMENT_KINDS.map((k) => (
+                      <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>De</Label>
+                  <Input
+                    value={form.fromValue}
+                    onChange={(e) => setForm({ ...form, fromValue: e.target.value })}
+                    placeholder="Valor anterior"
+                  />
+                </div>
+                <div>
+                  <Label>Para</Label>
+                  <Input
+                    value={form.toValue}
+                    onChange={(e) => setForm({ ...form, toValue: e.target.value })}
+                    placeholder="Novo valor"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Data de vigência *</Label>
+                <Input
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Motivo / observação</Label>
+                <Input
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={submit} disabled={create.isPending}>
+                  {create.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Registrar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {list.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+          </div>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Nenhuma movimentação registrada.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {items.slice(0, 10).map((m: any) => {
+              const kindLabel = MOVEMENT_KINDS.find((k) => k.value === m.kind)?.label ?? m.kind;
+              return (
+                <li key={m.id} className="border-l-2 border-primary/30 pl-3 py-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="font-medium text-sm">{kindLabel}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(m.effectiveDate).toLocaleDateString("pt-BR")}
+                    </span>
+                  </div>
+                  {(m.fromValue || m.toValue) && (
+                    <p className="text-xs text-muted-foreground">
+                      {m.fromValue ?? "—"} → {m.toValue ?? "—"}
+                    </p>
+                  )}
+                  {m.reason && <p className="text-xs italic mt-1">{m.reason}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HierarchyCard({ employee }: { employee: any }) {
+  const utils = trpc.useUtils();
+  const employeesQuery = trpc.employees.list.useQuery({});
+  const departmentsQuery = trpc.departments.list.useQuery();
+  const historyQuery = trpc.employees.managerHistory.useQuery({ employeeId: employee.id });
+
+  const employees = useMemo(() => {
+    const data = employeesQuery.data as any;
+    return Array.isArray(data) ? data : data?.data ?? [];
+  }, [employeesQuery.data]);
+
+  const setManager = trpc.employees.setManager.useMutation({
+    onSuccess: () => {
+      toast.success("Gestor atualizado");
+      utils.employees.get.invalidate({ id: employee.id });
+      utils.employees.managerHistory.invalidate({ employeeId: employee.id });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const setDepartment = trpc.employees.setDepartment.useMutation({
+    onSuccess: () => {
+      toast.success("Departamento atualizado");
+      utils.employees.get.invalidate({ id: employee.id });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const currentManager = employee.managerId
+    ? employees.find((e: any) => e.id === employee.managerId)
+    : null;
+  const currentDept = employee.departmentId
+    ? (departmentsQuery.data as any[])?.find((d: any) => d.id === employee.departmentId)
+    : null;
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader><CardTitle className="text-base">Hierarquia e Lotação</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label>Gestor direto</Label>
+            <Select
+              value={employee.managerId ? String(employee.managerId) : "none"}
+              onValueChange={(v) =>
+                setManager.mutate({
+                  employeeId: employee.id,
+                  managerId: v === "none" ? null : Number(v),
+                })
+              }
+              disabled={setManager.isPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Sem gestor —</SelectItem>
+                {employees
+                  .filter((e: any) => e.id !== employee.id)
+                  .map((e: any) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      {e.fullName}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {currentManager && (
+              <p className="text-xs text-muted-foreground mt-1">Atual: {currentManager.fullName}</p>
+            )}
+          </div>
+
+          <div>
+            <Label>Departamento</Label>
+            <Select
+              value={employee.departmentId ? String(employee.departmentId) : "none"}
+              onValueChange={(v) =>
+                setDepartment.mutate({
+                  employeeId: employee.id,
+                  departmentId: v === "none" ? null : Number(v),
+                })
+              }
+              disabled={setDepartment.isPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Sem departamento —</SelectItem>
+                {((departmentsQuery.data as any[]) ?? []).map((d: any) => (
+                  <SelectItem key={d.id} value={String(d.id)}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {currentDept && (
+              <p className="text-xs text-muted-foreground mt-1">Atual: {currentDept.name}</p>
+            )}
+          </div>
+        </div>
+
+        {(historyQuery.data as any[])?.length > 0 && (
+          <div className="border-t pt-3">
+            <p className="text-sm font-medium mb-2">Histórico de gestores</p>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              {(historyQuery.data as any[]).slice(0, 5).map((h: any) => {
+                const mgr = h.managerId ? employees.find((e: any) => e.id === h.managerId) : null;
+                return (
+                  <li key={h.id} className="flex justify-between">
+                    <span>{mgr?.fullName ?? "— sem gestor —"}</span>
+                    <span className="text-xs">
+                      {new Date(h.startDate).toLocaleDateString("pt-BR")}
+                      {h.endDate ? ` – ${new Date(h.endDate).toLocaleDateString("pt-BR")}` : " (atual)"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LinkUserButton({ employeeId, currentUserId }: { employeeId: number; currentUserId: number | null }) {
+  const utils = trpc.useUtils();
+  const usersQuery = trpc.users.listUsers.useQuery();
+  const linkMutation = trpc.employees.linkUser.useMutation({
+    onSuccess: () => {
+      toast.success("Usuário vinculado");
+      utils.employees.get.invalidate({ id: employeeId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string>(currentUserId ? String(currentUserId) : "");
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          {currentUserId ? "Trocar usuário vinculado" : "Vincular ao usuário"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Vincular funcionário a usuário</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            O vínculo permite que o usuário logado registre ponto e use as funcionalidades de jornada como este funcionário.
+          </p>
+          <Select value={selected} onValueChange={setSelected}>
+            <SelectTrigger><SelectValue placeholder="Selecione um usuário" /></SelectTrigger>
+            <SelectContent>
+              {((usersQuery.data as any[]) ?? []).map((u: any) => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.email} — {u.name ?? "(sem nome)"} · {u.role}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!selected || linkMutation.isPending}
+              onClick={async () => {
+                await linkMutation.mutateAsync({ employeeId, userId: Number(selected) });
+                setOpen(false);
+              }}
+            >
+              Vincular
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  href,
+  hrefLabel,
+}: {
+  label: string;
+  value: string | null | undefined;
+  href?: string;
+  hrefLabel?: string;
+}) {
   return (
     <div className="flex justify-between py-1.5 border-b border-border/50 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground">{value || "-"}</span>
+      <span className="font-medium text-foreground flex items-center gap-2">
+        {value || "-"}
+        {href && value && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-emerald-600 hover:underline"
+          >
+            {hrefLabel ?? "Abrir"}
+          </a>
+        )}
+      </span>
     </div>
   );
 }

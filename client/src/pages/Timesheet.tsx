@@ -65,34 +65,98 @@ export default function Timesheet() {
   );
 
   // Mutations
+  const captureLocation = (): Promise<string | undefined> =>
+    new Promise((resolve) => {
+      if (!('geolocation' in navigator)) return resolve(undefined);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude.toFixed(6);
+          const lng = pos.coords.longitude.toFixed(6);
+          const acc = Math.round(pos.coords.accuracy);
+          resolve(`${lat},${lng} (±${acc}m)`);
+        },
+        () => resolve(undefined),
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      );
+    });
+
   const clockInMutation = trpc.timesheet.clockIn.useMutation({
     onSuccess: () => {
-      toast.success('Entrada registrada com sucesso!');
+      toast.success('Entrada registrada com sucesso');
       utils.timesheet.getOpenRecord.invalidate();
       utils.timesheet.listRecords.invalidate();
       utils.timesheet.monthlySummary.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(err.message || 'Falha ao registrar entrada'),
   });
 
   const clockOutMutation = trpc.timesheet.clockOut.useMutation({
-    onSuccess: () => {
-      toast.success('Saída registrada com sucesso!');
+    onSuccess: (data: any) => {
+      const ev = data?.evaluation;
+      if (ev?.delayMinutes > 0) {
+        toast.warning(`Saída registrada. Atraso de ${ev.delayMinutes}min no início.`);
+      } else if (ev?.overtime?.total > 0) {
+        toast.success(`Saída registrada. ${Math.round(ev.overtime.total)}min de hora extra.`);
+      } else {
+        toast.success('Saída registrada com sucesso');
+      }
       utils.timesheet.getOpenRecord.invalidate();
       utils.timesheet.listRecords.invalidate();
       utils.timesheet.monthlySummary.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(err.message || 'Falha ao registrar saída'),
   });
 
   const isWorking = !!openRecord;
   const isPending = clockInMutation.isPending || clockOutMutation.isPending;
 
-  const handleToggleClock = () => {
+  const captureSelfie = (): Promise<string | undefined> =>
+    new Promise((resolve) => {
+      if (!('mediaDevices' in navigator)) return resolve(undefined);
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 }, audio: false })
+        .then((stream) => {
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.play().catch(() => {/* ignore */});
+          setTimeout(() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 320;
+            canvas.height = 240;
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.drawImage(video, 0, 0, 320, 240);
+            stream.getTracks().forEach((t) => t.stop());
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            resolve(dataUrl);
+          }, 600);
+        })
+        .catch(() => resolve(undefined));
+    });
+
+  const fingerprint = (): string => {
+    const ua = navigator.userAgent;
+    const lang = navigator.language;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const screen = `${window.screen.width}x${window.screen.height}`;
+    const raw = [ua, lang, tz, screen].join('|');
+    let h = 0;
+    for (let i = 0; i < raw.length; i++) h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+    return `dfp_${Math.abs(h).toString(36)}`;
+  };
+
+  const handleToggleClock = async () => {
+    const [location, selfieUrl] = await Promise.all([captureLocation(), captureSelfie()]);
+    const deviceFingerprint = fingerprint();
     if (isWorking) {
-      clockOutMutation.mutate({});
+      clockOutMutation.mutate({
+        notes: location ? `[saída] ${location}` : undefined,
+      });
     } else {
-      clockInMutation.mutate({});
+      clockInMutation.mutate({
+        location,
+        selfieUrl,
+        deviceFingerprint,
+      });
     }
   };
 

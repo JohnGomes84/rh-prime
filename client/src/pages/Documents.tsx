@@ -60,7 +60,7 @@ export default function Documents() {
       setDialogOpen(false);
       setUploadFile(null);
     },
-    onError: (err) => toast.error("Erro: " + err.message),
+    onError: (err: { message: string }) => toast.error("Erro: " + err.message),
   });
 
   const deleteMutation = trpc.documents.delete.useMutation({
@@ -68,7 +68,7 @@ export default function Documents() {
       utils.documents.list.invalidate();
       toast.success("Documento removido!");
     },
-    onError: (err) => toast.error("Erro: " + err.message),
+    onError: (err: { message: string }) => toast.error("Erro: " + err.message),
   });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

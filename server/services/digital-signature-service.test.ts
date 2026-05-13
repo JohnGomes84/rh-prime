@@ -3,7 +3,7 @@ import {
   calculateDocumentHash,
   signDocumentHash,
   validateSignature,
-} from './digital-signature-service';
+} from './digital-signature-service.js';
 
 describe('Digital Signature Service', () => {
   describe('calculateDocumentHash', () => {

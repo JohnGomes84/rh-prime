@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal, boolean, json, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal, boolean, json, index, uniqueIndex } from "drizzle-orm/mysql-core";
 
 // ============================================================
 // USERS (Auth - tabela do template)
@@ -115,6 +115,9 @@ export const employees = mysqlTable("employees", {
   employmentType: mysqlEnum("employmentType", ["CLT", "CLT_Comissao", "Comissionado", "Concursado", "Contrato", "Cooperado", "Efetivo", "Estagio", "Estatutario", "MenorAprendiz", "JovemAprendiz", "PrestadorServico", "Socio", "Temporario", "Outro"]).default("CLT"),
   esocialMatricula: varchar("esocialMatricula", { length: 20 }),
   insalubrityPercentage: mysqlEnum("insalubrityPercentage", ["0", "10", "20", "40"]).default("0"),
+  userId: int("userId"),
+  managerId: int("manager_id"),
+  departmentId: int("department_id"),
   status: mysqlEnum("status", ["Ativo", "Inativo", "Afastado", "Férias"]).default("Ativo").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -157,6 +160,17 @@ export const contracts = mysqlTable("contracts", {
   workSchedule: varchar("workSchedule", { length: 100 }),
   weeklyHours: decimal("weeklyHours", { precision: 4, scale: 2 }),
   salary: decimal("salary", { precision: 10, scale: 2 }),
+  // Jornada — definida na contratação
+  scheduleType: mysqlEnum("scheduleType", [
+    "5x2", "6x1", "12x36", "parcial_30h", "parcial_25h", "flexivel", "intermitente"
+  ]).default("5x2").notNull(),
+  workDays: json("workDays").$type<number[]>().default([1, 2, 3, 4, 5]),
+  startTime: varchar("startTime", { length: 5 }).default("08:00"),
+  endTime: varchar("endTime", { length: 5 }).default("17:00"),
+  lunchBreakMinutes: int("lunchBreakMinutes").default(60),
+  toleranceMinutes: int("toleranceMinutes").default(5),
+  hourBankEnabled: boolean("hourBankEnabled").default(false),
+  nightShiftEnabled: boolean("nightShiftEnabled").default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -320,6 +334,11 @@ export const documents = mysqlTable("documents", {
   fileType: varchar("fileType", { length: 10 }),
   fileSize: int("fileSize"),
   expiryDate: date("expiryDate"),
+  origin: varchar("origin", { length: 30 }),
+  admissionWorkflowId: int("admission_workflow_id"),
+  admissionChecklistItemId: int("admission_checklist_item_id"),
+  isPrimaryEvidence: boolean("is_primary_evidence").default(false).notNull(),
+  lifecycleStatus: varchar("lifecycle_status", { length: 20 }).default("stored").notNull(),
   observations: text("observations"),
   uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
 });
@@ -340,10 +359,20 @@ export const checklistItems = mysqlTable("checklist_items", {
   completedDate: date("completedDate"),
   completedBy: varchar("completedBy", { length: 255 }),
   documentId: int("documentId"),
+  sourceWorkflowId: int("sourceWorkflowId"),
+  sourceItemId: int("sourceItemId"),
+  mirrorOrigin: varchar("mirrorOrigin", { length: 50 }),
+  isEditable: boolean("isEditable").default(true).notNull(),
   observations: text("observations"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({
+  employeeMirrorIdx: uniqueIndex("idx_employee_mirror").on(
+    table.employeeId,
+    table.sourceItemId,
+    table.mirrorOrigin
+  ),
+}));
 
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertChecklistItem = typeof checklistItems.$inferInsert;
@@ -457,6 +486,7 @@ export type InsertServiceOrder = typeof serviceOrders.$inferInsert;
 export const documentTemplates = mysqlTable("document_templates", {
   id: int("id").autoincrement().primaryKey(),
   templateName: varchar("templateName", { length: 255 }).notNull(),
+  machineKey: varchar("machine_key", { length: 100 }).unique(),
   templateType: mysqlEnum("templateType", [
     "Termo de Responsabilidade",
     "Declaração de Pendência",
@@ -641,24 +671,56 @@ export type InsertDigitalSignature = typeof digitalSignatures.$inferInsert;
 // TIME RECORDS (Registros de Ponto)
 // ============================================================
 export const timeRecords = mysqlTable("time_records", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  employeeId: varchar("employee_id", { length: 36 })
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employees.id, { onDelete: "cascade", onUpdate: "cascade" }),
   clockIn: timestamp("clock_in").notNull(),
   clockOut: timestamp("clock_out"),
   hoursWorked: decimal("hours_worked", { precision: 6, scale: 2 }),
+  location: varchar("location", { length: 255 }),
+  notes: text("notes"),
   status: mysqlEnum("status", ["PENDING", "APPROVED", "REJECTED"]).default("PENDING").notNull(),
-  approvedById: varchar("approved_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  approvedById: int("approved_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   approvedAt: timestamp("approved_at"),
-  updatedById: varchar("updated_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  updatedById: int("updated_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  // Portaria MTP 671/2021 (REP-P)
+  nsr: int("nsr"),
+  previousHash: varchar("previous_hash", { length: 64 }),
+  recordHash: varchar("record_hash", { length: 64 }),
+  // Anti-fraude (Fase 7)
+  selfieUrl: varchar("selfie_url", { length: 500 }),
+  geofenceStatus: mysqlEnum("geofence_status", ["within", "outside", "no_geo"]).default("no_geo"),
+  deviceFingerprint: varchar("device_fingerprint", { length: 120 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
   employeeClockInIdx: index("idx_time_employee_clockin").on(table.employeeId, table.clockIn),
   employeeStatusIdx: index("idx_time_employee_status").on(table.employeeId, table.status),
   clockInIdx: index("idx_time_clockin").on(table.clockIn),
+  nsrIdx: index("idx_time_nsr").on(table.nsr),
 }));
+
+// ============================================================
+// COMPLIANCE EXPORTS (AFD/AFDT/ACJEF — Portaria 671/2021)
+// ============================================================
+export const complianceExports = mysqlTable("compliance_exports", {
+  id: int("id").autoincrement().primaryKey(),
+  type: mysqlEnum("type", ["AFD", "AFDT", "ACJEF"]).notNull(),
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  generatedById: int("generated_by_id").references(() => users.id, { onDelete: "set null" }),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  recordCount: int("record_count").default(0).notNull(),
+  fileSha256: varchar("file_sha256", { length: 64 }),
+  fileBytes: int("file_bytes"),
+  notes: text("notes"),
+}, (table) => ({
+  typePeriodIdx: index("idx_compliance_type_period").on(table.type, table.periodStart),
+}));
+
+export type ComplianceExport = typeof complianceExports.$inferSelect;
+export type InsertComplianceExport = typeof complianceExports.$inferInsert;
 
 export type TimeRecord = typeof timeRecords.$inferSelect;
 export type InsertTimeRecord = typeof timeRecords.$inferInsert;
@@ -667,19 +729,20 @@ export type InsertTimeRecord = typeof timeRecords.$inferInsert;
 // OVERTIME RECORDS (Registros de Horas Extras)
 // ============================================================
 export const overtimeRecords = mysqlTable("overtime_records", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  employeeId: varchar("employee_id", { length: 36 })
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
     .notNull()
     .references(() => employees.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  timeRecordId: varchar("time_record_id", { length: 36 })
+  timeRecordId: int("time_record_id")
     .notNull()
     .references(() => timeRecords.id, { onDelete: "cascade", onUpdate: "cascade" }),
   hoursWorked: decimal("hours_worked", { precision: 6, scale: 2 }).notNull(),
   overtimeHours: decimal("overtime_hours", { precision: 6, scale: 2 }).notNull(),
   multiplier: decimal("multiplier", { precision: 3, scale: 2 }).notNull(),
   type: mysqlEnum("type", ["50%", "100%", "NOTURNO"]).notNull(),
+  reason: text("reason"),
   status: mysqlEnum("status", ["PENDING", "APPROVED", "REJECTED"]).default("PENDING").notNull(),
-  approvedById: varchar("approved_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
+  approvedById: int("approved_by_id").references(() => users.id, { onDelete: "set null", onUpdate: "cascade" }),
   approvedAt: timestamp("approved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -692,6 +755,29 @@ export const overtimeRecords = mysqlTable("overtime_records", {
 
 export type OvertimeRecord = typeof overtimeRecords.$inferSelect;
 export type InsertOvertimeRecord = typeof overtimeRecords.$inferInsert;
+
+// ============================================================
+// OVERTIME AUTHORIZATIONS (Pré-autorização de horas extras)
+// ============================================================
+export const overtimeAuthorizations = mysqlTable("overtime_authorizations", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id")
+    .notNull()
+    .references(() => employees.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  authorizedDate: date("authorized_date").notNull(),
+  maxHours: decimal("max_hours", { precision: 5, scale: 2 }).notNull(),
+  type: mysqlEnum("type", ["50%", "100%", "NOTURNO"]).notNull(),
+  authorizedById: int("authorized_by_id").references(() => users.id, { onDelete: "set null" }),
+  authorizedAt: timestamp("authorized_at").defaultNow().notNull(),
+  reason: text("reason"),
+  consumed: boolean("consumed").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  employeeDateIdx: index("idx_otauth_employee_date").on(table.employeeId, table.authorizedDate),
+}));
+
+export type OvertimeAuthorization = typeof overtimeAuthorizations.$inferSelect;
+export type InsertOvertimeAuthorization = typeof overtimeAuthorizations.$inferInsert;
 
 // ============================================================
 // JOB OPENINGS (Vagas de Emprego)
@@ -737,3 +823,349 @@ export const candidates = mysqlTable("candidates", {
 });
 export type Candidate = typeof candidates.$inferSelect;
 export type InsertCandidate = typeof candidates.$inferInsert;
+
+// ============================================================
+// DEPARTMENTS (Departamentos / hierarquia organizacional)
+// ============================================================
+export const departments = mysqlTable("departments", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  parentId: int("parent_id"),
+  headEmployeeId: int("head_employee_id"),
+  costCenter: varchar("cost_center", { length: 50 }),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  parentIdx: index("idx_dept_parent").on(table.parentId),
+}));
+
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = typeof departments.$inferInsert;
+
+// ============================================================
+// EMPLOYEE MANAGER HISTORY (auditoria de troca de gestor)
+// ============================================================
+export const employeeManagerHistory = mysqlTable("employee_manager_history", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id").notNull(),
+  managerId: int("manager_id"),
+  startDate: timestamp("start_date").defaultNow().notNull(),
+  endDate: timestamp("end_date"),
+  changedById: int("changed_by_id"),
+  reason: varchar("reason", { length: 255 }),
+}, (table) => ({
+  employeeIdx: index("idx_emhist_employee").on(table.employeeId),
+}));
+
+export type EmployeeManagerHistory = typeof employeeManagerHistory.$inferSelect;
+export type InsertEmployeeManagerHistory = typeof employeeManagerHistory.$inferInsert;
+
+// ============================================================
+// ADMISSION WORKFLOWS (Workflow de admissão de novos funcionários)
+// ============================================================
+export const admissionWorkflows = mysqlTable("admission_workflows", {
+  id: int("id").autoincrement().primaryKey(),
+  candidateName: varchar("candidate_name", { length: 255 }).notNull(),
+  candidateEmail: varchar("candidate_email", { length: 255 }),
+  candidateCpf: varchar("candidate_cpf", { length: 14 }),
+  candidatePhone: varchar("candidate_phone", { length: 20 }),
+  positionId: int("position_id"),
+  departmentId: int("department_id"),
+  managerId: int("manager_id"),
+  proposedSalary: decimal("proposed_salary", { precision: 10, scale: 2 }),
+  proposedHireDate: date("proposed_hire_date"),
+  contractType: mysqlEnum("contract_type", ["CLT", "Estágio", "Temporário", "Experiência"]).default("CLT").notNull(),
+  status: mysqlEnum("status", [
+    "DRAFT",
+    "DOCS_PENDING",
+    "VALIDATING",
+    "APPROVED",
+    "ACTIVE",
+    "REJECTED",
+    "CANCELLED",
+  ]).default("DRAFT").notNull(),
+  currentStep: varchar("current_step", { length: 60 }).default("dados_basicos"),
+  notes: text("notes"),
+  createdById: int("created_by_id"),
+  approvedById: int("approved_by_id"),
+  resultEmployeeId: int("result_employee_id"),
+  syncStatus: varchar("sync_status", { length: 20 }).default("NOT_SYNCED").notNull(),
+  catalogVersion: varchar("catalog_version", { length: 20 }),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  statusIdx: index("idx_adm_status").on(table.status),
+  cpfIdx: index("idx_adm_cpf").on(table.candidateCpf),
+}));
+
+export type AdmissionWorkflow = typeof admissionWorkflows.$inferSelect;
+export type InsertAdmissionWorkflow = typeof admissionWorkflows.$inferInsert;
+
+// ============================================================
+// ADMISSION CHECKLIST ITEMS
+// ============================================================
+export const admissionChecklistItems = mysqlTable("admission_checklist_items", {
+  id: int("id").autoincrement().primaryKey(),
+  workflowId: int("workflow_id").notNull(),
+  code: varchar("code", { length: 100 }),
+  category: varchar("category", { length: 80 }).notNull(),
+  itemDescription: varchar("item_description", { length: 255 }).notNull(),
+  kind: varchar("kind", { length: 30 }).default("manual_validation").notNull(),
+  status: varchar("status", { length: 30 }).default("PENDING").notNull(),
+  documentPolicy: varchar("document_policy", { length: 30 }).default("none").notNull(),
+  templatePolicy: varchar("template_policy", { length: 30 }).default("none").notNull(),
+  templateKey: varchar("template_key", { length: 100 }),
+  signaturePolicy: varchar("signature_policy", { length: 30 }).default("none").notNull(),
+  reviewPolicy: varchar("review_policy", { length: 30 }).default("manual_review").notNull(),
+  reviewStatus: varchar("review_status", { length: 20 }),
+  reviewedById: int("reviewed_by_id"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  required: boolean("required").default(true).notNull(),
+  completed: boolean("completed").default(false).notNull(),
+  documentUrl: varchar("document_url", { length: 500 }),
+  notes: text("notes"),
+  completedAt: timestamp("completed_at"),
+  completedById: int("completed_by_id"),
+  waivedReason: text("waived_reason"),
+  waivedById: int("waived_by_id"),
+  waivedAt: timestamp("waived_at"),
+}, (table) => ({
+  workflowIdx: index("idx_admchk_workflow").on(table.workflowId),
+  workflowCodeIdx: uniqueIndex("idx_admchk_workflow_code").on(table.workflowId, table.code),
+}));
+
+export type AdmissionChecklistItem = typeof admissionChecklistItems.$inferSelect;
+export type InsertAdmissionChecklistItem = typeof admissionChecklistItems.$inferInsert;
+export const documentSignatures = mysqlTable("document_signatures", {
+  id: int("id").autoincrement().primaryKey(),
+  documentId: int("documentId").notNull(),
+  signatoryType: varchar("signatoryType", { length: 20 }).notNull(),
+  signatoryId: int("signatoryId").notNull(),
+  signedAt: timestamp("signedAt").defaultNow().notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  signatureMethod: varchar("signatureMethod", { length: 30 }).default("electronic"),
+}, (table) => ({
+  documentIdx: index("idx_docsign_document").on(table.documentId),
+}));
+
+export type DocumentSignature = typeof documentSignatures.$inferSelect;
+export type InsertDocumentSignature = typeof documentSignatures.$inferInsert;
+
+// ============================================================
+// EMPLOYEE MOVEMENTS (Movimentação interna versionada)
+// ============================================================
+export const employeeMovements = mysqlTable("employee_movements", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id").notNull(),
+  kind: mysqlEnum("kind", [
+    "promocao",
+    "transferencia_dept",
+    "troca_gestor",
+    "ajuste_salarial",
+    "mudanca_jornada",
+    "mudanca_centro_custo",
+    "mudanca_cargo",
+  ]).notNull(),
+  fromValue: text("from_value"),
+  toValue: text("to_value"),
+  effectiveDate: date("effective_date").notNull(),
+  reason: text("reason"),
+  approvedById: int("approved_by_id"),
+  createdById: int("created_by_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  employeeIdx: index("idx_mov_employee").on(table.employeeId),
+  effectiveIdx: index("idx_mov_effective").on(table.effectiveDate),
+}));
+
+export type EmployeeMovement = typeof employeeMovements.$inferSelect;
+export type InsertEmployeeMovement = typeof employeeMovements.$inferInsert;
+
+// ============================================================
+// TERMINATIONS (Desligamento com workflow)
+// ============================================================
+export const terminations = mysqlTable("terminations", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id").notNull(),
+  noticeDate: date("notice_date").notNull(),
+  lastWorkingDay: date("last_working_day").notNull(),
+  reason: mysqlEnum("reason", [
+    "sem_justa_causa",
+    "pedido_demissao",
+    "justa_causa",
+    "fim_contrato_determinado",
+    "acordo_mutuo",
+    "aposentadoria",
+    "obito",
+  ]).notNull(),
+  status: mysqlEnum("status", [
+    "INICIADO",
+    "DOCUMENTOS",
+    "DEVOLUCAO_EQUIP",
+    "CALCULO_VERBAS",
+    "APROVADO",
+    "FINALIZADO",
+    "CANCELADO",
+  ]).default("INICIADO").notNull(),
+  noticeType: mysqlEnum("notice_type", ["trabalhado", "indenizado", "dispensado"]),
+  totalVerbas: decimal("total_verbas", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  initiatedById: int("initiated_by_id"),
+  approvedById: int("approved_by_id"),
+  initiatedAt: timestamp("initiated_at").defaultNow().notNull(),
+  finalizedAt: timestamp("finalized_at"),
+}, (table) => ({
+  employeeIdx: index("idx_term_employee").on(table.employeeId),
+  statusIdx: index("idx_term_status").on(table.status),
+}));
+
+export type Termination = typeof terminations.$inferSelect;
+export type InsertTermination = typeof terminations.$inferInsert;
+
+// ============================================================
+// TERMINATION DEVOLUTION ITEMS (devolução de equipamento/cracha)
+// ============================================================
+export const terminationDevolutionItems = mysqlTable("termination_devolution_items", {
+  id: int("id").autoincrement().primaryKey(),
+  terminationId: int("termination_id").notNull(),
+  itemDescription: varchar("item_description", { length: 255 }).notNull(),
+  returned: boolean("returned").default(false).notNull(),
+  returnedAt: timestamp("returned_at"),
+  notes: text("notes"),
+}, (table) => ({
+  terminationIdx: index("idx_termdev_termination").on(table.terminationId),
+}));
+
+export type TerminationDevolutionItem = typeof terminationDevolutionItems.$inferSelect;
+export type InsertTerminationDevolutionItem = typeof terminationDevolutionItems.$inferInsert;
+
+// ============================================================
+// REQUESTS (caixa de entrada unificada)
+// ============================================================
+export const requests = mysqlTable("requests", {
+  id: int("id").autoincrement().primaryKey(),
+  kind: mysqlEnum("kind", [
+    "ferias",
+    "atestado",
+    "ajuste_ponto",
+    "abono",
+    "horas_extras",
+    "declaracao",
+    "adiantamento",
+    "outro",
+  ]).notNull(),
+  employeeId: int("employee_id").notNull(),
+  status: mysqlEnum("status", [
+    "PENDING",
+    "IN_REVIEW",
+    "APPROVED",
+    "REJECTED",
+    "CANCELLED",
+  ]).default("PENDING").notNull(),
+  priority: mysqlEnum("priority", ["LOW", "NORMAL", "HIGH", "URGENT"]).default("NORMAL").notNull(),
+  subject: varchar("subject", { length: 255 }).notNull(),
+  description: text("description"),
+  payload: json("payload"),
+  relatedResourceType: varchar("related_resource_type", { length: 60 }),
+  relatedResourceId: int("related_resource_id"),
+  slaDueAt: timestamp("sla_due_at"),
+  createdById: int("created_by_id"),
+  resolvedById: int("resolved_by_id"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  employeeIdx: index("idx_req_employee").on(table.employeeId),
+  statusIdx: index("idx_req_status").on(table.status),
+  kindIdx: index("idx_req_kind").on(table.kind),
+}));
+
+export type Request = typeof requests.$inferSelect;
+export type InsertRequest = typeof requests.$inferInsert;
+
+// ============================================================
+// APPROVALS (etapas de aprovação por request)
+// ============================================================
+export const approvals = mysqlTable("approvals", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("request_id").notNull(),
+  approverUserId: int("approver_user_id"),
+  level: int("level").default(1).notNull(),
+  decision: mysqlEnum("decision", ["PENDING", "APPROVED", "REJECTED"]).default("PENDING").notNull(),
+  reason: text("reason"),
+  decidedAt: timestamp("decided_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  requestIdx: index("idx_appr_request").on(table.requestId),
+}));
+
+export type Approval = typeof approvals.$inferSelect;
+export type InsertApproval = typeof approvals.$inferInsert;
+
+// ============================================================
+// CONSENT RECORDS (LGPD — base legal e consentimento explícito)
+// ============================================================
+export const consentRecords = mysqlTable("consent_records", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(),
+  employeeId: int("employee_id"),
+  consentType: mysqlEnum("consent_type", [
+    "data_processing",
+    "selfie_capture",
+    "geo_capture",
+    "marketing_communications",
+    "internal_policies",
+    "biometric",
+    "third_party_share",
+  ]).notNull(),
+  version: varchar("version", { length: 20 }).default("v1").notNull(),
+  legalBasis: mysqlEnum("legal_basis", [
+    "consentimento",
+    "execucao_contrato",
+    "obrigacao_legal",
+    "interesse_legitimo",
+    "protecao_credito",
+    "tutela_saude",
+  ]).notNull(),
+  accepted: boolean("accepted").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  revokedAt: timestamp("revoked_at"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userTypeIdx: index("idx_consent_user_type").on(table.userId, table.consentType),
+}));
+
+export type ConsentRecord = typeof consentRecords.$inferSelect;
+export type InsertConsentRecord = typeof consentRecords.$inferInsert;
+
+// ============================================================
+// READ AUDIT (logs de leitura de campos sensíveis)
+// ============================================================
+export const readAuditLogs = mysqlTable("read_audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  actorUserId: int("actor_user_id"),
+  resource: varchar("resource", { length: 80 }).notNull(),
+  field: varchar("field", { length: 60 }).notNull(),
+  targetEmployeeId: int("target_employee_id"),
+  scope: mysqlEnum("scope", ["self", "team", "all"]).default("all").notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  metadata: json("metadata"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => ({
+  actorIdx: index("idx_readlog_actor").on(table.actorUserId),
+  targetIdx: index("idx_readlog_target").on(table.targetEmployeeId),
+  resourceIdx: index("idx_readlog_resource").on(table.resource),
+}));
+
+export type ReadAuditLog = typeof readAuditLogs.$inferSelect;
+export type InsertReadAuditLog = typeof readAuditLogs.$inferInsert;
+
+// ============================================================
+// KANBAN (boards/lists/cards/labels/members) — fase 8
+// ============================================================
+export * from "./schema-kanban.js";

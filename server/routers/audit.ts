@@ -1,8 +1,8 @@
-import { protectedProcedure, publicProcedure } from "../_core/trpc";
+import { protectedProcedure, publicProcedure } from "../_core/trpc.js";
 import { z } from "zod";
-import { getDb } from "../db";
-import { auditLogs } from "../../drizzle/schema";
-import { desc, eq, and, gte, lte } from "drizzle-orm";
+import { getDb } from "../db.js";
+import { auditLogs } from "../../drizzle/schema.js";
+import { desc, eq, and, gte, lte, or, like } from "drizzle-orm";
 
 export const auditRouter = {
   list: protectedProcedure
@@ -14,13 +14,14 @@ export const auditRouter = {
       cpf: z.string().optional(),
       startDate: z.date().optional(),
       endDate: z.date().optional(),
+      search: z.string().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return { logs: [], total: 0 };
 
       const conditions = [];
-      
+
       if (input.resource) {
         conditions.push(eq(auditLogs.resource, input.resource));
       }
@@ -35,6 +36,20 @@ export const auditRouter = {
       }
       if (input.endDate) {
         conditions.push(lte(auditLogs.timestamp, input.endDate));
+      }
+      if (input.search && input.search.trim().length > 0) {
+        const term = `%${input.search.trim()}%`;
+        conditions.push(
+          or(
+            like(auditLogs.action, term),
+            like(auditLogs.resource, term),
+            like(auditLogs.description, term),
+            like(auditLogs.changesBefore as any, term),
+            like(auditLogs.changesAfter as any, term),
+            like(auditLogs.ipAddress, term),
+            like(auditLogs.userAgent, term),
+          )
+        );
       }
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

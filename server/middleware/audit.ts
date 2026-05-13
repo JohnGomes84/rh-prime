@@ -1,5 +1,5 @@
-import { getDb } from '../db';
-import { auditLogs } from '../../drizzle/schema';
+import { getDb } from '../db.js';
+import { auditLogs } from '../../drizzle/schema.js';
 
 /**
  * Middleware de auditoria para rastrear todas as alterações

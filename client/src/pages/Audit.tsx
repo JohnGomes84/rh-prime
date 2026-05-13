@@ -15,7 +15,9 @@ export default function Audit() {
     resource: "",
     action: "",
     cpf: "",
+    search: "",
   });
+  const [searchInput, setSearchInput] = useState("");
 
   const { data: auditData, isLoading } = trpc.audit.list.useQuery({
     limit: 100,
@@ -23,6 +25,7 @@ export default function Audit() {
     resource: filters.resource || undefined,
     action: filters.action || undefined,
     cpf: filters.cpf || undefined,
+    search: filters.search || undefined,
   });
 
   const { data: summary } = trpc.audit.summary.useQuery({
@@ -79,7 +82,29 @@ export default function Audit() {
       )}
 
       {/* Filtros */}
-      <Card className="p-4">
+      <Card className="p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Busca livre</label>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFilters((f) => ({ ...f, search: searchInput }));
+            }}
+            className="flex gap-2"
+          >
+            <Input
+              placeholder="Buscar em ações, recursos, descrições, IPs, payloads..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+            <Button type="submit" variant="default">Buscar</Button>
+            {filters.search && (
+              <Button type="button" variant="outline" onClick={() => { setSearchInput(""); setFilters((f) => ({ ...f, search: "" })); }}>
+                Limpar
+              </Button>
+            )}
+          </form>
+        </div>
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Recurso</label>

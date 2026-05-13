@@ -1,9 +1,9 @@
 {
-  "include": ["client/src/**/*", "shared/**/*", "server/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "include": ["api/**/*", "client/src/**/*", "shared/**/*", "server/**/*"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "server/__test__/**/*"],
   "compilerOptions": {
     "incremental": true,
-    "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
+    "tsBuildInfoFile": "./.tsbuildinfo",
     "noEmit": true,
     "module": "ESNext",
     "strict": true,

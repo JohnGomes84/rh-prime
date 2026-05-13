@@ -5,20 +5,36 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT;
+const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+
+if (typeof document !== "undefined" && analyticsEndpoint && analyticsWebsiteId) {
+  const analyticsScript = document.createElement("script");
+  analyticsScript.defer = true;
+  analyticsScript.src = `${analyticsEndpoint.replace(/\/$/, "")}/umami`;
+  analyticsScript.setAttribute("data-website-id", analyticsWebsiteId);
+  document.head.appendChild(analyticsScript);
+}
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
-
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
   if (!isUnauthorized) return;
-
-  window.location.href = getLoginUrl();
+  if (window.location.pathname === "/login") return;
+  window.location.href = "/login";
 };
 
 queryClient.getQueryCache().subscribe(event => {

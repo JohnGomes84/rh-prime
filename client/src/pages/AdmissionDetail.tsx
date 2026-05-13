@@ -13,6 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
   ArrowLeft,
   CheckCircle2,
   FileText,
@@ -23,6 +33,8 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+
+type ReviewStatus = "pending" | "approved" | "rejected";
 
 const STATUS_FLOW = [
   { value: "DRAFT", label: "Rascunho" },
@@ -112,6 +124,8 @@ export default function AdmissionDetail() {
   const waiveItem = trpc.lifecycle.admission.waiveChecklistItem.useMutation({
     onSuccess: async () => {
       toast.success("Item dispensado");
+      setWaiveTarget(null);
+      setWaiveReason("");
       await invalidateAdmissionQueries();
     },
     onError: (e) => toast.error(e.message),
@@ -120,6 +134,9 @@ export default function AdmissionDetail() {
   const reviewItem = trpc.lifecycle.admission.reviewChecklistItem.useMutation({
     onSuccess: async () => {
       toast.success("Revisão registrada");
+      setReviewTarget(null);
+      setReviewStatus("approved");
+      setReviewNotes("");
       await invalidateAdmissionQueries();
     },
     onError: (e) => toast.error(e.message),
@@ -134,6 +151,40 @@ export default function AdmissionDetail() {
   });
 
   const [linkEmpId, setLinkEmpId] = useState<string>("");
+  const [waiveTarget, setWaiveTarget] = useState<{ id: number; description: string } | null>(null);
+  const [waiveReason, setWaiveReason] = useState("");
+  const [reviewTarget, setReviewTarget] = useState<{ id: number; description: string; currentStatus: string | null } | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("approved");
+  const [reviewNotes, setReviewNotes] = useState("");
+
+  const openReview = (item: any) => {
+    setReviewTarget({ id: item.id, description: item.itemDescription, currentStatus: item.reviewStatus ?? null });
+    setReviewStatus((item.reviewStatus as ReviewStatus) ?? "approved");
+    setReviewNotes(item.reviewNotes ?? "");
+  };
+
+  const submitReview = () => {
+    if (!reviewTarget) return;
+    reviewItem.mutate({
+      workflowId: id,
+      itemId: reviewTarget.id,
+      reviewStatus,
+      reviewNotes: reviewNotes.trim() || undefined,
+    });
+  };
+
+  const submitWaive = () => {
+    if (!waiveTarget) return;
+    if (waiveReason.trim().length < 3) {
+      toast.error("Informe a justificativa (mínimo 3 caracteres)");
+      return;
+    }
+    waiveItem.mutate({
+      workflowId: id,
+      itemId: waiveTarget.id,
+      waivedReason: waiveReason.trim(),
+    });
+  };
 
   if (id <= 0) {
     return (
@@ -368,49 +419,13 @@ export default function AdmissionDetail() {
                               {item.kind === "generate_document" ? "Gerar em breve" : "Anexar em breve"}
                             </Button>
                             {item.reviewPolicy === "manual_review" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={reviewItem.isPending}
-                                  onClick={() =>
-                                    reviewItem.mutate({
-                                      workflowId: id,
-                                      itemId: item.id,
-                                      reviewStatus: "pending",
-                                    })
-                                  }
-                                >
-                                  Em revisão
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  disabled={reviewItem.isPending}
-                                  onClick={() =>
-                                    reviewItem.mutate({
-                                      workflowId: id,
-                                      itemId: item.id,
-                                      reviewStatus: "approved",
-                                    })
-                                  }
-                                >
-                                  Aprovar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  disabled={reviewItem.isPending}
-                                  onClick={() =>
-                                    reviewItem.mutate({
-                                      workflowId: id,
-                                      itemId: item.id,
-                                      reviewStatus: "rejected",
-                                    })
-                                  }
-                                >
-                                  Rejeitar
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                disabled={reviewItem.isPending}
+                                onClick={() => openReview(item)}
+                              >
+                                Revisar
+                              </Button>
                             )}
                             {item.status !== "COMPLETED" && item.status !== "WAIVED" && (
                               <Button
@@ -418,11 +433,7 @@ export default function AdmissionDetail() {
                                 variant="secondary"
                                 disabled={waiveItem.isPending}
                                 onClick={() =>
-                                  waiveItem.mutate({
-                                    workflowId: id,
-                                    itemId: item.id,
-                                    waivedReason: "Dispensado operacionalmente",
-                                  })
+                                  setWaiveTarget({ id: item.id, description: item.itemDescription })
                                 }
                               >
                                 Dispensar
@@ -471,6 +482,145 @@ export default function AdmissionDetail() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={Boolean(waiveTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWaiveTarget(null);
+            setWaiveReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dispensar item do checklist</DialogTitle>
+            <DialogDescription>
+              {waiveTarget?.description}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="waive-reason">Justificativa</Label>
+            <Textarea
+              id="waive-reason"
+              value={waiveReason}
+              onChange={(e) => setWaiveReason(e.target.value)}
+              placeholder="Explique por que este item está sendo dispensado…"
+              rows={4}
+              disabled={waiveItem.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Registrado no histórico do workflow para auditoria.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setWaiveTarget(null);
+                setWaiveReason("");
+              }}
+              disabled={waiveItem.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={submitWaive}
+              disabled={waiveItem.isPending || waiveReason.trim().length < 3}
+            >
+              {waiveItem.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Dispensar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(reviewTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewTarget(null);
+            setReviewStatus("approved");
+            setReviewNotes("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revisar item</DialogTitle>
+            <DialogDescription>
+              {reviewTarget?.description}
+              {reviewTarget?.currentStatus && (
+                <span className="ml-2 text-xs">
+                  (atual: <Badge variant="outline">{reviewTarget.currentStatus}</Badge>)
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Decisão</Label>
+              <RadioGroup
+                value={reviewStatus}
+                onValueChange={(v) => setReviewStatus(v as ReviewStatus)}
+                disabled={reviewItem.isPending}
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="review-approved" value="approved" />
+                  <Label htmlFor="review-approved" className="font-normal">
+                    Aprovar
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="review-pending" value="pending" />
+                  <Label htmlFor="review-pending" className="font-normal">
+                    Marcar em revisão
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="review-rejected" value="rejected" />
+                  <Label htmlFor="review-rejected" className="font-normal">
+                    Rejeitar
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-notes">Observações (opcional)</Label>
+              <Textarea
+                id="review-notes"
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder="Notas internas sobre a revisão…"
+                rows={3}
+                disabled={reviewItem.isPending}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setReviewTarget(null);
+                setReviewStatus("approved");
+                setReviewNotes("");
+              }}
+              disabled={reviewItem.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={submitReview}
+              disabled={reviewItem.isPending}
+              variant={reviewStatus === "rejected" ? "destructive" : "default"}
+            >
+              {reviewItem.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar revisão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

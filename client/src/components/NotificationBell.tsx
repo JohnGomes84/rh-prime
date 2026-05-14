@@ -1,119 +1,179 @@
-import React, { useState } from 'react';
-import { Bell, X, CheckCircle, AlertCircle, Info } from 'lucide-react';
-import { useNotifications } from '@/contexts/NotificationContext';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { useEffect, useMemo, useRef } from "react";
+import { useLocation } from "wouter";
+import { Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
+import { useNotifications } from "@/contexts/NotificationContext";
+
+const POLL_INTERVAL_MS = 30_000;
+
+type NotificationItem = {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  severity: "Info" | "Aviso" | "Crítico";
+  isRead: boolean;
+  createdAt: Date | string;
+  dueDate?: Date | string | null;
+};
+
+function formatRelative(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 60) return "agora";
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
+  return `${Math.floor(diffSec / 86400)}d`;
+}
+
+function severityClass(severity: string): string {
+  if (severity === "Crítico") return "border-l-destructive";
+  if (severity === "Aviso") return "border-l-amber-500";
+  return "border-l-sky-500";
+}
+
+function targetFromTitle(title: string): string | null {
+  if (title.includes("Tarefa") || title.includes("designado")) return "/kanban";
+  return null;
+}
 
 export function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, removeNotification, isConnected } =
-    useNotifications();
-  const [isOpen, setIsOpen] = useState(false);
+  const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+  const wsCtx = useNotifications();
+  const lastWsCount = useRef(0);
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'approval':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'alert':
-        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-      case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <Info className="w-5 h-5 text-blue-500" />;
-    }
-  };
+  const countQuery = trpc.notifications.count.useQuery(undefined, {
+    refetchInterval: POLL_INTERVAL_MS,
+    refetchOnWindowFocus: true,
+  });
 
-  const getBackgroundColor = (type: string) => {
-    switch (type) {
-      case 'approval':
-        return 'bg-green-50 border-green-200';
-      case 'alert':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'error':
-        return 'bg-red-50 border-red-200';
-      default:
-        return 'bg-blue-50 border-blue-200';
+  const listQuery = trpc.notifications.list.useQuery(undefined, {
+    refetchInterval: POLL_INTERVAL_MS,
+    refetchOnWindowFocus: true,
+  });
+
+  // Push do WebSocket: ao chegar nova notificação volátil, força refetch das persistidas.
+  useEffect(() => {
+    if (wsCtx.notifications.length > lastWsCount.current) {
+      void utils.notifications.count.invalidate();
+      void utils.notifications.list.invalidate();
     }
+    lastWsCount.current = wsCtx.notifications.length;
+  }, [wsCtx.notifications, utils]);
+
+  const markRead = trpc.notifications.markRead.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.notifications.count.invalidate(),
+        utils.notifications.list.invalidate(),
+      ]);
+    },
+  });
+
+  const markAll = trpc.notifications.markAllRead.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.notifications.count.invalidate(),
+        utils.notifications.list.invalidate(),
+      ]);
+    },
+  });
+
+  const items = (listQuery.data ?? []) as NotificationItem[];
+  const unreadCount = (countQuery.data as number | undefined) ?? 0;
+
+  const sorted = useMemo(
+    () =>
+      [...items].sort((a, b) => {
+        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }),
+    [items]
+  );
+
+  const handleClickItem = async (item: NotificationItem) => {
+    if (!item.isRead) {
+      await markRead.mutateAsync({ id: item.id });
+    }
+    const target = targetFromTitle(item.title);
+    if (target) setLocation(target);
   };
 
   return (
-    <div className="relative">
-      {/* Bell Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative"
-      >
-        <Bell className="w-5 h-5" />
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-        {!isConnected && (
-          <span className="absolute bottom-0 right-0 w-2 h-2 bg-gray-400 rounded-full animate-pulse" />
-        )}
-      </Button>
-
-      {/* Dropdown Panel */}
-      {isOpen && (
-        <Card className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto shadow-lg z-50">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">Notificações</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {notifications.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Info className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>Nenhuma notificação</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-all ${getBackgroundColor(
-                      notification.type
-                    )} ${!notification.read ? 'border-l-4' : ''}`}
-                    onClick={() => markAsRead(notification.id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1">{getIcon(notification.type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{notification.title}</p>
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {new Date(notification.timestamp).toLocaleTimeString()}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeNotification(notification.id);
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`${unreadCount} notificações não lidas`}
+          className="relative"
+        >
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-96 p-0" align="end">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Notificações</span>
+            {unreadCount > 0 && <Badge variant="secondary">{unreadCount} novas</Badge>}
           </div>
-        </Card>
-      )}
-    </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={markAll.isPending || unreadCount === 0}
+            onClick={() => markAll.mutate()}
+          >
+            Marcar todas lidas
+          </Button>
+        </div>
+        <div className="max-h-96 overflow-y-auto">
+          {sorted.length === 0 ? (
+            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+              Sem notificações.
+            </div>
+          ) : (
+            sorted.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleClickItem(item)}
+                className={cn(
+                  "w-full border-b border-l-4 px-3 py-2 text-left text-sm transition hover:bg-muted/50",
+                  severityClass(item.severity),
+                  !item.isRead && "bg-muted/30"
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className={cn("font-medium", !item.isRead && "text-foreground")}>
+                    {item.title}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatRelative(item.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                  {item.message}
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

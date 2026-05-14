@@ -265,6 +265,32 @@ export async function listCardsByBoard(boardId: number): Promise<KanbanCard[]> {
     .orderBy(asc(kanbanCards.listId), asc(kanbanCards.position));
 }
 
+export interface ChecklistCounts {
+  cardId: number;
+  total: number;
+  done: number;
+}
+
+export async function listChecklistCountsForCards(cardIds: number[]): Promise<ChecklistCounts[]> {
+  if (cardIds.length === 0) return [];
+  const db = await requireDb();
+  const rows = await db
+    .select({
+      cardId: kanbanChecklistItems.cardId,
+      total: sql<number>`COUNT(*)`,
+      done: sql<number>`SUM(CASE WHEN ${kanbanChecklistItems.isDone} = TRUE THEN 1 ELSE 0 END)`,
+    })
+    .from(kanbanChecklistItems)
+    .where(inArray(kanbanChecklistItems.cardId, cardIds))
+    .groupBy(kanbanChecklistItems.cardId);
+
+  return rows.map((row) => ({
+    cardId: row.cardId,
+    total: Number(row.total ?? 0),
+    done: Number(row.done ?? 0),
+  }));
+}
+
 export async function getCardById(id: number): Promise<KanbanCard | null> {
   const db = await requireDb();
   const rows = await db.select().from(kanbanCards).where(eq(kanbanCards.id, id)).limit(1);

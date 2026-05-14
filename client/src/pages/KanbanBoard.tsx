@@ -41,12 +41,14 @@ type BoardLabelData = {
   color: string;
 };
 
+type ChecklistCountData = { cardId: number; total: number; done: number };
+
 function applyOptimisticCardMove<TCard extends { id: number; listId: number; position: number }>(
-  previous: { cards: TCard[]; labels: KanbanLabelData[]; assignees: KanbanAssigneeData[] },
+  previous: { cards: TCard[]; labels: KanbanLabelData[]; assignees: KanbanAssigneeData[]; checklistCounts: ChecklistCountData[] },
   cardId: number,
   toListId: number,
   toIndex: number,
-): { cards: TCard[]; labels: KanbanLabelData[]; assignees: KanbanAssigneeData[] } {
+): { cards: TCard[]; labels: KanbanLabelData[]; assignees: KanbanAssigneeData[]; checklistCounts: ChecklistCountData[] } {
   const sortedCards = [...previous.cards].sort((left, right) => {
     if (left.listId !== right.listId) return left.listId - right.listId;
     return left.position - right.position;
@@ -147,6 +149,13 @@ export default function KanbanBoard() {
       const list = map.get(assignee.cardId) ?? [];
       list.push(assignee as KanbanAssigneeData);
       map.set(assignee.cardId, list);
+    }
+    return map;
+  }, [cardsData]);
+  const checklistByCard = useMemo(() => {
+    const map = new Map<number, { total: number; done: number }>();
+    for (const entry of cardsData?.checklistCounts ?? []) {
+      map.set(entry.cardId, { total: entry.total, done: entry.done });
     }
     return map;
   }, [cardsData]);
@@ -453,6 +462,7 @@ export default function KanbanBoard() {
                   cards={cardsByList.get(list.id) ?? []}
                   labelsByCard={labelsByCard}
                   assigneesByCard={assigneesByCard}
+                  checklistByCard={checklistByCard}
                   readonly={!canEdit}
                   onAddCard={(listId, title) => createCard.mutate({ listId, boardId, title })}
                   onRenameList={(listId, name) => renameList.mutate({ id: listId, boardId, name })}
@@ -524,6 +534,7 @@ export default function KanbanBoard() {
                   card={activeCard}
                   labels={labelsByCard.get(activeCard.id) ?? []}
                   assignees={assigneesByCard.get(activeCard.id) ?? []}
+                  checklist={checklistByCard.get(activeCard.id)}
                   onClick={() => {}}
                 />
               </div>

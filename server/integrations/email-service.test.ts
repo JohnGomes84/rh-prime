@@ -1,71 +1,83 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { sendEmail, generateASOExpiringEmail, generateVacationApprovedEmail, notifyCriticalEvent } from "./email-service.js";
+import {
+  generateASOExpiringEmail,
+  generateKanbanAssignmentEmail,
+  generateKanbanDeadlineEmail,
+  generateVacationApprovedEmail,
+  notifyCriticalEvent,
+  sendEmail,
+} from "./email-service.js";
 
-// Mock fetch
-global.fetch = vi.fn();
+const sendMock = vi.fn();
 
-describe("Email Service", () => {
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    emails: {
+      send: (...args: any[]) => sendMock(...args),
+    },
+  })),
+}));
+
+describe("Email Service (Resend)", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    sendMock.mockReset();
+    delete process.env.RESEND_API_KEY;
   });
 
-  it("deve enviar email com sucesso quando API key está configurada", async () => {
-    process.env.SENDGRID_API_KEY = "test-api-key";
-    (global.fetch).mockResolvedValueOnce({ ok: true });
-
+  it("retorna false quando RESEND_API_KEY não está configurada", async () => {
     const result = await sendEmail({
       to: "test@example.com",
       subject: "Test Email",
       html: "<p>Test content</p>",
     });
+    expect(result).toBe(false);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("envia email com From/Reply-To default quando RESEND_API_KEY presente", async () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    process.env.EMAIL_FROM = "noreply@mlservicoseco.com.br";
+    process.env.EMAIL_REPLY_TO = "adm@mlservicoseco.com.br";
+    sendMock.mockResolvedValueOnce({ data: { id: "abc-123" }, error: null });
+
+    const result = await sendEmail({
+      to: "user@example.com",
+      subject: "Test",
+      html: "<p>hi</p>",
+    });
 
     expect(result).toBe(true);
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://api.sendgrid.com/v3/mail/send",
+    expect(sendMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer test-api-key",
-          "Content-Type": "application/json",
-        }),
+        from: "noreply@mlservicoseco.com.br",
+        to: ["user@example.com"],
+        replyTo: "adm@mlservicoseco.com.br",
+        subject: "Test",
       })
     );
   });
 
-  it("deve retornar false quando API key não está configurada", async () => {
-    delete process.env.SENDGRID_API_KEY;
-    delete process.env.EMAIL_API_KEY;
+  it("retorna false quando Resend devolve error", async () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    sendMock.mockResolvedValueOnce({ data: null, error: { message: "rate_limit" } });
 
     const result = await sendEmail({
-      to: "test@example.com",
-      subject: "Test Email",
-      html: "<p>Test content</p>",
+      to: "user@example.com",
+      subject: "Test",
+      html: "<p>hi</p>",
     });
 
     expect(result).toBe(false);
   });
 
-  it("deve retornar false quando API retorna erro", async () => {
-    process.env.SENDGRID_API_KEY = "test-api-key";
-    (global.fetch).mockResolvedValueOnce({ ok: false });
-
-    const result = await sendEmail({
-      to: "test@example.com",
-      subject: "Test Email",
-      html: "<p>Test content</p>",
-    });
-
-    expect(result).toBe(false);
-  });
-
-  it("deve gerar template de email para ASO vencendo", () => {
+  it("gera template ASO", () => {
     const html = generateASOExpiringEmail("João Silva", 7);
     expect(html).toContain("João Silva");
     expect(html).toContain("7 dias");
     expect(html).toContain("ASO");
   });
 
-  it("deve gerar template de email para férias aprovadas", () => {
+  it("gera template férias aprovadas", () => {
     const html = generateVacationApprovedEmail("Maria Santos", "2026-03-01", "2026-03-15");
     expect(html).toContain("Maria Santos");
     expect(html).toContain("2026-03-01");
@@ -73,9 +85,38 @@ describe("Email Service", () => {
     expect(html).toContain("Férias Aprovadas");
   });
 
-  it("deve notificar evento crítico com detalhes", async () => {
-    process.env.SENDGRID_API_KEY = "test-api-key";
-    (global.fetch).mockResolvedValueOnce({ ok: true });
+  it("gera template kanban assignment com prazo", () => {
+    const html = generateKanbanAssignmentEmail({
+      assigneeName: "Ana",
+      cardTitle: "Revisar contrato",
+      boardName: "RH Operacional",
+      dueDate: "2026-05-20",
+      cardUrl: "https://app/kanban/1?card=2",
+    });
+    expect(html).toContain("Ana");
+    expect(html).toContain("Revisar contrato");
+    expect(html).toContain("RH Operacional");
+    expect(html).toContain("2026-05-20");
+    expect(html).toContain("https://app/kanban/1?card=2");
+  });
+
+  it("gera template kanban deadline (overdue)", () => {
+    const html = generateKanbanDeadlineEmail({
+      assigneeName: "Carlos",
+      cardTitle: "Aprovar PR",
+      boardName: "Dev",
+      dueDate: "2026-05-13",
+      overdue: true,
+      cardUrl: "https://app/kanban/2?card=5",
+    });
+    expect(html).toContain("Carlos");
+    expect(html).toContain("Tarefa atrasada");
+    expect(html).toContain("vencido");
+  });
+
+  it("notifyCriticalEvent envia via Resend", async () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    sendMock.mockResolvedValueOnce({ data: { id: "x" }, error: null });
 
     const result = await notifyCriticalEvent(
       "ASO Vencido",
@@ -84,6 +125,7 @@ describe("Email Service", () => {
     );
 
     expect(result).toBe(true);
-    expect(global.fetch).toHaveBeenCalled();
+    expect(sendMock).toHaveBeenCalled();
+    expect(sendMock.mock.calls[0][0].subject).toContain("CRÍTICO");
   });
 });

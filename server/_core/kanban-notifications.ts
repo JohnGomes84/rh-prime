@@ -5,6 +5,7 @@ import { broadcastNotification } from "./websocket.js";
 import {
   sendEmail,
   generateKanbanAssignmentEmail,
+  generateKanbanCommentEmail,
   generateKanbanDeadlineEmail,
 } from "../integrations/email-service.js";
 import { ENV } from "./env.js";
@@ -156,5 +157,62 @@ export async function notifyKanbanCardDeadline(input: DeadlineInput) {
     }
   } catch (err) {
     console.error("[kanban-notify] deadline email failed:", err);
+  }
+}
+
+interface CommentInput {
+  userId: number;
+  cardId: number;
+  cardTitle: string;
+  boardId: number;
+  boardName: string;
+  authorName: string;
+  bodyPreview: string;
+}
+
+export async function notifyKanbanCardComment(input: CommentInput) {
+  const title = `💬 ${input.authorName} comentou em "${input.cardTitle}"`;
+  const message = `${input.boardName}: ${input.bodyPreview}`;
+
+  try {
+    await db.createNotification({
+      type: "Geral" as any,
+      severity: "Info" as any,
+      title,
+      message,
+      userId: input.userId,
+    } as any);
+  } catch (err) {
+    console.error("[kanban-notify] comment persist failed:", err);
+  }
+
+  try {
+    await broadcastNotification({
+      type: "info",
+      title,
+      message,
+      userId: input.userId,
+      data: { kind: "kanban_comment", boardId: input.boardId, cardId: input.cardId },
+    });
+  } catch { /* WS no-op */ }
+
+  try {
+    const contact = await getUserContact(input.userId);
+    if (contact?.email) {
+      await sendEmail({
+        to: contact.email,
+        subject: title,
+        html: generateKanbanCommentEmail({
+          assigneeName: contact.name ?? "colega",
+          cardTitle: input.cardTitle,
+          boardName: input.boardName,
+          authorName: input.authorName,
+          bodyPreview: input.bodyPreview,
+          cardUrl: cardUrl(input.boardId, input.cardId),
+        }),
+      });
+    }
+  } catch (err) {
+    console.error("[kanban-notify] comment email failed:", err);
   }
 }

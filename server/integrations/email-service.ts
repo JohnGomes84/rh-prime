@@ -104,6 +104,24 @@ export function generateKanbanAssignmentEmail(input: {
   `;
 }
 
+export function generateKanbanCommentEmail(input: {
+  assigneeName: string;
+  cardTitle: string;
+  boardName: string;
+  authorName: string;
+  bodyPreview: string;
+  cardUrl: string;
+}): string {
+  return `
+    <h2>${input.authorName} comentou em "${input.cardTitle}"</h2>
+    <p>Olá ${input.assigneeName},</p>
+    <p>Quadro: <em>${input.boardName}</em></p>
+    <blockquote style="border-left:3px solid #ccc;padding-left:8px;color:#555;">${input.bodyPreview}</blockquote>
+    <p><a href="${input.cardUrl}">Abrir tarefa</a></p>
+    <p>Atenciosamente,<br>RH Prime</p>
+  `;
+}
+
 export function generateKanbanDeadlineEmail(input: {
   assigneeName: string;
   cardTitle: string;

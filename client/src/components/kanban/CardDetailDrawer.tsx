@@ -125,7 +125,10 @@ export function CardDetailDrawer({
 
   const createChecklistItem = trpc.kanban.checklist.create.useMutation({
     onSuccess: async () => {
-      await utils.kanban.cards.get.invalidate({ id: cardId ?? 0 });
+      await Promise.all([
+        utils.kanban.cards.get.invalidate({ id: cardId ?? 0 }),
+        utils.kanban.cards.listByBoard.invalidate({ boardId }),
+      ]);
       setNewChecklistContent("");
       toast.success("Item adicionado");
     },
@@ -134,14 +137,20 @@ export function CardDetailDrawer({
 
   const updateChecklistItem = trpc.kanban.checklist.update.useMutation({
     onSuccess: async () => {
-      await utils.kanban.cards.get.invalidate({ id: cardId ?? 0 });
+      await Promise.all([
+        utils.kanban.cards.get.invalidate({ id: cardId ?? 0 }),
+        utils.kanban.cards.listByBoard.invalidate({ boardId }),
+      ]);
     },
     onError: (error) => toast.error(error.message ?? "Falha ao atualizar item"),
   });
 
   const deleteChecklistItem = trpc.kanban.checklist.delete.useMutation({
     onSuccess: async () => {
-      await utils.kanban.cards.get.invalidate({ id: cardId ?? 0 });
+      await Promise.all([
+        utils.kanban.cards.get.invalidate({ id: cardId ?? 0 }),
+        utils.kanban.cards.listByBoard.invalidate({ boardId }),
+      ]);
       toast.success("Item removido");
     },
     onError: (error) => toast.error(error.message ?? "Falha ao remover item"),

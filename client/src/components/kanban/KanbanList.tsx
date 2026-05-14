@@ -9,6 +9,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import { KanbanCard, type KanbanCardData, type KanbanLabelData, type KanbanAssigneeData } from "./KanbanCard";
 
+type ChecklistCount = { total: number; done: number };
+
 export type KanbanListData = {
   id: number;
   boardId: number;
@@ -21,6 +23,7 @@ export function KanbanList({
   cards,
   labelsByCard,
   assigneesByCard,
+  checklistByCard,
   onAddCard,
   onRenameList,
   onArchiveList,
@@ -31,6 +34,7 @@ export function KanbanList({
   cards: KanbanCardData[];
   labelsByCard: Map<number, KanbanLabelData[]>;
   assigneesByCard: Map<number, KanbanAssigneeData[]>;
+  checklistByCard?: Map<number, ChecklistCount>;
   onAddCard: (listId: number, title: string) => void | Promise<void>;
   onRenameList: (listId: number, name: string) => void | Promise<void>;
   onArchiveList: (listId: number) => void | Promise<void>;
@@ -126,6 +130,7 @@ export function KanbanList({
               card={c}
               labels={labelsByCard.get(c.id) ?? []}
               assignees={assigneesByCard.get(c.id) ?? []}
+              checklist={checklistByCard?.get(c.id)}
               onClick={() => onCardClick(c.id)}
               readonly={readonly}
             />

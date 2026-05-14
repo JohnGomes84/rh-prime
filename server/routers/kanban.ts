@@ -202,11 +202,12 @@ export const kanbanRouter = router({
         await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId);
         const cards = await kdb.listCardsByBoard(input.boardId);
         const ids = cards.map((c) => c.id);
-        const [labels, assignees] = await Promise.all([
+        const [labels, assignees, checklistCounts] = await Promise.all([
           kdb.listCardLabels(ids),
           kdb.listCardAssignees(ids),
+          kdb.listChecklistCountsForCards(ids),
         ]);
-        return { cards, labels, assignees };
+        return { cards, labels, assignees, checklistCounts };
       }),
 
     get: protectedProcedure

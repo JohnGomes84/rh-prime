@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc.js";
 import * as kdb from "../modules/kanban/db.js";
+import { notifyKanbanCardAssignment } from "../_core/kanban-notifications.js";
 
 async function assertAccess(
   userId: number,
@@ -302,7 +303,33 @@ export const kanbanRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
+
+        const previous = await kdb.listCardAssignees([input.cardId]);
+        const previousIds = new Set(previous.map((a) => a.userId));
+        const newlyAssigned = input.userIds.filter((id) => !previousIds.has(id));
+
         await kdb.setCardAssignees(input.cardId, input.userIds);
+
+        if (newlyAssigned.length > 0) {
+          const card = await kdb.getCardById(input.cardId);
+          const board = await kdb.getBoardById(input.boardId);
+          if (card && board) {
+            await Promise.all(
+              newlyAssigned.map((userId) =>
+                notifyKanbanCardAssignment({
+                  userId,
+                  cardId: card.id,
+                  cardTitle: card.title,
+                  boardId: board.id,
+                  boardName: board.name,
+                  dueDate: card.dueDate,
+                  triggeredByUserId: ctx.user!.id,
+                })
+              )
+            );
+          }
+        }
+
         return { success: true };
       }),
 

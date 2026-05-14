@@ -515,10 +515,13 @@ export const notifications = mysqlTable("notifications", {
   message: text("message").notNull(),
   severity: mysqlEnum("severity", ["Info", "Aviso", "Crítico"]).default("Info").notNull(),
   relatedEmployeeId: int("relatedEmployeeId"),
+  userId: int("userId"),
   isRead: boolean("isRead").default(false).notNull(),
   dueDate: date("dueDate"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  userUnreadIdx: index("idx_notifications_user_unread").on(table.userId, table.isRead),
+}));
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;

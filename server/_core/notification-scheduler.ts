@@ -1,6 +1,12 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import * as db from "../db.js";
 import { notifications, employees as employeesTable } from "../../drizzle/schema.js";
+import {
+  kanbanBoards,
+  kanbanCardAssignees,
+  kanbanCards,
+} from "../../drizzle/schema-kanban.js";
+import { notifyKanbanCardDeadline } from "./kanban-notifications.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -166,23 +172,115 @@ async function scanBirthdays(): Promise<number> {
   return created;
 }
 
+async function scanKanbanDeadlines(): Promise<number> {
+  const conn = await db.getDb();
+  if (!conn) return 0;
+
+  const todayDate = new Date();
+  const today = todayDate.toISOString().slice(0, 10);
+  const tomorrowDate = new Date(todayDate);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+
+  const candidates = await conn
+    .select({
+      cardId: kanbanCards.id,
+      cardTitle: kanbanCards.title,
+      dueDate: kanbanCards.dueDate,
+      boardId: kanbanCards.boardId,
+      boardName: kanbanBoards.name,
+    })
+    .from(kanbanCards)
+    .innerJoin(kanbanBoards, eq(kanbanBoards.id, kanbanCards.boardId))
+    .where(
+      and(
+        eq(kanbanCards.archived, false),
+        sql`${kanbanCards.completedAt} IS NULL`,
+        sql`${kanbanCards.dueDate} IS NOT NULL`,
+        or(
+          eq(kanbanCards.dueDate, tomorrow as any),
+          lt(kanbanCards.dueDate, today as any)
+        )
+      )
+    );
+
+  if (candidates.length === 0) return 0;
+
+  const cardIds = candidates.map((c) => c.cardId);
+  const assignees = await conn
+    .select({
+      cardId: kanbanCardAssignees.cardId,
+      userId: kanbanCardAssignees.userId,
+    })
+    .from(kanbanCardAssignees)
+    .where(inArray(kanbanCardAssignees.cardId, cardIds));
+
+  const assigneesByCard = new Map<number, number[]>();
+  for (const a of assignees) {
+    const list = assigneesByCard.get(a.cardId) ?? [];
+    list.push(a.userId);
+    assigneesByCard.set(a.cardId, list);
+  }
+
+  let dispatched = 0;
+  for (const card of candidates) {
+    const targets = assigneesByCard.get(card.cardId);
+    if (!targets || targets.length === 0) continue;
+
+    const dueIso = (card.dueDate as unknown as string) ?? "";
+    const overdue = dueIso < today;
+
+    for (const userId of targets) {
+      const fired = await notifyOnce({
+        type: "Geral",
+        title: overdue
+          ? `🚨 Tarefa atrasada: ${card.cardTitle}`
+          : `⏰ Tarefa vence amanhã: ${card.cardTitle}`,
+        message: `Quadro ${card.boardName}. Prazo: ${dueIso}${overdue ? " (vencido)" : ""}.`,
+        severity: overdue ? "Crítico" : "Aviso",
+        relatedEmployeeId: null,
+        dueDate: dueIso,
+      });
+      if (!fired) continue;
+
+      try {
+        await notifyKanbanCardDeadline({
+          userId,
+          cardId: card.cardId,
+          cardTitle: card.cardTitle,
+          boardId: card.boardId,
+          boardName: card.boardName,
+          dueDate: dueIso,
+          overdue,
+        });
+        dispatched++;
+      } catch (err) {
+        console.warn("[Scheduler] kanban deadline dispatch failed:", err);
+      }
+    }
+  }
+  return dispatched;
+}
+
 export async function runNotificationScan(): Promise<{
   vacations: number;
   exams: number;
   timeBank: number;
   birthdays: number;
+  kanban: number;
 }> {
-  const [vacations, exams, timeBank, birthdays] = await Promise.all([
+  const [vacations, exams, timeBank, birthdays, kanban] = await Promise.all([
     scanVacations().catch((e) => { console.warn("[Scheduler] vacations scan:", e); return 0; }),
     scanMedicalExams().catch((e) => { console.warn("[Scheduler] exams scan:", e); return 0; }),
     scanTimeBank().catch((e) => { console.warn("[Scheduler] time bank scan:", e); return 0; }),
     scanBirthdays().catch((e) => { console.warn("[Scheduler] birthdays scan:", e); return 0; }),
+    scanKanbanDeadlines().catch((e) => { console.warn("[Scheduler] kanban scan:", e); return 0; }),
   ]);
-  const total = vacations + exams + timeBank + birthdays;
+  const total = vacations + exams + timeBank + birthdays + kanban;
   if (total > 0) {
-    console.log(`[Scheduler] created ${total} notifications (vac:${vacations} exams:${exams} bank:${timeBank} bday:${birthdays})`);
+    console.log(`[Scheduler] created ${total} notifications (vac:${vacations} exams:${exams} bank:${timeBank} bday:${birthdays} kanban:${kanban})`);
   }
-  return { vacations, exams, timeBank, birthdays };
+  return { vacations, exams, timeBank, birthdays, kanban };
 }
 
 let intervalHandle: NodeJS.Timeout | null = null;

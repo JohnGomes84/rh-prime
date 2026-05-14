@@ -1861,12 +1861,29 @@ export async function updateDocumentTemplate(id: number, data: Partial<InsertDoc
 // ============================================================
 // NOTIFICATIONS
 // ============================================================
-export async function listNotifications(unreadOnly?: boolean) {
+export async function listNotifications(opts?: { unreadOnly?: boolean; userId?: number; includeGlobal?: boolean }) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return [];
-    if (unreadOnly) return db.select().from(notifications).where(eq(notifications.isRead, false)).orderBy(desc(notifications.createdAt));
-    return db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(100);
+
+    const conditions: any[] = [];
+    if (opts?.unreadOnly) conditions.push(eq(notifications.isRead, false));
+    if (typeof opts?.userId === "number") {
+      const scope = opts.includeGlobal === false
+        ? eq(notifications.userId, opts.userId)
+        : or(eq(notifications.userId, opts.userId), sql`${notifications.userId} IS NULL`);
+      conditions.push(scope);
+    }
+
+    const where = conditions.length === 0
+      ? undefined
+      : conditions.length === 1
+        ? conditions[0]
+        : and(...conditions);
+
+    let query = db.select().from(notifications).orderBy(desc(notifications.createdAt)).$dynamic();
+    if (where) query = query.where(where);
+    return query.limit(100);
   }, "listNotifications");
 }
 
@@ -1901,13 +1918,57 @@ export async function markAllNotificationsRead() {
   }, { name: "markAllNotificationsRead-transaction" });
 }
 
-export async function countUnreadNotifications() {
+export async function countUnreadNotifications(opts?: { userId?: number; includeGlobal?: boolean }) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return 0;
-    const result = await db.select({ count: count() }).from(notifications).where(eq(notifications.isRead, false));
+    const conditions: any[] = [eq(notifications.isRead, false)];
+    if (typeof opts?.userId === "number") {
+      const scope = opts.includeGlobal === false
+        ? eq(notifications.userId, opts.userId)
+        : or(eq(notifications.userId, opts.userId), sql`${notifications.userId} IS NULL`);
+      conditions.push(scope);
+    }
+    const where = conditions.length === 1 ? conditions[0] : and(...conditions);
+    const result = await db.select({ count: count() }).from(notifications).where(where);
     return result[0]?.count ?? 0;
   }, "countUnreadNotifications");
+}
+
+export async function markUserNotificationRead(id: number, userId: number) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(notifications.id, id),
+            or(eq(notifications.userId, userId), sql`${notifications.userId} IS NULL`)
+          )
+        );
+    }, "markUserNotificationRead");
+  }, { name: "markUserNotificationRead-transaction" });
+}
+
+export async function markAllUserNotificationsRead(userId: number) {
+  return withTransaction(async () => {
+    return withDBRetry(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB not available");
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(notifications.isRead, false),
+            or(eq(notifications.userId, userId), sql`${notifications.userId} IS NULL`)
+          )
+        );
+    }, "markAllUserNotificationsRead");
+  }, { name: "markAllUserNotificationsRead-transaction" });
 }
 
 // ============================================================

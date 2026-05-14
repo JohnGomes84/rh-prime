@@ -1150,20 +1150,25 @@ export const appRouter = router({
   notifications: router({
     list: protectedProcedure
       .input(z.object({ unreadOnly: z.boolean().optional() }).optional())
-      .query(async ({ input }) => {
-        return db.listNotifications(input?.unreadOnly);
+      .query(async ({ input, ctx }) => {
+        return db.listNotifications({
+          unreadOnly: input?.unreadOnly,
+          userId: ctx.user?.id,
+        });
       }),
-    count: protectedProcedure.query(async () => {
-      return db.countUnreadNotifications();
+    count: protectedProcedure.query(async ({ ctx }) => {
+      return db.countUnreadNotifications({ userId: ctx.user?.id });
     }),
     markRead: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await db.markNotificationRead(input.id);
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+        await db.markUserNotificationRead(input.id, ctx.user.id);
         return { success: true };
       }),
-    markAllRead: protectedProcedure.mutation(async () => {
-      await db.markAllNotificationsRead();
+    markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+      await db.markAllUserNotificationsRead(ctx.user.id);
       return { success: true };
     }),
     create: protectedProcedure
@@ -1173,6 +1178,7 @@ export const appRouter = router({
         message: z.string(),
         severity: z.enum(["Info", "Aviso", "Crítico"]).optional(),
         relatedEmployeeId: z.number().optional(),
+        userId: z.number().optional(),
         dueDate: z.string().optional(),
       }))
       .mutation(async ({ input }) => {

@@ -239,6 +239,10 @@ export const kanbanRouter = router({
   // CARDS
   // ============================================================
   cards: router({
+    listAcrossUserBoards: protectedProcedure.query(async ({ ctx }) => {
+      return kdb.listCardsAcrossUserBoards(ctx.user!.id, ctx.user!.role as string);
+    }),
+
     listByBoard: protectedProcedure
       .input(z.object({ boardId: z.number().int().positive() }))
       .query(async ({ input, ctx }) => {

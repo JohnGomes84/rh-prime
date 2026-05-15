@@ -883,6 +883,58 @@ export async function deleteBoardHard(id: number): Promise<void> {
   );
 }
 
+export async function listCardsAcrossUserBoards(userId: number, userRole?: string) {
+  const boards = await listBoardsForUser(userId, userRole);
+  const boardIds = boards.map((b) => b.id);
+  if (boardIds.length === 0) {
+    return {
+      cards: [] as Array<
+        KanbanCard & { boardName: string; boardColor: string | null; listName: string }
+      >,
+      labels: [] as Awaited<ReturnType<typeof listCardLabels>>,
+      assignees: [] as KanbanAssigneeDetails[],
+      checklistCounts: [] as ChecklistCounts[],
+      boards: [] as Array<{ id: number; name: string; color: string | null }>,
+    };
+  }
+  const db = await requireDb();
+
+  const cardRows = await db
+    .select({
+      card: kanbanCards,
+      boardName: kanbanBoards.name,
+      boardColor: kanbanBoards.color,
+      listName: kanbanLists.name,
+    })
+    .from(kanbanCards)
+    .innerJoin(kanbanBoards, eq(kanbanBoards.id, kanbanCards.boardId))
+    .innerJoin(kanbanLists, eq(kanbanLists.id, kanbanCards.listId))
+    .where(and(inArray(kanbanCards.boardId, boardIds), eq(kanbanCards.archived, false)))
+    .orderBy(asc(kanbanCards.dueDate));
+
+  const cards = cardRows.map((r) => ({
+    ...r.card,
+    boardName: r.boardName,
+    boardColor: r.boardColor,
+    listName: r.listName,
+  }));
+
+  const cardIds = cards.map((c) => c.id);
+  const [labels, assignees, checklistCounts] = await Promise.all([
+    listCardLabels(cardIds),
+    listCardAssignees(cardIds),
+    listChecklistCountsForCards(cardIds),
+  ]);
+
+  return {
+    cards,
+    labels,
+    assignees,
+    checklistCounts,
+    boards: boards.map((b) => ({ id: b.id, name: b.name, color: b.color })),
+  };
+}
+
 export async function listArchivedCardsByBoard(boardId: number) {
   const db = await requireDb();
   return db

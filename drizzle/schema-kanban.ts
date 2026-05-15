@@ -194,3 +194,49 @@ export const kanbanBoardMembers = mysqlTable(
 
 export type KanbanBoardMember = typeof kanbanBoardMembers.$inferSelect;
 export type InsertKanbanBoardMember = typeof kanbanBoardMembers.$inferInsert;
+
+
+// ============================================================
+// KANBAN_CARD_COMMENTS
+// ============================================================
+export const kanbanCardComments = mysqlTable(
+  "kanban_card_comments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    cardId: int("card_id").notNull(),
+    userId: int("user_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    cardCreatedIdx: index("idx_kcc_card_created").on(table.cardId, table.createdAt),
+  }),
+);
+
+export type KanbanCardComment = typeof kanbanCardComments.$inferSelect;
+export type InsertKanbanCardComment = typeof kanbanCardComments.$inferInsert;
+
+// ============================================================
+// KANBAN_CARD_ATTACHMENTS
+// ============================================================
+export const kanbanCardAttachments = mysqlTable(
+  "kanban_card_attachments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    cardId: int("card_id").notNull(),
+    uploadedBy: int("uploaded_by").notNull(),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileUrl: varchar("file_url", { length: 500 }).notNull(),
+    pathname: varchar("pathname", { length: 500 }),
+    contentType: varchar("content_type", { length: 100 }),
+    sizeBytes: int("size_bytes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    cardIdx: index("idx_kca_card").on(table.cardId, table.createdAt),
+  }),
+);
+
+export type KanbanCardAttachment = typeof kanbanCardAttachments.$inferSelect;
+export type InsertKanbanCardAttachment = typeof kanbanCardAttachments.$inferInsert;

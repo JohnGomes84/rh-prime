@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Archive, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, ExternalLink, Loader2, Paperclip, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -64,6 +64,93 @@ export function CardDetailDrawer({
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0]!);
   const [newChecklistContent, setNewChecklistContent] = useState("");
+  const [newCommentBody, setNewCommentBody] = useState("");
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const commentsQuery = trpc.kanban.comments.list.useQuery(
+    { cardId: cardId ?? 0, boardId },
+    { enabled: open && !!cardId },
+  );
+
+  const attachmentsQuery = trpc.kanban.attachments.list.useQuery(
+    { cardId: cardId ?? 0, boardId },
+    { enabled: open && !!cardId },
+  );
+
+  const createComment = trpc.kanban.comments.create.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.comments.list.invalidate({ cardId: cardId ?? 0, boardId });
+      setNewCommentBody("");
+    },
+    onError: (error) => toast.error(error.message ?? "Falha ao comentar"),
+  });
+
+  const deleteComment = trpc.kanban.comments.delete.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.comments.list.invalidate({ cardId: cardId ?? 0, boardId });
+    },
+    onError: (error) => toast.error(error.message ?? "Falha ao remover comentário"),
+  });
+
+  const registerAttachment = trpc.kanban.attachments.register.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.attachments.list.invalidate({ cardId: cardId ?? 0, boardId });
+      toast.success("Anexo carregado");
+    },
+    onError: (error) => toast.error(error.message ?? "Falha ao registrar anexo"),
+  });
+
+  const deleteAttachment = trpc.kanban.attachments.delete.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.attachments.list.invalidate({ cardId: cardId ?? 0, boardId });
+    },
+    onError: (error) => toast.error(error.message ?? "Falha ao remover anexo"),
+  });
+
+  const handleUploadFile = async (file: File) => {
+    if (!cardId) return;
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error("Arquivo maior que 4MB — limite atual.");
+      return;
+    }
+    try {
+      setAttachmentUploading(true);
+      const resp = await fetch(
+        `/api/upload-attachment?cardId=${cardId}&filename=${encodeURIComponent(file.name)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+          body: file,
+          credentials: "include",
+        },
+      );
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: resp.statusText }));
+        throw new Error(err.error ?? "Falha no upload");
+      }
+      const blob = (await resp.json()) as {
+        url: string;
+        pathname?: string;
+        contentType?: string;
+        size?: number;
+      };
+      await registerAttachment.mutateAsync({
+        cardId,
+        boardId,
+        fileName: file.name,
+        fileUrl: blob.url,
+        pathname: blob.pathname,
+        contentType: blob.contentType,
+        sizeBytes: blob.size,
+      });
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAttachmentUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     if (!data?.card) return;
@@ -465,6 +552,169 @@ export function CardDetailDrawer({
                     >
                       <Plus className="mr-1 h-4 w-4" />
                       Adicionar
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Anexos</Label>
+                <span className="text-xs text-muted-foreground">
+                  {attachmentsQuery.data?.length ?? 0} arquivo(s)
+                </span>
+              </div>
+              <div className="space-y-2 rounded-lg border p-3">
+                {attachmentsQuery.isLoading ? (
+                  <p className="text-xs text-muted-foreground">Carregando…</p>
+                ) : (attachmentsQuery.data?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum arquivo ainda.</p>
+                ) : (
+                  attachmentsQuery.data!.map((att) => (
+                    <div key={att.id} className="flex items-center justify-between gap-2 text-xs">
+                      <a
+                        href={att.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex flex-1 items-center gap-2 truncate hover:text-foreground"
+                      >
+                        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{att.fileName}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+                        {att.sizeBytes != null && (
+                          <span className="shrink-0 text-muted-foreground">
+                            {(att.sizeBytes / 1024).toFixed(0)}KB
+                          </span>
+                        )}
+                      </a>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteAttachment.mutate({ id: att.id, boardId })}
+                          disabled={deleteAttachment.isPending}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+
+                {canEdit && (
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleUploadFile(file);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={attachmentUploading}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {attachmentUploading ? (
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="mr-1 h-4 w-4" />
+                      )}
+                      {attachmentUploading ? "Enviando…" : "Anexar arquivo"}
+                    </Button>
+                    <span className="text-[10px] text-muted-foreground">máx 4MB</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Comentários</Label>
+                <span className="text-xs text-muted-foreground">
+                  {commentsQuery.data?.length ?? 0}
+                </span>
+              </div>
+              <div className="space-y-3 rounded-lg border p-3">
+                {commentsQuery.isLoading ? (
+                  <p className="text-xs text-muted-foreground">Carregando…</p>
+                ) : (commentsQuery.data?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sem comentários ainda.</p>
+                ) : (
+                  commentsQuery.data!.map((comment) => (
+                    <div key={comment.id} className="flex items-start gap-2">
+                      <Avatar className="size-7 shrink-0 bg-muted">
+                        <AvatarFallback className="text-[10px] font-semibold">
+                          {(comment.authorName ?? comment.authorEmail ?? "?")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium">
+                            {comment.authorName ?? comment.authorEmail ?? "Autor"}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(comment.createdAt).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                                onClick={() => deleteComment.mutate({ id: comment.id, boardId })}
+                                disabled={deleteComment.isPending}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="whitespace-pre-wrap text-sm leading-snug">{comment.body}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {canEdit && (
+                  <div className="flex items-end gap-2 pt-2">
+                    <Textarea
+                      value={newCommentBody}
+                      onChange={(e) => setNewCommentBody(e.target.value)}
+                      placeholder="Escreva um comentário…"
+                      rows={2}
+                      className="text-sm"
+                      disabled={createComment.isPending}
+                    />
+                    <Button
+                      size="icon"
+                      disabled={!newCommentBody.trim() || createComment.isPending}
+                      onClick={() =>
+                        cardId &&
+                        createComment.mutate({
+                          cardId,
+                          boardId,
+                          body: newCommentBody.trim(),
+                        })
+                      }
+                    >
+                      {createComment.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 )}

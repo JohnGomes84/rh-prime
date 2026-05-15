@@ -21,6 +21,20 @@ const ALLOWED_UPLOAD_TYPES = new Set([
   "image/webp",
   "image/heic",
 ]);
+const ATTACHMENT_ALLOWED_TYPES = new Set<string>([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/zip",
+  "text/csv",
+  "text/plain",
+]);
 
 interface CreateAppOptions {
   server?: Server;
@@ -124,6 +138,57 @@ export async function createConfiguredApp(
           pathname: blob.pathname,
           contentType,
           size: req.body.length,
+        });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  app.post(
+    "/api/upload-attachment",
+    express.raw({ type: () => true, limit: UPLOAD_MAX_BYTES }),
+    async (req, res, next) => {
+      try {
+        const user = await sdk.authenticateRequest(req).catch(() => null);
+        if (!user) return res.status(401).json({ error: "unauthorized" });
+
+        const contentType = String(req.headers["content-type"] ?? "application/octet-stream");
+        if (!ATTACHMENT_ALLOWED_TYPES.has(contentType)) {
+          return res.status(415).json({
+            error: "unsupported content-type",
+            allowed: Array.from(ATTACHMENT_ALLOWED_TYPES),
+          });
+        }
+
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+          return res.status(400).json({ error: "empty body" });
+        }
+        if (req.body.length > UPLOAD_MAX_BYTES) {
+          return res.status(413).json({ error: "file too large", maxBytes: UPLOAD_MAX_BYTES });
+        }
+
+        const cardIdParam = Number(req.query.cardId ?? 0);
+        if (!Number.isInteger(cardIdParam) || cardIdParam <= 0) {
+          return res.status(400).json({ error: "cardId param required" });
+        }
+
+        const rawName = String(req.query.filename ?? "attachment");
+        const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+        const pathname = `kanban/card-${cardIdParam}/${Date.now()}-${safeName}`;
+
+        const blob = await put(pathname, req.body, {
+          access: "public",
+          contentType,
+          addRandomSuffix: false,
+        });
+
+        return res.json({
+          url: blob.url,
+          pathname: blob.pathname,
+          contentType,
+          size: req.body.length,
+          fileName: rawName,
         });
       } catch (err) {
         next(err);

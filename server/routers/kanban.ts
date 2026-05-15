@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc.js";
 import * as kdb from "../modules/kanban/db.js";
-import { notifyKanbanCardAssignment } from "../_core/kanban-notifications.js";
+import { notifyKanbanCardAssignment, notifyKanbanCardComment } from "../_core/kanban-notifications.js";
 
 async function assertAccess(
   userId: number,
@@ -442,6 +442,113 @@ export const kanbanRouter = router({
         await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
         await kdb.deleteChecklistItem(input.id);
         return { success: true };
+      }),
+  }),
+
+  // ============================================================
+  // COMMENTS
+  // ============================================================
+  comments: router({
+    list: protectedProcedure
+      .input(z.object({ cardId: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId);
+        return kdb.listCardComments(input.cardId);
+      }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          cardId: z.number().int().positive(),
+          boardId: z.number().int().positive(),
+          body: z.string().min(1).max(2000),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
+        const created = await kdb.createCardComment({
+          cardId: input.cardId,
+          userId: ctx.user!.id,
+          body: input.body.trim(),
+        });
+
+        // Notifica assignees (exceto autor)
+        try {
+          const assignees = await kdb.listCardAssignees([input.cardId]);
+          const card = await kdb.getCardById(input.cardId);
+          const board = await kdb.getBoardById(input.boardId);
+          if (card && board) {
+            const targets = assignees
+              .map((a) => a.userId)
+              .filter((id, idx, arr) => arr.indexOf(id) === idx && id !== ctx.user!.id);
+            await Promise.all(
+              targets.map((userId) =>
+                notifyKanbanCardComment({
+                  userId,
+                  cardId: card.id,
+                  cardTitle: card.title,
+                  boardId: board.id,
+                  boardName: board.name,
+                  authorName: ctx.user!.name ?? ctx.user!.email,
+                  bodyPreview: input.body.trim().slice(0, 200),
+                })
+              )
+            );
+          }
+        } catch (err) {
+          console.warn("[kanban.comments.create] notify failed:", err);
+        }
+
+        return created;
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const role = await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId);
+        await kdb.deleteCardComment(input.id, ctx.user!.id, role === "admin");
+        return { success: true };
+      }),
+  }),
+
+  // ============================================================
+  // ATTACHMENTS
+  // ============================================================
+  attachments: router({
+    list: protectedProcedure
+      .input(z.object({ cardId: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId);
+        return kdb.listCardAttachments(input.cardId);
+      }),
+    register: protectedProcedure
+      .input(
+        z.object({
+          cardId: z.number().int().positive(),
+          boardId: z.number().int().positive(),
+          fileName: z.string().min(1).max(255),
+          fileUrl: z.string().url().max(500),
+          pathname: z.string().max(500).optional(),
+          contentType: z.string().max(100).optional(),
+          sizeBytes: z.number().int().min(0).optional(),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
+        return kdb.createCardAttachment({
+          cardId: input.cardId,
+          uploadedBy: ctx.user!.id,
+          fileName: input.fileName,
+          fileUrl: input.fileUrl,
+          pathname: input.pathname ?? null,
+          contentType: input.contentType ?? null,
+          sizeBytes: input.sizeBytes ?? null,
+        } as any);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
+        const removed = await kdb.deleteCardAttachment(input.id);
+        return { success: true, removed };
       }),
   }),
 });

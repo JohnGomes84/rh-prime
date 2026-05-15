@@ -6,6 +6,8 @@ import {
   kanbanBoardMembers,
   kanbanBoards,
   kanbanCardAssignees,
+  kanbanCardAttachments,
+  kanbanCardComments,
   kanbanChecklistItems,
   kanbanCardLabels,
   kanbanCards,
@@ -13,11 +15,15 @@ import {
   kanbanLists,
   type InsertKanbanBoard,
   type InsertKanbanCard,
+  type InsertKanbanCardAttachment,
+  type InsertKanbanCardComment,
   type InsertKanbanChecklistItem,
   type InsertKanbanLabel,
   type InsertKanbanList,
   type KanbanBoard,
   type KanbanCard,
+  type KanbanCardAttachment,
+  type KanbanCardComment,
   type KanbanChecklistItem,
   type KanbanList,
   users,
@@ -708,4 +714,88 @@ export async function listBoardUserCandidates(boardId: number) {
       const rightName = right.employeeName ?? right.userName ?? right.userEmail ?? `${right.userId}`;
       return leftName.localeCompare(rightName, "pt-BR");
     }) satisfies KanbanUserCandidate[];
+}
+
+// ============================================================
+// COMMENTS
+// ============================================================
+export interface KanbanCardCommentDetails extends KanbanCardComment {
+  authorName: string | null;
+  authorEmail: string | null;
+}
+
+export async function listCardComments(cardId: number): Promise<KanbanCardCommentDetails[]> {
+  const db = await requireDb();
+  const rows = await db
+    .select({
+      id: kanbanCardComments.id,
+      cardId: kanbanCardComments.cardId,
+      userId: kanbanCardComments.userId,
+      body: kanbanCardComments.body,
+      createdAt: kanbanCardComments.createdAt,
+      updatedAt: kanbanCardComments.updatedAt,
+      authorName: users.name,
+      authorEmail: users.email,
+    })
+    .from(kanbanCardComments)
+    .leftJoin(users, eq(users.id, kanbanCardComments.userId))
+    .where(eq(kanbanCardComments.cardId, cardId))
+    .orderBy(asc(kanbanCardComments.createdAt));
+
+  return rows as KanbanCardCommentDetails[];
+}
+
+export async function createCardComment(data: InsertKanbanCardComment) {
+  const db = await requireDb();
+  const [result] = await db.insert(kanbanCardComments).values(data);
+  return { id: Number((result as any).insertId) };
+}
+
+export async function deleteCardComment(id: number, requestUserId: number, isAdminBoard: boolean) {
+  const db = await requireDb();
+  const conditions = isAdminBoard
+    ? eq(kanbanCardComments.id, id)
+    : and(eq(kanbanCardComments.id, id), eq(kanbanCardComments.userId, requestUserId));
+  await db.delete(kanbanCardComments).where(conditions);
+}
+
+// ============================================================
+// ATTACHMENTS
+// ============================================================
+export async function listCardAttachments(cardId: number): Promise<KanbanCardAttachment[]> {
+  const db = await requireDb();
+  return db
+    .select()
+    .from(kanbanCardAttachments)
+    .where(eq(kanbanCardAttachments.cardId, cardId))
+    .orderBy(desc(kanbanCardAttachments.createdAt));
+}
+
+export async function createCardAttachment(data: InsertKanbanCardAttachment) {
+  const db = await requireDb();
+  const [result] = await db.insert(kanbanCardAttachments).values(data);
+  return { id: Number((result as any).insertId) };
+}
+
+export async function deleteCardAttachment(id: number) {
+  const db = await requireDb();
+  const rows = await db
+    .select()
+    .from(kanbanCardAttachments)
+    .where(eq(kanbanCardAttachments.id, id))
+    .limit(1);
+  const attachment = rows[0];
+  if (!attachment) return null;
+  await db.delete(kanbanCardAttachments).where(eq(kanbanCardAttachments.id, id));
+  return attachment;
+}
+
+export async function getCardAttachmentById(id: number) {
+  const db = await requireDb();
+  const rows = await db
+    .select()
+    .from(kanbanCardAttachments)
+    .where(eq(kanbanCardAttachments.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }

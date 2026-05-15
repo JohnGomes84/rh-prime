@@ -799,3 +799,113 @@ export async function getCardAttachmentById(id: number) {
     .limit(1);
   return rows[0] ?? null;
 }
+
+// ============================================================
+// TRASH: restore + hard delete (admin-only on router layer)
+// ============================================================
+
+export async function restoreBoard(id: number): Promise<void> {
+  const db = await requireDb();
+  await db.update(kanbanBoards).set({ archived: false }).where(eq(kanbanBoards.id, id));
+}
+
+export async function restoreList(id: number): Promise<void> {
+  const db = await requireDb();
+  await db.update(kanbanLists).set({ archived: false }).where(eq(kanbanLists.id, id));
+}
+
+export async function restoreCard(id: number): Promise<void> {
+  const db = await requireDb();
+  await db.update(kanbanCards).set({ archived: false }).where(eq(kanbanCards.id, id));
+}
+
+async function deleteCardChildren(tx: any, cardIds: number[]): Promise<void> {
+  if (cardIds.length === 0) return;
+  await tx.delete(kanbanCardAssignees).where(inArray(kanbanCardAssignees.cardId, cardIds));
+  await tx.delete(kanbanCardLabels).where(inArray(kanbanCardLabels.cardId, cardIds));
+  await tx.delete(kanbanChecklistItems).where(inArray(kanbanChecklistItems.cardId, cardIds));
+  await tx.delete(kanbanCardComments).where(inArray(kanbanCardComments.cardId, cardIds));
+  await tx.delete(kanbanCardAttachments).where(inArray(kanbanCardAttachments.cardId, cardIds));
+}
+
+export async function deleteCardHard(id: number): Promise<void> {
+  const db = await requireDb();
+  return withDBRetry(
+    () =>
+      db.transaction(async (tx) => {
+        await deleteCardChildren(tx, [id]);
+        await tx.delete(kanbanCards).where(eq(kanbanCards.id, id));
+      }),
+    "kanban.deleteCardHard",
+  );
+}
+
+export async function deleteListHard(id: number): Promise<void> {
+  const db = await requireDb();
+  return withDBRetry(
+    () =>
+      db.transaction(async (tx) => {
+        const cards = await tx
+          .select({ id: kanbanCards.id })
+          .from(kanbanCards)
+          .where(eq(kanbanCards.listId, id));
+        const cardIds = cards.map((c: { id: number }) => c.id);
+        if (cardIds.length > 0) {
+          await deleteCardChildren(tx, cardIds);
+          await tx.delete(kanbanCards).where(inArray(kanbanCards.id, cardIds));
+        }
+        await tx.delete(kanbanLists).where(eq(kanbanLists.id, id));
+      }),
+    "kanban.deleteListHard",
+  );
+}
+
+export async function deleteBoardHard(id: number): Promise<void> {
+  const db = await requireDb();
+  return withDBRetry(
+    () =>
+      db.transaction(async (tx) => {
+        const cards = await tx
+          .select({ id: kanbanCards.id })
+          .from(kanbanCards)
+          .where(eq(kanbanCards.boardId, id));
+        const cardIds = cards.map((c: { id: number }) => c.id);
+        if (cardIds.length > 0) {
+          await deleteCardChildren(tx, cardIds);
+          await tx.delete(kanbanCards).where(inArray(kanbanCards.id, cardIds));
+        }
+        await tx.delete(kanbanLists).where(eq(kanbanLists.boardId, id));
+        await tx.delete(kanbanLabels).where(eq(kanbanLabels.boardId, id));
+        await tx.delete(kanbanBoardMembers).where(eq(kanbanBoardMembers.boardId, id));
+        await tx.delete(kanbanBoards).where(eq(kanbanBoards.id, id));
+      }),
+    "kanban.deleteBoardHard",
+  );
+}
+
+export async function listArchivedCardsByBoard(boardId: number) {
+  const db = await requireDb();
+  return db
+    .select({
+      id: kanbanCards.id,
+      listId: kanbanCards.listId,
+      title: kanbanCards.title,
+      updatedAt: kanbanCards.updatedAt,
+    })
+    .from(kanbanCards)
+    .where(and(eq(kanbanCards.boardId, boardId), eq(kanbanCards.archived, true)))
+    .orderBy(desc(kanbanCards.updatedAt));
+}
+
+export async function listArchivedListsByBoard(boardId: number) {
+  const db = await requireDb();
+  return db
+    .select({
+      id: kanbanLists.id,
+      name: kanbanLists.name,
+      position: kanbanLists.position,
+    })
+    .from(kanbanLists)
+    .where(and(eq(kanbanLists.boardId, boardId), eq(kanbanLists.archived, true)))
+    .orderBy(asc(kanbanLists.position));
+}

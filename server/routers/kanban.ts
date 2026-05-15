@@ -101,6 +101,33 @@ export const kanbanRouter = router({
         return { success: true };
       }),
 
+    restore: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.id, "admin");
+        await kdb.restoreBoard(input.id);
+        return { success: true };
+      }),
+
+    deleteHard: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.id, "admin");
+        await kdb.deleteBoardHard(input.id);
+        return { success: true };
+      }),
+
+    listArchived: protectedProcedure
+      .input(z.object({ boardId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "admin");
+        const [cards, lists] = await Promise.all([
+          kdb.listArchivedCardsByBoard(input.boardId),
+          kdb.listArchivedListsByBoard(input.boardId),
+        ]);
+        return { cards, lists };
+      }),
+
     listMembers: protectedProcedure
       .input(z.object({ boardId: z.number().int().positive() }))
       .query(async ({ input, ctx }) => {
@@ -175,6 +202,22 @@ export const kanbanRouter = router({
       .mutation(async ({ input, ctx }) => {
         await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
         await kdb.archiveList(input.id);
+        return { success: true };
+      }),
+
+    restore: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "admin");
+        await kdb.restoreList(input.id);
+        return { success: true };
+      }),
+
+    deleteHard: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "admin");
+        await kdb.deleteListHard(input.id);
         return { success: true };
       }),
 
@@ -273,6 +316,22 @@ export const kanbanRouter = router({
       .mutation(async ({ input, ctx }) => {
         await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "editor");
         await kdb.archiveCard(input.id);
+        return { success: true };
+      }),
+
+    restore: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "admin");
+        await kdb.restoreCard(input.id);
+        return { success: true };
+      }),
+
+    deleteHard: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), boardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertAccess(ctx.user!.id, ctx.user!.role as string, input.boardId, "admin");
+        await kdb.deleteCardHard(input.id);
         return { success: true };
       }),
 

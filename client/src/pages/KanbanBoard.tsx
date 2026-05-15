@@ -11,8 +11,9 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { arrayMove, horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortable";
-import { ArrowLeft, Loader2, Plus, Tags, Users, X } from "lucide-react";
+import { Archive, ArrowLeft, Loader2, Plus, Tags, Users, X } from "lucide-react";
 import { toast } from "sonner";
+import { ArchivedItemsDialog } from "@/components/kanban/ArchivedItemsDialog";
 import { BoardMembersDialog } from "@/components/kanban/BoardMembersDialog";
 import { BoardSettingsDialog } from "@/components/kanban/BoardSettingsDialog";
 import { CardDetailDrawer } from "@/components/kanban/CardDetailDrawer";
@@ -126,11 +127,14 @@ export default function KanbanBoard() {
   const [addingList, setAddingList] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [detailCardId, setDetailCardId] = useState<number | null>(null);
+  const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
+  const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState("all");
   const [selectedLabelFilter, setSelectedLabelFilter] = useState("all");
 
   const canEdit = board?.viewerRole === "admin" || board?.viewerRole === "editor";
+  const isBoardAdmin = board?.viewerRole === "admin";
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const cards = useMemo(() => (cardsData?.cards ?? []) as KanbanCardData[], [cardsData]);
@@ -244,6 +248,20 @@ export default function KanbanBoard() {
   const createCard = trpc.kanban.cards.create.useMutation({
     onSuccess: () => utils.kanban.cards.listByBoard.invalidate({ boardId }),
     onError: (error) => toast.error(error.message),
+  });
+  const archiveCard = trpc.kanban.cards.archive.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.cards.listByBoard.invalidate({ boardId });
+      toast.success("Card arquivado");
+    },
+    onError: (error) => toast.error(error.message ?? "Falha ao arquivar"),
+  });
+  const deleteCardHard = trpc.kanban.cards.deleteHard.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.cards.listByBoard.invalidate({ boardId });
+      toast.success("Card excluido permanentemente");
+    },
+    onError: (error) => toast.error(error.message ?? "Falha ao excluir"),
   });
   const moveCard = trpc.kanban.cards.move.useMutation({
     onMutate: async (variables) => {
@@ -387,6 +405,15 @@ export default function KanbanBoard() {
                     departmentId: board.departmentId ?? null,
                   }}
                 />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => setArchivedDialogOpen(true)}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  Ver arquivados
+                </Button>
               </>
             )}
           </div>
@@ -464,10 +491,30 @@ export default function KanbanBoard() {
                   assigneesByCard={assigneesByCard}
                   checklistByCard={checklistByCard}
                   readonly={!canEdit}
+                  canDelete={isBoardAdmin}
+                  expandedCardId={expandedCardId}
+                  onToggleExpandCard={(id) =>
+                    setExpandedCardId((cur) => (cur === id ? null : id))
+                  }
+                  onEditCard={(id) => setDetailCardId(id)}
+                  onArchiveCard={(id) => {
+                    if (!confirm("Arquivar este card?")) return;
+                    archiveCard.mutate({ id, boardId });
+                    if (expandedCardId === id) setExpandedCardId(null);
+                  }}
+                  onDeleteCard={(id) => {
+                    if (
+                      !confirm(
+                        "Excluir card permanentemente?\n\nComentarios, anexos, checklist e responsaveis serao removidos.\nEsta acao nao pode ser desfeita.",
+                      )
+                    )
+                      return;
+                    deleteCardHard.mutate({ id, boardId });
+                    if (expandedCardId === id) setExpandedCardId(null);
+                  }}
                   onAddCard={(listId, title) => createCard.mutate({ listId, boardId, title })}
                   onRenameList={(listId, name) => renameList.mutate({ id: listId, boardId, name })}
                   onArchiveList={(listId) => archiveList.mutate({ id: listId, boardId })}
-                  onCardClick={(id) => setDetailCardId(id)}
                 />
               ))}
             </SortableContext>
@@ -535,7 +582,6 @@ export default function KanbanBoard() {
                   labels={labelsByCard.get(activeCard.id) ?? []}
                   assignees={assigneesByCard.get(activeCard.id) ?? []}
                   checklist={checklistByCard.get(activeCard.id)}
-                  onClick={() => {}}
                 />
               </div>
             )}
@@ -550,6 +596,12 @@ export default function KanbanBoard() {
           canEdit={canEdit}
           boardMembers={boardMembers}
           boardLabels={boardLabels}
+        />
+
+        <ArchivedItemsDialog
+          boardId={boardId}
+          open={archivedDialogOpen}
+          onClose={() => setArchivedDialogOpen(false)}
         />
       </div>
     </DashboardLayout>

@@ -24,10 +24,15 @@ export function KanbanList({
   labelsByCard,
   assigneesByCard,
   checklistByCard,
+  expandedCardId,
+  onToggleExpandCard,
+  onEditCard,
+  onArchiveCard,
+  onDeleteCard,
   onAddCard,
   onRenameList,
   onArchiveList,
-  onCardClick,
+  canDelete,
   readonly,
 }: {
   list: KanbanListData;
@@ -35,10 +40,15 @@ export function KanbanList({
   labelsByCard: Map<number, KanbanLabelData[]>;
   assigneesByCard: Map<number, KanbanAssigneeData[]>;
   checklistByCard?: Map<number, ChecklistCount>;
+  expandedCardId: number | null;
+  onToggleExpandCard: (cardId: number) => void;
+  onEditCard: (cardId: number) => void;
+  onArchiveCard: (cardId: number) => void;
+  onDeleteCard: (cardId: number) => void;
   onAddCard: (listId: number, title: string) => void | Promise<void>;
   onRenameList: (listId: number, name: string) => void | Promise<void>;
   onArchiveList: (listId: number) => void | Promise<void>;
-  onCardClick: (cardId: number) => void;
+  canDelete?: boolean;
   readonly?: boolean;
 }) {
   const [addingCard, setAddingCard] = useState(false);
@@ -131,7 +141,13 @@ export function KanbanList({
               labels={labelsByCard.get(c.id) ?? []}
               assignees={assigneesByCard.get(c.id) ?? []}
               checklist={checklistByCard?.get(c.id)}
-              onClick={() => onCardClick(c.id)}
+              expanded={expandedCardId === c.id}
+              onToggleExpand={() => onToggleExpandCard(c.id)}
+              onEdit={!readonly ? () => onEditCard(c.id) : undefined}
+              onArchive={!readonly ? () => onArchiveCard(c.id) : undefined}
+              onDelete={canDelete ? () => onDeleteCard(c.id) : undefined}
+              canEdit={!readonly}
+              canDelete={!!canDelete}
               readonly={readonly}
             />
           ))}

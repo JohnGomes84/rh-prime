@@ -548,7 +548,7 @@ export default function AdmissionDetail() {
                                   <div key={doc.id} className="flex items-center gap-2 text-muted-foreground">
                                     <FileText className="h-3.5 w-3.5" />
                                     <a
-                                      href={doc.fileUrl}
+                                      href={`/api/blob/proxy?url=${encodeURIComponent(doc.fileUrl)}`}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="hover:text-foreground inline-flex items-center gap-1"

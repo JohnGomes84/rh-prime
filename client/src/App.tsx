@@ -23,8 +23,12 @@ const DocumentsPage = lazy(() => import("./pages/Documents"));
 const SchedulesPage = lazy(() => import("./pages/Schedules"));
 const PortalLiderPage = lazy(() => import("./pages/PortalLider"));
 const PixApprovalsPage = lazy(() => import("./pages/PixApprovals"));
+const PixRequestsPage = lazy(() => import("./pages/PixRequests"));
 const PaymentsPage = lazy(() => import("./pages/Payments"));
 const AdminOccurrencesPage = lazy(() => import("./pages/AdminOccurrences"));
+const AuditPage = lazy(() => import("./pages/Audit"));
+const RelatoriosPage = lazy(() => import("./pages/Relatorios"));
+const NotasFiscaisPage = lazy(() => import("./pages/NotasFiscaisRecebidas"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function PageFallback() {
@@ -93,13 +97,25 @@ function Router() {
           </DashboardLayout>
         </Route>
         <Route path="/portal-lider">
-          <PortalLiderPage />
+          <DashboardLayout><PortalLiderPage /></DashboardLayout>
         </Route>
         <Route path="/pix-approvals">
           <DashboardLayout><PixApprovalsPage /></DashboardLayout>
         </Route>
+        <Route path="/pix-requests">
+          <DashboardLayout><PixRequestsPage /></DashboardLayout>
+        </Route>
         <Route path="/admin/occurrences">
           <DashboardLayout><AdminOccurrencesPage /></DashboardLayout>
+        </Route>
+        <Route path="/audit">
+          <DashboardLayout><AuditPage /></DashboardLayout>
+        </Route>
+        <Route path="/relatorios">
+          <DashboardLayout><RelatoriosPage /></DashboardLayout>
+        </Route>
+        <Route path="/notas-fiscais">
+          <DashboardLayout><NotasFiscaisPage /></DashboardLayout>
         </Route>
         <Route path="/404">
           <NotFound />

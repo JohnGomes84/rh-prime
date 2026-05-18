@@ -11,6 +11,7 @@ import {
   longtext,
   time,
   uniqueIndex,
+  index,
 } from "drizzle-orm/mysql-core";
 
 // ============================================================
@@ -79,7 +80,7 @@ export type InsertClient = typeof clients.$inferInsert;
 /** Unidades / Locais dentro do cliente */
 export const clientUnits = mysqlTable("client_units", {
   id: int("id").autoincrement().primaryKey(),
-  clientId: int("clientId").notNull(),
+  clientId: int("clientId").notNull().references(() => clients.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(), // ex: Sorotama, Base, Dufrio, RG
   address: varchar("address", { length: 500 }),
   isActive: boolean("isActive").default(true).notNull(),
@@ -107,8 +108,8 @@ export type InsertJobFunction = typeof jobFunctions.$inferInsert;
 /** Funções associadas a cada Cliente (com valores específicos) */
 export const clientFunctions = mysqlTable("client_functions", {
   id: int("id").autoincrement().primaryKey(),
-  clientId: int("clientId").notNull(),
-  jobFunctionId: int("jobFunctionId").notNull(),
+  clientId: int("clientId").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  jobFunctionId: int("jobFunctionId").notNull().references(() => jobFunctions.id, { onDelete: "restrict" }),
   payValue: decimal("payValue", { precision: 10, scale: 2 }), // Valor que paga ao diarista neste cliente
   receiveValue: decimal("receiveValue", { precision: 10, scale: 2 }), // Valor que recebe do cliente
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -187,10 +188,10 @@ export type InsertBankAccount = typeof bankAccounts.$inferInsert;
 export const accountsPayable = mysqlTable("accounts_payable", {
   id: int("id").autoincrement().primaryKey(),
   description: varchar("description", { length: 255 }).notNull(),
-  supplierId: int("supplierId"),
-  clientId: int("clientId"),
-  costCenterId: int("costCenterId"),
-  bankAccountId: int("bankAccountId"),
+  supplierId: int("supplierId").references(() => suppliers.id, { onDelete: "restrict" }),
+  clientId: int("clientId").references(() => clients.id, { onDelete: "restrict" }),
+  costCenterId: int("costCenterId").references(() => costCenters.id, { onDelete: "set null" }),
+  bankAccountId: int("bankAccountId").references(() => bankAccounts.id, { onDelete: "restrict" }),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   dueDate: datetime("dueDate").notNull(),
   paymentDate: datetime("paymentDate"),
@@ -208,9 +209,9 @@ export type InsertAccountPayable = typeof accountsPayable.$inferInsert;
 export const accountsReceivable = mysqlTable("accounts_receivable", {
   id: int("id").autoincrement().primaryKey(),
   description: varchar("description", { length: 255 }).notNull(),
-  clientId: int("clientId"),
-  costCenterId: int("costCenterId"),
-  bankAccountId: int("bankAccountId"),
+  clientId: int("clientId").references(() => clients.id, { onDelete: "restrict" }),
+  costCenterId: int("costCenterId").references(() => costCenters.id, { onDelete: "set null" }),
+  bankAccountId: int("bankAccountId").references(() => bankAccounts.id, { onDelete: "restrict" }),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   dueDate: datetime("dueDate").notNull(),
   receiveDate: datetime("receiveDate"),
@@ -234,7 +235,7 @@ export const paymentBatches = mysqlTable("payment_batches", {
   employeeCount: int("employeeCount").default(0),
   status: mysqlEnum("status", ["pendente", "pago", "cancelado"]).default("pendente").notNull(),
   paidAt: datetime("paidAt"),
-  bankAccountId: int("bankAccountId"),
+  bankAccountId: int("bankAccountId").references(() => bankAccounts.id, { onDelete: "restrict" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -246,8 +247,8 @@ export type InsertPaymentBatch = typeof paymentBatches.$inferInsert;
 /** Itens do Lote de Pagamento */
 export const paymentBatchItems = mysqlTable("payment_batch_items", {
   id: int("id").autoincrement().primaryKey(),
-  batchId: int("batchId").notNull(),
-  employeeId: int("employeeId").notNull(),
+  batchId: int("batchId").notNull().references(() => paymentBatches.id, { onDelete: "cascade" }),
+  employeeId: int("employeeId").notNull().references(() => employees.id, { onDelete: "restrict" }),
   daysWorked: int("daysWorked").default(0),
   dailyRate: decimal("dailyRate", { precision: 10, scale: 2 }).default("0"),
   mealAllowance: decimal("mealAllowance", { precision: 10, scale: 2 }).default("0"), // Marmita
@@ -328,14 +329,17 @@ export type InsertNotification = typeof notifications.$inferInsert;
 export const userPermissions = mysqlTable("user_permissions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  module: varchar("module", { length: 50 }).notNull(), // dashboard, employees, clients, suppliers, shifts, functions, cost_centers, bank_accounts, accounts_payable, accounts_receivable, payment_batches, documents, analytics, users
+  module: varchar("module", { length: 50 }).notNull(),
   canView: boolean("canView").default(false).notNull(),
   canCreate: boolean("canCreate").default(false).notNull(),
   canEdit: boolean("canEdit").default(false).notNull(),
   canDelete: boolean("canDelete").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => [
+  index("idx_uperm_user").on(t.userId),
+  uniqueIndex("uniq_uperm_user_module").on(t.userId, t.module),
+]);
 
 export type UserPermission = typeof userPermissions.$inferSelect;
 export type InsertUserPermission = typeof userPermissions.$inferInsert;
@@ -492,18 +496,23 @@ export type InsertStorageCleanupJob = typeof storageCleanupJobs.$inferInsert;
 export const workSchedules = mysqlTable("work_schedules", {
   id: int("id").autoincrement().primaryKey(),
   date: datetime("date").notNull(),
-  shiftId: int("shiftId"),
-  clientId: int("clientId").notNull(),
-  clientUnitId: int("clientUnitId"),
+  shiftId: int("shiftId").references(() => shifts.id, { onDelete: "set null" }),
+  clientId: int("clientId").notNull().references(() => clients.id, { onDelete: "restrict" }),
+  clientUnitId: int("clientUnitId").references(() => clientUnits.id, { onDelete: "set null" }),
   status: mysqlEnum("status", ["pendente", "validado", "cancelado"]).default("pendente").notNull(),
   totalPayValue: decimal("totalPayValue", { precision: 15, scale: 2 }).default("0"),
   totalReceiveValue: decimal("totalReceiveValue", { precision: 15, scale: 2 }).default("0"),
   totalPeople: int("totalPeople").default(0),
-  leaderId: int("leaderId"), // Funcionário responsável (líder) da operação
+  leaderId: int("leaderId").references(() => employees.id, { onDelete: "set null" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => [
+  index("idx_ws_date").on(t.date),
+  index("idx_ws_client_date").on(t.clientId, t.date),
+  index("idx_ws_leader").on(t.leaderId),
+  index("idx_ws_status").on(t.status),
+]);
 
 export type WorkSchedule = typeof workSchedules.$inferSelect;
 export type InsertWorkSchedule = typeof workSchedules.$inferInsert;
@@ -511,8 +520,8 @@ export type InsertWorkSchedule = typeof workSchedules.$inferInsert;
 /** Funções alocadas dentro de um planejamento */
 export const scheduleFunctions = mysqlTable("schedule_functions", {
   id: int("id").autoincrement().primaryKey(),
-  scheduleId: int("scheduleId").notNull(),
-  jobFunctionId: int("jobFunctionId").notNull(),
+  scheduleId: int("scheduleId").notNull().references(() => workSchedules.id, { onDelete: "cascade" }),
+  jobFunctionId: int("jobFunctionId").notNull().references(() => jobFunctions.id, { onDelete: "restrict" }),
   payValue: decimal("payValue", { precision: 10, scale: 2 }).default("0"), // Valor padrão paga
   receiveValue: decimal("receiveValue", { precision: 10, scale: 2 }).default("0"), // Valor padrão recebe
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -525,22 +534,26 @@ export type InsertScheduleFunction = typeof scheduleFunctions.$inferInsert;
 /** Funcionários alocados dentro de uma função de um planejamento */
 export const scheduleAllocations = mysqlTable("schedule_allocations", {
   id: int("id").autoincrement().primaryKey(),
-  scheduleFunctionId: int("scheduleFunctionId").notNull(),
-  scheduleId: int("scheduleId").notNull(),
-  employeeId: int("employeeId").notNull(),
+  scheduleFunctionId: int("scheduleFunctionId").notNull().references(() => scheduleFunctions.id, { onDelete: "cascade" }),
+  scheduleId: int("scheduleId").notNull().references(() => workSchedules.id, { onDelete: "cascade" }),
+  employeeId: int("employeeId").notNull().references(() => employees.id, { onDelete: "restrict" }),
   payValue: decimal("payValue", { precision: 10, scale: 2 }).default("0"),
   receiveValue: decimal("receiveValue", { precision: 10, scale: 2 }).default("0"),
-  mealAllowance: decimal("mealAllowance", { precision: 10, scale: 2 }).default("0"), // Marmita
-  voucher: decimal("voucher", { precision: 10, scale: 2 }).default("0"), // Vale
+  mealAllowance: decimal("mealAllowance", { precision: 10, scale: 2 }).default("0"),
+  voucher: decimal("voucher", { precision: 10, scale: 2 }).default("0"),
   bonus: decimal("bonus", { precision: 10, scale: 2 }).default("0"),
-  paymentBatchId: int("paymentBatchId"), // Referência ao lote de pagamento (null = não pago)
+  paymentBatchId: int("paymentBatchId").references(() => paymentBatches.id, { onDelete: "set null" }),
   attendanceStatus: mysqlEnum("attendance_status", ["presente", "faltou", "parcial"]).default("presente"),
-  allocNotes: text("alloc_notes"), // Observação individual (motivo falta, etc.)
-  checkInTime: datetime("checkInTime"), // Horário de chegada registrado pelo líder
-  checkOutTime: datetime("checkOutTime"), // Horário de saída registrado pelo líder
+  allocNotes: text("alloc_notes"),
+  checkInTime: datetime("checkInTime"),
+  checkOutTime: datetime("checkOutTime"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => [
+  index("idx_alloc_schedule").on(t.scheduleId),
+  index("idx_alloc_employee").on(t.employeeId),
+  index("idx_alloc_batch").on(t.paymentBatchId),
+]);
 
 export type ScheduleAllocation = typeof scheduleAllocations.$inferSelect;
 export type InsertScheduleAllocation = typeof scheduleAllocations.$inferInsert;

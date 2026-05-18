@@ -29,11 +29,9 @@ export async function logAudit(
   try {
     const db = await getDb();
     if (!db) return;
-    
-    // Inserir na tabela de auditoria
     await db.execute(
       sql`
-        INSERT INTO audit_logs (userId, action, entityType, entityId, changes, createdAt)
+        INSERT INTO audit_logs (userId, action, entityType, entityId, newValues, createdAt)
         VALUES (${userId}, ${action}, ${entityType}, ${entityId}, ${JSON.stringify(changes)}, NOW())
       `
     );
@@ -80,7 +78,7 @@ export const auditRouter = router({
           al.action,
           al.entityType,
           al.entityId,
-          al.changes,
+          COALESCE(al.newValues, al.oldValues) as changes,
           al.createdAt
         FROM audit_logs al
         LEFT JOIN users u ON al.userId = u.id
@@ -120,9 +118,10 @@ export const auditRouter = router({
         (current, value) => current.replace("?", escapeSqlValue(value)),
         countQuery
       );
-      const [countRows] = (await db.$client.execute(
-        resolvedCountQuery
-      )) as unknown as [RowDataPacket[], unknown];
+      const countResult = (await db.execute(
+        sql.raw(resolvedCountQuery)
+      )) as unknown as RowDataPacket[] | [RowDataPacket[], unknown];
+      const countRows = (Array.isArray(countResult[0]) ? countResult[0] : countResult) as RowDataPacket[];
       const total = Number(countRows[0]?.total || 0);
 
       // Buscar logs com paginação
@@ -134,9 +133,10 @@ export const auditRouter = router({
         (current, value) => current.replace("?", escapeSqlValue(value)),
         query
       );
-      const [logs] = (await db.$client.execute(
-        resolvedLogsQuery
-      )) as unknown as [RowDataPacket[], unknown];
+      const logsResult = (await db.execute(
+        sql.raw(resolvedLogsQuery)
+      )) as unknown as RowDataPacket[] | [RowDataPacket[], unknown];
+      const logs = (Array.isArray(logsResult[0]) ? logsResult[0] : logsResult) as RowDataPacket[];
 
       return {
         logs: logs.map((log: any) => ({
@@ -181,9 +181,10 @@ export const auditRouter = router({
         (current, value) => current.replace("?", escapeSqlValue(value)),
         query
       );
-      const [results] = (await db.$client.execute(
-        resolvedQuery
-      )) as unknown as [RowDataPacket[], unknown];
+      const summaryResult = (await db.execute(
+        sql.raw(resolvedQuery)
+      )) as unknown as RowDataPacket[] | [RowDataPacket[], unknown];
+      const results = (Array.isArray(summaryResult[0]) ? summaryResult[0] : summaryResult) as RowDataPacket[];
 
       return results;
     }),
@@ -210,7 +211,7 @@ export const auditRouter = router({
           al.action,
           al.entityType,
           al.entityId,
-          al.changes
+          COALESCE(al.newValues, al.oldValues) as changes
         FROM audit_logs al
         LEFT JOIN users u ON al.userId = u.id
         WHERE al.createdAt >= ? AND al.createdAt < ?
@@ -229,9 +230,10 @@ export const auditRouter = router({
         (current, value) => current.replace("?", escapeSqlValue(value)),
         query
       );
-      const [logs] = (await db.$client.execute(
-        resolvedQuery
-      )) as unknown as [RowDataPacket[], unknown];
+      const exportResult = (await db.execute(
+        sql.raw(resolvedQuery)
+      )) as unknown as RowDataPacket[] | [RowDataPacket[], unknown];
+      const logs = (Array.isArray(exportResult[0]) ? exportResult[0] : exportResult) as RowDataPacket[];
 
       // Converter para CSV
       const headers = ['Data/Hora', 'Usuário', 'Ação', 'Tipo de Entidade', 'ID da Entidade', 'Mudanças'];

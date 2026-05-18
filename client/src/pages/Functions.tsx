@@ -5,9 +5,9 @@ import { Briefcase } from "lucide-react";
 
 const fields: FieldDef[] = [
   { key: "name", label: "Nome da Função", required: true },
-  { key: "defaultPayValue", label: "Valor Pago (R$)", placeholder: "0.00" },
-  { key: "defaultReceiveValue", label: "Valor Cobrado (R$)", placeholder: "0.00" },
-  { key: "isActive", label: "Ativo", showInTable: true, render: (val: boolean) => (
+  { key: "defaultPayValue", label: "Valor Pago (R$)", type: "number", placeholder: "0.00" },
+  { key: "defaultReceiveValue", label: "Valor Cobrado (R$)", type: "number", placeholder: "0.00" },
+  { key: "isActive", label: "Ativo", type: "checkbox", defaultValue: true, showInTable: true, render: (val: boolean) => (
     <span className={`text-xs px-2 py-0.5 rounded-full ${val !== false ? "badge-success" : "badge-danger"}`}>
       {val !== false ? "Ativo" : "Inativo"}
     </span>

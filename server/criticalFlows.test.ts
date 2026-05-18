@@ -7,7 +7,8 @@ import {
 } from "./_core/criticalFlows";
 
 describe("critical flows - fase 2", () => {
-  it("calcula total do item de lote corretamente", () => {
+  it("calcula total do item de lote corretamente (marmita e vale descontam, bônus soma)", () => {
+    // 5 × 100 − 20 (marmita) − 10 (vale) + 30 (bônus) = 500
     const total = calculatePaymentBatchItemTotal({
       daysWorked: 5,
       dailyRate: "100",
@@ -15,7 +16,7 @@ describe("critical flows - fase 2", () => {
       bonus: "30",
       voucher: "10",
     });
-    expect(total).toBe("540.00");
+    expect(total).toBe("500.00");
   });
 
   it("remove duplicados já existentes na alocação", () => {

@@ -11,7 +11,7 @@ const fields: FieldDef[] = [
   { key: "pixKey", label: "Chave PIX" },
   { key: "contactPhone", label: "Telefone" },
   { key: "contactEmail", label: "E-mail", type: "email", showInTable: false },
-  { key: "isActive", label: "Ativo", showInTable: true, render: (val: boolean) => (
+  { key: "isActive", label: "Ativo", type: "checkbox", defaultValue: true, showInTable: true, render: (val: boolean) => (
     <span className={`text-xs px-2 py-0.5 rounded-full ${val !== false ? "badge-success" : "badge-danger"}`}>
       {val !== false ? "Ativo" : "Inativo"}
     </span>

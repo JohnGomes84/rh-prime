@@ -12,6 +12,7 @@ import type { AppRouter } from "../../../server/routers";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type NfeRecebida = RouterOutputs["fiscal"]["getNfesRecebidas"]["data"][number];
+const ALL_STATUS_VALUE = "all";
 
 export default function NotasFiscaisRecebidas() {
   const [page, setPage] = useState(1);
@@ -179,15 +180,15 @@ export default function NotasFiscaisRecebidas() {
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <label className="text-sm font-medium">Status</label>
-              <Select value={status || ""} onValueChange={(v) => {
-                setStatus(v as any);
+              <Select value={status ?? ALL_STATUS_VALUE} onValueChange={(value) => {
+                setStatus(value === ALL_STATUS_VALUE ? undefined : (value as typeof status));
                 setPage(1);
               }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos os status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value={ALL_STATUS_VALUE}>Todos</SelectItem>
                   <SelectItem value="received">Recebida</SelectItem>
                   <SelectItem value="processed">Processada</SelectItem>
                   <SelectItem value="reconciled">Reconciliada</SelectItem>

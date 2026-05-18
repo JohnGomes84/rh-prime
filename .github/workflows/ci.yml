@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Typecheck + Test + Build
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_pass
+          MYSQL_DATABASE: finhub_test
+          MYSQL_USER: finhub
+          MYSQL_PASSWORD: finhub_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u finhub -pfinhub_pass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: mysql://finhub:finhub_pass@127.0.0.1:3306/finhub_test
+      NODE_ENV: test
+      JWT_SECRET: ci-secret-not-used-in-prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Apply DB schema
+        run: pnpm db:push
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  e2e:
+    name: E2E (smoke)
+    runs-on: ubuntu-latest
+    needs: check
+    env:
+      DATABASE_URL: ""
+      NODE_ENV: test
+      E2E_BASE_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start server (background)
+        run: node ./scripts/start-server.mjs &
+        env:
+          PORT: "3000"
+
+      - name: Wait for server
+        run: npx wait-on http://localhost:3000 --timeout 30000
+
+      - name: Run E2E smoke tests
+        run: pnpm exec playwright test --project=chromium
+        env:
+          CI: true
+          E2E_BASE_URL: http://localhost:3000

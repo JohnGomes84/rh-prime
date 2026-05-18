@@ -88,7 +88,8 @@ describeIfDb("FinHub Inteligente - Router Tests", () => {
     it("admin can create an employee", async () => {
       const ctx = createAdminContext();
       const caller = appRouter.createCaller(ctx);
-      const uniqueCpf = `T${Date.now().toString().slice(-10)}`;
+      // CPF deve ter 11 dígitos numéricos (validador centralizado em shared/validators.ts).
+      const uniqueCpf = `1${Date.now().toString().slice(-10)}`;
       const result = await caller.cadastros.employees.create({
         name: "João Teste",
         cpf: uniqueCpf,

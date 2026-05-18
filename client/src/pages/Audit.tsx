@@ -12,6 +12,7 @@ import type { AppRouter } from '../../../server/routers';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type AuditLog = RouterOutputs['audit']['getLogs']['logs'][number];
+const ALL_FILTER_VALUE = 'all';
 
 const ACTION_LABELS: Record<string, string> = {
   payment_created: '💳 Pagamento Criado',
@@ -37,11 +38,11 @@ const ACTION_COLORS: Record<string, string> = {
   client_updated: 'bg-yellow-100 text-yellow-800',
 };
 
-export function Audit() {
+export default function Audit() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
-  const [filterAction, setFilterAction] = useState<string>('');
-  const [filterEntity, setFilterEntity] = useState<string>('');
+  const [filterAction, setFilterAction] = useState<string>(ALL_FILTER_VALUE);
+  const [filterEntity, setFilterEntity] = useState<string>(ALL_FILTER_VALUE);
   const [startDate, setStartDate] = useState<Date>(
     new Date(new Date().setDate(new Date().getDate() - 30))
   );
@@ -51,8 +52,8 @@ export function Audit() {
   const { data: logsData, isLoading } = trpc.audit.getLogs.useQuery({
     page,
     limit,
-    action: filterAction || undefined,
-    entityType: filterEntity || undefined,
+    action: filterAction === ALL_FILTER_VALUE ? undefined : filterAction,
+    entityType: filterEntity === ALL_FILTER_VALUE ? undefined : filterEntity,
     startDate,
     endDate,
   });
@@ -70,7 +71,7 @@ export function Audit() {
       const result = await trpcUtils.audit.exportLogs.fetch({
         startDate,
         endDate,
-        action: filterAction || undefined,
+        action: filterAction === ALL_FILTER_VALUE ? undefined : filterAction,
       });
 
       // Criar blob e download
@@ -158,7 +159,7 @@ export function Audit() {
                   <SelectValue placeholder="Todas as ações" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas as ações</SelectItem>
+                  <SelectItem value={ALL_FILTER_VALUE}>Todas as ações</SelectItem>
                   {uniqueActions.map((action) => (
                     <SelectItem key={action} value={action}>
                       {ACTION_LABELS[action] || action}
@@ -175,7 +176,7 @@ export function Audit() {
                   <SelectValue placeholder="Todas as entidades" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas as entidades</SelectItem>
+                  <SelectItem value={ALL_FILTER_VALUE}>Todas as entidades</SelectItem>
                   {uniqueEntities.map((entity) => (
                     <SelectItem key={entity} value={entity}>
                       {entity}
@@ -187,7 +188,14 @@ export function Audit() {
           </div>
 
           <div className="flex gap-2 mt-4">
-            <Button onClick={() => setPage(1)} variant="outline">
+            <Button
+              onClick={() => {
+                setFilterAction(ALL_FILTER_VALUE);
+                setFilterEntity(ALL_FILTER_VALUE);
+                setPage(1);
+              }}
+              variant="outline"
+            >
               Limpar Filtros
             </Button>
             <Button onClick={handleExport}>

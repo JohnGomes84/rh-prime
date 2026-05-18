@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { scheduleAllocations, employees, schedulePayments } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { computeAllocationNetNumber, stringToDecimal } from "../_core/money";
 
 export interface PaymentRecord {
   employeeId: number;
@@ -63,21 +64,28 @@ export async function generatePaymentRecords(
       const pixKey = employee?.[0]?.pixKey || undefined;
       const pixType = pixKey ? detectPixType(pixKey) : undefined;
 
-      // Calcular total a pagar
-      const marmita = alloc.mealAllowance || 0;
-      const vale = alloc.voucher || 0;
-      const bonus = alloc.bonus || 0;
-      const totalToPay = alloc.payValue - marmita - vale + bonus;
+      // Calcular total a pagar via single source of truth (_core/money.ts)
+      const baseValue = stringToDecimal(alloc.payValue);
+      const marmita = stringToDecimal(alloc.mealAllowance);
+      const vale = stringToDecimal(alloc.voucher);
+      const bonus = stringToDecimal(alloc.bonus);
+      const totalToPay = computeAllocationNetNumber({
+        days: 1,
+        dailyRate: baseValue,
+        mealAllowance: marmita,
+        voucher: vale,
+        bonus,
+      });
 
       const record: PaymentRecord = {
         employeeId: alloc.employeeId,
         scheduleId: alloc.scheduleId,
         period,
         daysWorked: 1,
-        baseValue: alloc.payValue,
+        baseValue,
         mealAllowance: marmita,
         voucher: vale,
-        bonus: bonus,
+        bonus,
         totalToPay,
         pixKey,
         pixType,

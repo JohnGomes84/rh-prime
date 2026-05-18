@@ -26,6 +26,23 @@ import {
   assertBatchCanBePaid,
   calculatePaymentBatchItemTotal,
 } from "../_core/criticalFlows";
+import {
+  computeAllocationNetNumber,
+  stringToDecimal,
+} from "../_core/money";
+import {
+  dateString,
+  dateStringOptional,
+  moneyString,
+  moneyStringOptional,
+  payableStatus,
+  paymentBatchStatus,
+  positiveId,
+  positiveIdNullable,
+  positiveIdOptional,
+  receivableStatus,
+  requiredText,
+} from "@shared/validators";
 
 async function requirePermission(
   userId: number,
@@ -127,13 +144,15 @@ export const financeiroRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          description: z.string().min(2),
-          supplierId: z.number().optional(),
-          clientId: z.number().optional(),
-          costCenterId: z.number().optional(),
-          bankAccountId: z.number().optional(),
-          amount: z.string(),
-          dueDate: z.string(),
+          description: requiredText(2, "Descrição"),
+          supplierId: positiveIdOptional,
+          clientId: positiveIdOptional,
+          costCenterId: positiveIdOptional,
+          bankAccountId: positiveIdOptional,
+          amount: moneyString,
+          dueDate: dateString,
+          paymentDate: dateStringOptional.nullable().or(z.literal("")),
+          status: payableStatus.optional(),
           notes: z.string().optional(),
         })
       )
@@ -149,6 +168,8 @@ export const financeiroRouter = router({
         const result = await db.insert(accountsPayable).values({
           ...input,
           dueDate: new Date(input.dueDate),
+          paymentDate: input.paymentDate ? new Date(input.paymentDate) : null,
+          status: input.status ?? "pendente",
         });
         return { id: Number(result[0].insertId) };
       }),
@@ -156,18 +177,16 @@ export const financeiroRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
+          id: positiveId,
           description: z.string().optional(),
-          supplierId: z.number().nullable().optional(),
-          clientId: z.number().nullable().optional(),
-          costCenterId: z.number().nullable().optional(),
-          bankAccountId: z.number().nullable().optional(),
-          amount: z.string().optional(),
-          dueDate: z.string().optional(),
-          paymentDate: z.string().nullable().optional(),
-          status: z
-            .enum(["pendente", "pago", "vencido", "cancelado"])
-            .optional(),
+          supplierId: positiveIdNullable,
+          clientId: positiveIdNullable,
+          costCenterId: positiveIdNullable,
+          bankAccountId: positiveIdNullable,
+          amount: moneyStringOptional,
+          dueDate: dateStringOptional,
+          paymentDate: dateStringOptional.nullable(),
+          status: payableStatus.optional(),
           notes: z.string().optional(),
         })
       )
@@ -191,11 +210,24 @@ export const financeiroRouter = router({
             code: "NOT_FOUND",
             message: "Conta a pagar não encontrada",
           });
+        // Conta paga: só permite alterar notes/documentUrl. Bloquear mudanças financeiras.
         if (current.status === "pago") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Conta já paga não pode ser editada",
-          });
+          const lockedKeys = [
+            "amount",
+            "dueDate",
+            "supplierId",
+            "clientId",
+            "costCenterId",
+            "bankAccountId",
+            "description",
+          ] as const;
+          const blocked = lockedKeys.find(k => (data as any)[k] !== undefined);
+          if (blocked) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Conta já paga: campo "${blocked}" não pode ser alterado`,
+            });
+          }
         }
         const updateData: any = { ...data };
         if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
@@ -210,7 +242,7 @@ export const financeiroRouter = router({
       }),
 
     markPaid: protectedProcedure
-      .input(z.object({ id: z.number(), paymentDate: z.string().optional() }))
+      .input(z.object({ id: positiveId, paymentDate: dateStringOptional }))
       .mutation(async ({ ctx, input }) => {
         await requirePermission(
           ctx.user.id,
@@ -341,12 +373,14 @@ export const financeiroRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          description: z.string().min(2),
-          clientId: z.number().optional(),
-          costCenterId: z.number().optional(),
-          bankAccountId: z.number().optional(),
-          amount: z.string(),
-          dueDate: z.string(),
+          description: requiredText(2, "Descrição"),
+          clientId: positiveIdOptional,
+          costCenterId: positiveIdOptional,
+          bankAccountId: positiveIdOptional,
+          amount: moneyString,
+          dueDate: dateString,
+          receiveDate: dateStringOptional.nullable().or(z.literal("")),
+          status: receivableStatus.optional(),
           notes: z.string().optional(),
         })
       )
@@ -362,6 +396,8 @@ export const financeiroRouter = router({
         const result = await db.insert(accountsReceivable).values({
           ...input,
           dueDate: new Date(input.dueDate),
+          receiveDate: input.receiveDate ? new Date(input.receiveDate) : null,
+          status: input.status ?? "pendente",
         });
         return { id: Number(result[0].insertId) };
       }),
@@ -369,17 +405,15 @@ export const financeiroRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
+          id: positiveId,
           description: z.string().optional(),
-          clientId: z.number().nullable().optional(),
-          costCenterId: z.number().nullable().optional(),
-          bankAccountId: z.number().nullable().optional(),
-          amount: z.string().optional(),
-          dueDate: z.string().optional(),
-          receiveDate: z.string().nullable().optional(),
-          status: z
-            .enum(["pendente", "recebido", "vencido", "cancelado"])
-            .optional(),
+          clientId: positiveIdNullable,
+          costCenterId: positiveIdNullable,
+          bankAccountId: positiveIdNullable,
+          amount: moneyStringOptional,
+          dueDate: dateStringOptional,
+          receiveDate: dateStringOptional.nullable(),
+          status: receivableStatus.optional(),
           notes: z.string().optional(),
         })
       )
@@ -404,10 +438,21 @@ export const financeiroRouter = router({
             message: "Conta a receber não encontrada",
           });
         if (current.status === "recebido") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Conta já recebida não pode ser editada",
-          });
+          const lockedKeys = [
+            "amount",
+            "dueDate",
+            "clientId",
+            "costCenterId",
+            "bankAccountId",
+            "description",
+          ] as const;
+          const blocked = lockedKeys.find(k => (data as any)[k] !== undefined);
+          if (blocked) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Conta já recebida: campo "${blocked}" não pode ser alterado`,
+            });
+          }
         }
         const updateData: any = { ...data };
         if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
@@ -423,7 +468,7 @@ export const financeiroRouter = router({
       }),
 
     markReceived: protectedProcedure
-      .input(z.object({ id: z.number(), receiveDate: z.string().optional() }))
+      .input(z.object({ id: positiveId, receiveDate: dateStringOptional }))
       .mutation(async ({ ctx, input }) => {
         await requirePermission(
           ctx.user.id,
@@ -487,34 +532,31 @@ export const financeiroRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const [allocations, schedules, employeeList, clientList] = await Promise.all([
-        db.select().from(scheduleAllocations),
-        db.select().from(workSchedules),
-        db.select().from(employees),
-        db.select().from(clients),
-      ]);
+      const rows = await db
+        .select()
+        .from(scheduleAllocations)
+        .innerJoin(workSchedules, and(
+          eq(scheduleAllocations.scheduleId, workSchedules.id),
+          eq(workSchedules.status, "validado")
+        ))
+        .innerJoin(employees, eq(scheduleAllocations.employeeId, employees.id))
+        .leftJoin(clients, eq(workSchedules.clientId, clients.id));
 
-      const scheduleMap = new Map(schedules.map(item => [item.id, item]));
-      const employeeMap = new Map(employeeList.map(item => [item.id, item]));
-      const clientMap = new Map(clientList.map(item => [item.id, item]));
-
-      return allocations
-        .map(allocation => {
-          const schedule = scheduleMap.get(allocation.scheduleId);
-          const employee = employeeMap.get(allocation.employeeId);
-          const client = schedule ? clientMap.get(schedule.clientId) : null;
-          if (!schedule || !employee) return null;
-          if (schedule.status !== "validado") return null;
-
-          const baseValue = Number(allocation.payValue || 0);
-          const mealAllowance = Number(allocation.mealAllowance || 0);
-          const voucher = Number(allocation.voucher || 0);
-          const bonus = Number(allocation.bonus || 0);
-          const totalToPay = baseValue - mealAllowance - voucher + bonus;
+      return rows
+        .map(({ schedule_allocations: allocation, work_schedules: schedule, employees: employee, clients: client }) => {
+          const baseValue = stringToDecimal(allocation.payValue);
+          const mealAllowance = stringToDecimal(allocation.mealAllowance);
+          const voucher = stringToDecimal(allocation.voucher);
+          const bonus = stringToDecimal(allocation.bonus);
+          const totalToPay = computeAllocationNetNumber({
+            days: 1,
+            dailyRate: baseValue,
+            mealAllowance,
+            voucher,
+            bonus,
+          });
           const scheduleDate = new Date(schedule.date);
-          const period = `${scheduleDate.getFullYear()}-${String(
-            scheduleDate.getMonth() + 1
-          ).padStart(2, "0")}`;
+          const period = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, "0")}`;
 
           return {
             id: allocation.id,
@@ -537,11 +579,7 @@ export const financeiroRouter = router({
             status: allocation.paymentBatchId ? "paid" : employee.pixKey ? "pending" : "no_pix",
           };
         })
-        .filter((item): item is NonNullable<typeof item> => Boolean(item))
-        .sort(
-          (a, b) =>
-            new Date(b.scheduleDate).getTime() - new Date(a.scheduleDate).getTime()
-        );
+        .sort((a, b) => new Date(b.scheduleDate).getTime() - new Date(a.scheduleDate).getTime());
     }),
   }),
 
@@ -589,10 +627,10 @@ export const financeiroRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          title: z.string().min(2),
-          periodStart: z.string(),
-          periodEnd: z.string(),
-          bankAccountId: z.number().optional(),
+          title: requiredText(2, "Título"),
+          periodStart: dateString,
+          periodEnd: dateString,
+          bankAccountId: positiveIdOptional,
           notes: z.string().optional(),
         })
       )
@@ -616,13 +654,13 @@ export const financeiroRouter = router({
     addItem: protectedProcedure
       .input(
         z.object({
-          batchId: z.number(),
-          employeeId: z.number(),
-          daysWorked: z.number().default(0),
-          dailyRate: z.string().default("0"),
-          mealAllowance: z.string().default("0"),
-          bonus: z.string().default("0"),
-          voucher: z.string().default("0"),
+          batchId: positiveId,
+          employeeId: positiveId,
+          daysWorked: z.number().int().nonnegative().default(0),
+          dailyRate: moneyStringOptional.default("0"),
+          mealAllowance: moneyStringOptional.default("0"),
+          bonus: moneyStringOptional.default("0"),
+          voucher: moneyStringOptional.default("0"),
           pixKey: z.string().optional(),
         })
       )
@@ -705,7 +743,7 @@ export const financeiroRouter = router({
       }),
 
     removeItem: protectedProcedure
-      .input(z.object({ itemId: z.number(), batchId: z.number() }))
+      .input(z.object({ itemId: positiveId, batchId: positiveId }))
       .mutation(async ({ ctx, input }) => {
         await requirePermission(
           ctx.user.id,

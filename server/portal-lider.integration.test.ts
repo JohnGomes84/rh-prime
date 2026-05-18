@@ -23,6 +23,13 @@ type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
 let leaderUserId = 0;
 let adminUserId = 0;
+let uniqueCpfCounter = 0;
+
+function buildUniqueCpf() {
+  uniqueCpfCounter += 1;
+  const digits = `${Date.now()}${uniqueCpfCounter}`.slice(-11).padStart(11, "0");
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
 
 function createLeaderContext(): TrpcContext {
   const user: AuthenticatedUser = {
@@ -320,7 +327,8 @@ describeIfDb("Portal Lider Integration", () => {
     expect(expenses.length).toBeGreaterThan(0);
     expect(expenses[0]?.employeeCpf).toBe(fixture.employeeCpf);
     expect(Number(expenses[0]?.voucher)).toBe(35);
-    expect(Number(expenses[0]?.total)).toBeGreaterThanOrEqual(35);
+    // Total = bônus − vale − marmita (efeito líquido na diária). Vale 35 → total -35.
+    expect(Number(expenses[0]?.total)).toBeLessThanOrEqual(-35);
   });
 
   it("closes the operation and marks the schedule as validated", async () => {
@@ -359,7 +367,7 @@ describeIfDb("Portal Lider Integration", () => {
     const suffix = Date.now();
     const employee = await caller.portalLider.quickRegisterEmployee({
       name: `Pix Portal ${suffix}`,
-      cpf: `901.000.${String(suffix).slice(-3)}-00`,
+      cpf: buildUniqueCpf(),
       rg: `RG-PIX-${suffix}`,
       pixKey: `pix${suffix}@old.local`,
       pixKeyType: "email",
@@ -401,7 +409,7 @@ describeIfDb("Portal Lider Integration", () => {
     const suffix = Date.now();
     const employee = await leaderCaller.portalLider.quickRegisterEmployee({
       name: `Pix Approval ${suffix}`,
-      cpf: `903.000.${String(suffix).slice(-3)}-00`,
+      cpf: buildUniqueCpf(),
       rg: `RG-APP-${suffix}`,
       pixKey: `pix-antigo-${suffix}@old.local`,
       pixKeyType: "email",
@@ -465,7 +473,7 @@ describeIfDb("Portal Lider Integration", () => {
     const originalPixKey = `pix-original-${suffix}@old.local`;
     const employee = await leaderCaller.portalLider.quickRegisterEmployee({
       name: `Pix Reject ${suffix}`,
-      cpf: `904.000.${String(suffix).slice(-3)}-00`,
+      cpf: buildUniqueCpf(),
       rg: `RG-REJ-${suffix}`,
       pixKey: originalPixKey,
       pixKeyType: "email",
@@ -528,7 +536,7 @@ describeIfDb("Portal Lider Integration", () => {
     const suffix = Date.now();
     const employee = await leaderCaller.portalLider.quickRegisterEmployee({
       name: `Pix Double ${suffix}`,
-      cpf: `905.000.${String(suffix).slice(-3)}-00`,
+      cpf: buildUniqueCpf(),
       rg: `RG-DBL-${suffix}`,
       pixKey: `pix-double-${suffix}@old.local`,
       pixKeyType: "email",
@@ -582,7 +590,7 @@ describeIfDb("Portal Lider Integration", () => {
     const suffix = Date.now();
     const employee = await caller.portalLider.quickRegisterEmployee({
       name: `Teste Portal ${suffix}`,
-      cpf: `900.000.${String(suffix).slice(-3)}-00`,
+      cpf: buildUniqueCpf(),
       rg: `RG-${suffix}`,
       pixKey: `teste${suffix}@pix.local`,
       pixKeyType: "email",
@@ -618,7 +626,7 @@ describeIfDb("Portal Lider Integration", () => {
     const suffix = Date.now();
     const employee = await caller.portalLider.quickRegisterEmployee({
       name: `Remocao Portal ${suffix}`,
-      cpf: `902.000.${String(suffix).slice(-3)}-00`,
+      cpf: buildUniqueCpf(),
       rg: `RG-REM-${suffix}`,
       pixKey: `remove${suffix}@pix.local`,
       pixKeyType: "email",

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { computeAllocationNet } from "./money";
 
 export function calculatePaymentBatchItemTotal(params: {
   daysWorked: number;
@@ -7,12 +8,13 @@ export function calculatePaymentBatchItemTotal(params: {
   bonus: string;
   voucher: string;
 }) {
-  const total =
-    params.daysWorked * parseFloat(params.dailyRate) +
-    parseFloat(params.mealAllowance) +
-    parseFloat(params.bonus) -
-    parseFloat(params.voucher);
-  return total.toFixed(2);
+  return computeAllocationNet({
+    days: params.daysWorked,
+    dailyRate: params.dailyRate,
+    mealAllowance: params.mealAllowance,
+    voucher: params.voucher,
+    bonus: params.bonus,
+  });
 }
 
 export function assertScheduleEditable(

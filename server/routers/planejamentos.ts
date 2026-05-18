@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { eq, and, gte, lte, desc, sql, inArray, ne } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, inArray, ne, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   workSchedules,
@@ -23,6 +23,7 @@ import {
   assertScheduleEditable,
   filterNewEmployeesWithoutDuplicate,
 } from "../_core/criticalFlows";
+import { dateString } from "../../shared/validators";
 
 async function requirePermission(
   userId: number,
@@ -101,20 +102,27 @@ async function createScheduleRecord(
 
   const scheduleDate = payload.date instanceof Date ? payload.date : new Date(payload.date);
   const normalizedDate = new Date(scheduleDate);
-  normalizedDate.setHours(0, 0, 0, 0);
+  normalizedDate.setUTCHours(0, 0, 0, 0);
 
-  const existing = await db.select().from(workSchedules);
-  const conflict = existing.find((schedule) => {
-    const existingDate = new Date(schedule.date);
-    existingDate.setHours(0, 0, 0, 0);
+  const nextDay = new Date(normalizedDate);
+  nextDay.setUTCDate(normalizedDate.getUTCDate() + 1);
 
-    return (
-      existingDate.getTime() === normalizedDate.getTime() &&
-      schedule.clientId === payload.clientId &&
-      (schedule.shiftId ?? null) === (payload.shiftId ?? null) &&
-      (schedule.clientUnitId ?? null) === (payload.clientUnitId ?? null)
+  const candidates = await db
+    .select()
+    .from(workSchedules)
+    .where(
+      and(
+        gte(workSchedules.date, normalizedDate),
+        lte(workSchedules.date, nextDay),
+        eq(workSchedules.clientId, payload.clientId)
+      )
     );
-  });
+
+  const conflict = candidates.find(
+    (s) =>
+      (s.shiftId ?? null) === (payload.shiftId ?? null) &&
+      (s.clientUnitId ?? null) === (payload.clientUnitId ?? null)
+  );
 
   if (conflict) {
     if (options?.skipIfExists) {
@@ -430,7 +438,7 @@ export const planejamentosRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        date: z.string(),
+        date: dateString,
         shiftId: z.number().optional(),
         clientId: z.number(),
         clientUnitId: z.number().optional(),
@@ -459,7 +467,7 @@ export const planejamentosRouter = router({
   createRecurring: protectedProcedure
     .input(
       z.object({
-        date: z.string(),
+        date: dateString,
         shiftId: z.number().optional(),
         clientId: z.number(),
         clientUnitId: z.number().optional(),
@@ -616,7 +624,7 @@ export const planejamentosRouter = router({
     .input(
       z.object({
         id: z.number(),
-        date: z.string().optional(),
+        date: dateString.optional(),
         shiftId: z.number().nullable().optional(),
         clientId: z.number().optional(),
         clientUnitId: z.number().nullable().optional(),
@@ -634,12 +642,16 @@ export const planejamentosRouter = router({
       );
       const { db, schedule } = await getScheduleOrThrow(input.id);
       const { id, ...data } = input;
-      const updateData: any = { ...data };
+      const updateData: Partial<typeof workSchedules.$inferInsert> = { ...data } as Partial<typeof workSchedules.$inferInsert>;
       if (data.date) updateData.date = new Date(data.date);
       if (data.status) {
         assertScheduleTransition(schedule.status, data.status);
       }
-      if (schedule.status === "cancelado" && data.status !== "cancelado") {
+      if (
+        schedule.status === "cancelado" &&
+        data.status &&
+        data.status !== "cancelado"
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Planejamento cancelado não pode ser reaberto",
@@ -712,22 +724,20 @@ export const planejamentosRouter = router({
       });
       const newScheduleId = Number(newSchedule.insertId);
 
-      // Copiar funções
+      // Copiar funções (batch insert)
       const funcs = await db
         .select()
         .from(scheduleFunctions)
         .where(eq(scheduleFunctions.scheduleId, input.scheduleId));
-      for (const f of funcs) {
-        const [newFunc] = await db.insert(scheduleFunctions).values({
-          scheduleId: newScheduleId,
-          jobFunctionId: f.jobFunctionId,
-          payValue: f.payValue,
-          receiveValue: f.receiveValue,
-        });
-        const newFuncId = Number(newFunc.insertId);
-
-        // NÃO copiar alocações de diaristas (apenas funções e valores)
-        // As alocações devem ser feitas manualmente no novo planejamento
+      if (funcs.length > 0) {
+        await db.insert(scheduleFunctions).values(
+          funcs.map(f => ({
+            scheduleId: newScheduleId,
+            jobFunctionId: f.jobFunctionId,
+            payValue: f.payValue,
+            receiveValue: f.receiveValue,
+          }))
+        );
       }
 
       await recalcScheduleTotals(newScheduleId);
@@ -823,22 +833,19 @@ export const planejamentosRouter = router({
 
         // Atualizar valores de todas as alocações desta função que não foram pagas
         if (data.payValue || data.receiveValue) {
-          const updateAlloc: any = {};
+          const updateAlloc: Partial<Pick<typeof scheduleAllocations.$inferInsert, "payValue" | "receiveValue">> = {};
           if (data.payValue) updateAlloc.payValue = data.payValue;
           if (data.receiveValue) updateAlloc.receiveValue = data.receiveValue;
           // Só atualiza alocações não pagas (paymentBatchId IS NULL)
-          const allocs = await db
-            .select()
-            .from(scheduleAllocations)
-            .where(eq(scheduleAllocations.scheduleFunctionId, id));
-          for (const a of allocs) {
-            if (!a.paymentBatchId) {
-              await db
-                .update(scheduleAllocations)
-                .set(updateAlloc)
-                .where(eq(scheduleAllocations.id, a.id));
-            }
-          }
+          await db
+            .update(scheduleAllocations)
+            .set(updateAlloc)
+            .where(
+              and(
+                eq(scheduleAllocations.scheduleFunctionId, id),
+                isNull(scheduleAllocations.paymentBatchId)
+              )
+            );
         }
 
         // Recalcular totais
@@ -964,8 +971,8 @@ export const planejamentosRouter = router({
           });
         }
 
-        for (const empId of newEmpIds) {
-          await db.insert(scheduleAllocations).values({
+        await db.insert(scheduleAllocations).values(
+          newEmpIds.map(empId => ({
             scheduleFunctionId: input.scheduleFunctionId,
             scheduleId: input.scheduleId,
             employeeId: empId,
@@ -974,8 +981,8 @@ export const planejamentosRouter = router({
             mealAllowance: "0",
             voucher: "0",
             bonus: "0",
-          });
-        }
+          }))
+        );
 
         await recalcScheduleTotals(input.scheduleId);
         return { added: newEmpIds.length };
@@ -1089,11 +1096,16 @@ export const planejamentosRouter = router({
   stats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return { total: 0, pendentes: 0, validados: 0 };
-    const all = await db.select().from(workSchedules);
+    const rows = await db
+      .select({ status: workSchedules.status, count: sql<number>`count(*)` })
+      .from(workSchedules)
+      .groupBy(workSchedules.status);
+    const byStatus = Object.fromEntries(rows.map((r) => [r.status, Number(r.count)]));
+    const total = rows.reduce((acc, r) => acc + Number(r.count), 0);
     return {
-      total: all.length,
-      pendentes: all.filter(s => s.status === "pendente").length,
-      validados: all.filter(s => s.status === "validado").length,
+      total,
+      pendentes: byStatus["pendente"] ?? 0,
+      validados: byStatus["validado"] ?? 0,
     };
   }),
 
@@ -1132,7 +1144,7 @@ export const planejamentosRouter = router({
     .input(
       z.object({
         cpf: z.string(),
-        date: z.string(),
+        date: dateString,
         type: z.enum(["voucher", "bonus", "mealAllowance"]),
         value: z.string(),
       })
@@ -1177,11 +1189,11 @@ export const planejamentosRouter = router({
         59
       );
 
-      const allSchedules = await db.select().from(workSchedules);
-      const [schedule] = allSchedules.filter(s => {
-        const sDate = new Date(s.date);
-        return sDate >= dayStart && sDate <= dayEnd;
-      });
+      const [schedule] = await db
+        .select()
+        .from(workSchedules)
+        .where(and(gte(workSchedules.date, dayStart), lte(workSchedules.date, dayEnd)))
+        .limit(1);
 
       if (!schedule) {
         throw new TRPCError({
@@ -1207,7 +1219,7 @@ export const planejamentosRouter = router({
         });
       }
 
-      const updateData: any = {};
+      const updateData: Partial<Pick<typeof scheduleAllocations.$inferInsert, "voucher" | "bonus" | "mealAllowance">> = {};
       updateData[input.type] = input.value;
       await db
         .update(scheduleAllocations)

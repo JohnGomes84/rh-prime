@@ -39,6 +39,10 @@ import {
   UserCheck,
   Key,
   FolderOpen,
+  ClipboardList,
+  FileBarChart2,
+  FileText,
+  ScrollText,
 } from "lucide-react";
 import { CSSProperties, useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -66,7 +70,11 @@ const allMenuItems: MenuItem[] = [
   { icon: CalendarDays, label: "Planejamentos", path: "/schedules", module: "schedules", group: "Operacoes" },
   { icon: UserCheck, label: "Portal do Lider", path: "/portal-lider", module: "schedules", group: "Operacoes" },
   { icon: Key, label: "Aprovacao PIX", path: "/pix-approvals", module: "users", group: "Admin" },
+  { icon: ClipboardList, label: "Historico PIX", path: "/pix-requests", module: "users", group: "Admin" },
   { icon: Shield, label: "Ocorrencias", path: "/admin/occurrences", module: "users", group: "Admin" },
+  { icon: ScrollText, label: "Auditoria", path: "/audit", module: "users", group: "Admin" },
+  { icon: FileBarChart2, label: "Relatorios", path: "/relatorios", module: "schedules", group: "Operacoes" },
+  { icon: FileText, label: "Notas Fiscais", path: "/notas-fiscais", module: "schedules", group: "Operacoes" },
   { icon: CreditCard, label: "Contas a Pagar", path: "/accounts-payable", module: "accounts_payable", group: "Financeiro" },
   { icon: Receipt, label: "Contas a Receber", path: "/accounts-receivable", module: "accounts_receivable", group: "Financeiro" },
   { icon: CircleDollarSign, label: "Pagamentos", path: "/payments", module: "payment_batches", group: "Financeiro" },

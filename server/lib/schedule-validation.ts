@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { workSchedules, scheduleAllocations, schedulePayments, accountsReceivable } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { computeAllocationNet, stringToDecimal, sumMoney } from "../_core/money";
 
 /**
  * Valida se um planejamento pode ser validado
@@ -134,14 +135,24 @@ export async function validateScheduleAtomic(
       mealAllowance: alloc.mealAllowance || 0,
       voucher: alloc.voucher || 0,
       bonus: alloc.bonus || 0,
-      totalToPay: alloc.payValue - (alloc.mealAllowance || 0) - (alloc.voucher || 0) + (alloc.bonus || 0),
+      totalToPay: stringToDecimal(
+        computeAllocationNet({
+          days: 1,
+          dailyRate: alloc.payValue,
+          mealAllowance: alloc.mealAllowance,
+          voucher: alloc.voucher,
+          bonus: alloc.bonus,
+        })
+      ),
       status: "pending" as const,
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
 
     // 4. Gerar conta a receber (FASE 3)
-    const totalReceive = allocations.reduce((sum, alloc) => sum + alloc.receiveValue, 0);
+    const totalReceive = stringToDecimal(
+      sumMoney(...allocations.map(a => a.receiveValue))
+    );
     const dueDate = new Date(schedule[0].date);
     dueDate.setDate(dueDate.getDate() + 30);
 

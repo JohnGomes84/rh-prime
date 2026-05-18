@@ -34,11 +34,12 @@ import { toast } from "sonner";
 export type FieldDef = {
   key: string;
   label: string;
-  type?: "text" | "email" | "select" | "date" | "number" | "textarea";
+  type?: "text" | "email" | "select" | "date" | "number" | "textarea" | "time" | "checkbox";
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
   showInTable?: boolean;
+  defaultValue?: any;
   render?: (value: any, row: any) => React.ReactNode;
 };
 
@@ -98,7 +99,14 @@ export default function CrudPage({
   const openCreate = () => {
     setEditItem(null);
     const defaults: Record<string, any> = {};
-    fields.forEach(f => { defaults[f.key] = ""; });
+    fields.forEach(f => {
+      if (f.defaultValue !== undefined) {
+        defaults[f.key] = f.defaultValue;
+        return;
+      }
+
+      defaults[f.key] = f.type === "checkbox" ? false : "";
+    });
     setFormData(defaults);
     setDialogOpen(true);
   };
@@ -111,20 +119,88 @@ export default function CrudPage({
       if (f.type === "date" && val) {
         val = new Date(val).toISOString().split("T")[0];
       }
+      if (f.type === "checkbox") {
+        val = Boolean(val);
+      }
       data[f.key] = val ?? "";
     });
     setFormData(data);
     setDialogOpen(true);
   };
 
+  // Remove campos vazios (string "" ou undefined) para não sobrescrever no servidor
+  // nem violar enums/decimal. Checkboxes e números válidos permanecem.
+  const sanitizeForSubmit = (raw: Record<string, any>) => {
+    const out: Record<string, any> = {};
+    for (const f of fields) {
+      const v = raw[f.key];
+      if (v === undefined || v === null) continue;
+      if (typeof v === "string" && v.trim() === "") continue;
+      out[f.key] = v;
+    }
+    return out;
+  };
+
+  // Diff: envia somente campos modificados E não-vazios. Limpar um campo via formulário não
+  // dispara update naquele campo (servidor não aceita null em z.string().optional()).
+  const diffDirty = (raw: Record<string, any>, original: any) => {
+    const out: Record<string, any> = {};
+    for (const f of fields) {
+      let curr = raw[f.key];
+      let orig = original?.[f.key];
+      if (f.type === "date" && orig) {
+        orig = new Date(orig).toISOString().split("T")[0];
+      }
+      if (f.type === "checkbox") {
+        curr = Boolean(curr);
+        orig = Boolean(orig);
+      }
+      const currEmpty =
+        curr === undefined || curr === null || (typeof curr === "string" && curr.trim() === "");
+      if (currEmpty) continue;
+      if (String(curr) === String(orig ?? "")) continue;
+      out[f.key] = curr;
+    }
+    return out;
+  };
+
+  // Validação client-side (UX): required vazio, number inválido, date inválido.
+  // Validações de domínio (CPF, CNPJ, PIX, enum) ficam no servidor (validators.ts) e a
+  // mensagem específica volta no toast de erro.
+  const validateBeforeSubmit = (raw: Record<string, any>): string | null => {
+    for (const f of fields) {
+      const v = raw[f.key];
+      const empty =
+        v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+      if (f.required && empty) return `Campo "${f.label}" é obrigatório`;
+      if (empty) continue;
+      if (f.type === "number" && Number.isNaN(Number(String(v).replace(",", ".")))) {
+        return `Campo "${f.label}" deve ser numérico`;
+      }
+      if (f.type === "date" && Number.isNaN(new Date(String(v)).getTime())) {
+        return `Campo "${f.label}" tem data inválida`;
+      }
+      if (f.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) {
+        return `Campo "${f.label}" tem e-mail inválido`;
+      }
+    }
+    return null;
+  };
+
   const handleSave = async () => {
+    const validationError = validateBeforeSubmit(formData);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     setSaving(true);
     try {
       if (editItem) {
-        await onUpdate?.({ id: editItem.id, ...formData });
+        const dirty = diffDirty(formData, editItem);
+        await onUpdate?.({ id: editItem.id, ...dirty });
         toast.success("Atualizado com sucesso");
       } else {
-        await onCreate?.(formData);
+        await onCreate?.(sanitizeForSubmit(formData));
         toast.success("Criado com sucesso");
       }
       setDialogOpen(false);
@@ -265,6 +341,15 @@ export default function CrudPage({
                     onChange={e => setFormData(prev => ({ ...prev, [f.key]: e.target.value }))}
                     placeholder={f.placeholder}
                   />
+                ) : f.type === "checkbox" ? (
+                  <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData[f.key])}
+                      onChange={e => setFormData(prev => ({ ...prev, [f.key]: e.target.checked }))}
+                    />
+                    <span>{Boolean(formData[f.key]) ? "Ativo" : "Inativo"}</span>
+                  </label>
                 ) : (
                   <Input
                     type={f.type || "text"}

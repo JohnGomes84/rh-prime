@@ -12,6 +12,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
+const ALL_STATUS_VALUE = "all";
+
 export default function PixRequests() {
   const [statusFilter, setStatusFilter] = useState<"pendente" | "aprovado" | "rejeitado" | undefined>(undefined);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
@@ -83,14 +85,16 @@ export default function PixRequests() {
             <div className="flex-1">
               <label className="text-sm font-medium">Status</label>
               <Select
-                value={statusFilter || ""}
-                onValueChange={(value) => setStatusFilter(value as any || undefined)}
+                value={statusFilter ?? ALL_STATUS_VALUE}
+                onValueChange={(value) =>
+                  setStatusFilter(value === ALL_STATUS_VALUE ? undefined : (value as typeof statusFilter))
+                }
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Todos os status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos os status</SelectItem>
+                  <SelectItem value={ALL_STATUS_VALUE}>Todos os status</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
                   <SelectItem value="aprovado">Aprovado</SelectItem>
                   <SelectItem value="rejeitado">Rejeitado</SelectItem>

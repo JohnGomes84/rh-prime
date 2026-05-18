@@ -21,7 +21,7 @@ const currencyRender = (val: string) => {
 
 const fields: FieldDef[] = [
   { key: "description", label: "Descri\u00e7\u00e3o", required: true },
-  { key: "amount", label: "Valor (R$)", required: true, render: currencyRender },
+  { key: "amount", label: "Valor (R$)", type: "number", required: true, render: currencyRender },
   { key: "dueDate", label: "Vencimento", type: "date", required: true, render: (val: any) => val ? new Date(val).toLocaleDateString("pt-BR") : "\u2014" },
   { key: "status", label: "Status", type: "select", options: [
     { value: "pendente", label: "Pendente" },

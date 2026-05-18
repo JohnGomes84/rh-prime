@@ -107,12 +107,40 @@ async function startServer() {
   registerDocumentUploadRoutes(app);
   // SSE notifications under /api/notifications/stream
   setupSSE(app);
-  // tRPC API
+  // tRPC API com log estruturado em erros (rastreamento de "não funciona" do usuário).
   app.use(
     "/api/trpc",
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      onError: ({ error, type, path, input, ctx }) => {
+        // INPUT pode conter PII (CPF, PIX). Truncar payload grande.
+        const safeInput = (() => {
+          try {
+            const json = JSON.stringify(input);
+            return json.length > 500 ? json.slice(0, 500) + "...[truncated]" : json;
+          } catch {
+            return "<unserializable>";
+          }
+        })();
+        const userId = (ctx as { user?: { id?: number } } | undefined)?.user?.id ?? null;
+        // INTERNAL_SERVER_ERROR é o que mais importa — bug não-tratado.
+        // Outros (BAD_REQUEST, FORBIDDEN, NOT_FOUND) são esperados, log mais enxuto.
+        const isUnexpected = error.code === "INTERNAL_SERVER_ERROR";
+        const payload = {
+          ts: new Date().toISOString(),
+          level: isUnexpected ? "error" : "warn",
+          scope: "trpc",
+          type,
+          path,
+          userId,
+          code: error.code,
+          message: error.message,
+          input: safeInput,
+          ...(isUnexpected ? { stack: error.stack } : {}),
+        };
+        console.log(JSON.stringify(payload));
+      },
     })
   );
   // development mode uses Vite, production mode uses static files

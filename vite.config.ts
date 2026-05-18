@@ -174,15 +174,6 @@ export default defineConfig({
           }
 
           if (
-            id.includes("/node_modules/react/") ||
-            id.includes("/node_modules/react-dom/") ||
-            id.includes("/node_modules/scheduler/") ||
-            id.includes("wouter")
-          ) {
-            return "vendor-react";
-          }
-
-          if (
             id.includes("@tanstack") ||
             id.includes("@trpc") ||
             id.includes("superjson")

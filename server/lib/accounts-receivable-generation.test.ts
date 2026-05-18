@@ -185,9 +185,11 @@ describe("Accounts Receivable Generation", () => {
     it("deve filtrar apenas registros vencidos", () => {
       const past = new Date();
       past.setDate(past.getDate() - 10);
+      const future = new Date();
+      future.setDate(future.getDate() + 30);
       const records = [
         { ...mockRecords[0], dueDate: past },
-        { ...mockRecords[1], dueDate: new Date("2026-05-06") },
+        { ...mockRecords[1], dueDate: future },
       ];
       const overdue = filterOverdue(records);
       expect(overdue.length).toBe(1);

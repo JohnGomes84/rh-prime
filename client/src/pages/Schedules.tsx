@@ -39,9 +39,9 @@ export default function SchedulesPage() {
   const { data: schedules, isLoading } = trpc.planejamentos.list.useQuery({
     dateStart: dateStart || undefined,
     dateEnd: dateEnd || undefined,
-    clientId: filterClient ? parseInt(filterClient) : undefined,
-    shiftId: filterShift ? parseInt(filterShift) : undefined,
-    clientUnitId: filterUnit ? parseInt(filterUnit) : undefined,
+    clientId: filterClient && filterClient !== "all" ? parseInt(filterClient) : undefined,
+    shiftId: filterShift && filterShift !== "all" ? parseInt(filterShift) : undefined,
+    clientUnitId: filterUnit && filterUnit !== "all" ? parseInt(filterUnit) : undefined,
     employeeSearch: filterEmployee || undefined,
   });
   const { data: formData } = trpc.planejamentos.formData.useQuery();
@@ -94,6 +94,7 @@ export default function SchedulesPage() {
 
   const handleCreate = async () => {
     if (!newDate || !newClient) { toast.error("Data e Cliente são obrigatórios"); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { toast.error("Data inválida (use AAAA-MM-DD)"); return; }
     if (isRecurring) {
       await createRecurringMut.mutateAsync({
         date: newDate,
@@ -186,11 +187,11 @@ export default function SchedulesPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div>
               <Label className="text-xs text-muted-foreground">Data início</Label>
-              <Input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="mt-1" />
+              <Input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} min="1900-01-01" max="2200-12-31" className="mt-1" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Data fim</Label>
-              <Input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="mt-1" />
+              <Input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} min="1900-01-01" max="2200-12-31" className="mt-1" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Cliente</Label>
@@ -307,7 +308,7 @@ export default function SchedulesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="min-w-0">
               <Label>Data *</Label>
-              <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="mt-1" />
+              <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} min="1900-01-01" max="2200-12-31" className="mt-1" />
             </div>
             <div className="min-w-0">
               <Label>Turno</Label>
@@ -501,7 +502,7 @@ function EditScheduleModal({ id, onClose, formData }: { id: number; onClose: () 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>Data *</Label>
-            <Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="mt-1" />
+            <Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} min="1900-01-01" max="2200-12-31" className="mt-1" />
           </div>
           <div>
             <Label>Turno</Label>

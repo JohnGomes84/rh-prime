@@ -8,15 +8,19 @@ export function buildRecurringDates(
   const safeOccurrences = Math.max(1, Math.min(occurrences, 52));
   const dates: Date[] = [];
 
+  const y = startDate.getUTCFullYear();
+  const m = startDate.getUTCMonth();
+  const d = startDate.getUTCDate();
+
   for (let index = 0; index < safeOccurrences; index += 1) {
-    const nextDate = new Date(startDate);
+    let nextDate: Date;
 
     if (frequency === "weekly") {
-      nextDate.setDate(startDate.getDate() + index * 7);
+      nextDate = new Date(Date.UTC(y, m, d + index * 7));
     } else if (frequency === "biweekly") {
-      nextDate.setDate(startDate.getDate() + index * 14);
+      nextDate = new Date(Date.UTC(y, m, d + index * 14));
     } else {
-      nextDate.setMonth(startDate.getMonth() + index);
+      nextDate = new Date(Date.UTC(y, m + index, d));
     }
 
     dates.push(nextDate);

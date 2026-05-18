@@ -2,6 +2,16 @@ import { useMemo, useState, type ChangeEvent } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { trpc } from "@/lib/trpc";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../server/routers";
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type ScheduleDetail = NonNullable<RouterOutputs["portalLider"]["getScheduleDetail"]>;
+type Allocation = ScheduleDetail["allocations"][number];
+type Expense = RouterOutputs["portalLider"]["listExpensesForSchedule"][number];
+type Occurrence = RouterOutputs["portalLider"]["listOccurrences"][number];
+type AllocationOption = RouterOutputs["portalLider"]["allocationOptions"][number];
+type OperationFormOptions = RouterOutputs["portalLider"]["operationFormOptions"];
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -161,7 +171,7 @@ async function fileToBase64(file: File) {
 
 export default function PortalLiderPage() {
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState("hoje");
+  const [activeTab, setActiveTab] = useState("info");
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(
     null
   );
@@ -267,17 +277,17 @@ export default function PortalLiderPage() {
   const selectedAllocationOption = useMemo(
     () =>
       allocationOptions.find(
-        (option: any) => String(option.id) === quickRegisterForm.jobFunctionId
+        (option: AllocationOption) => String(option.id) === quickRegisterForm.jobFunctionId
       ),
     [allocationOptions, quickRegisterForm.jobFunctionId]
   );
   const unresolvedOccurrences = useMemo(
-    () => occurrences.filter((item: any) => !item.resolved),
+    () => occurrences.filter((item: Occurrence) => !item.resolved),
     [occurrences]
   );
   const unresolvedOccurrenceSeverity = useMemo(() => {
     if (unresolvedOccurrences.length === 0) return "none" as const;
-    return unresolvedOccurrences.some((item: any) =>
+    return unresolvedOccurrences.some((item: Occurrence) =>
       ["absence", "client_issue", "critical"].includes(item.type)
     )
       ? ("high" as const)
@@ -296,7 +306,7 @@ export default function PortalLiderPage() {
     };
 
     const counts = unresolvedOccurrences.reduce<Record<string, number>>(
-      (acc, item: any) => {
+      (acc, item: Occurrence) => {
         acc[item.type] = (acc[item.type] || 0) + 1;
         return acc;
       },
@@ -310,30 +320,30 @@ export default function PortalLiderPage() {
   const operationSummary = useMemo(() => {
     const allocations = schedule?.allocations || [];
     const presentCount = allocations.filter(
-      (item: any) => item.attendanceStatus === "presente"
+      (item: Allocation) => item.attendanceStatus === "presente"
     ).length;
     const absentCount = allocations.filter(
-      (item: any) => item.attendanceStatus === "faltou"
+      (item: Allocation) => item.attendanceStatus === "faltou"
     ).length;
     const partialCount = allocations.filter(
-      (item: any) => item.attendanceStatus === "parcial"
+      (item: Allocation) => item.attendanceStatus === "parcial"
     ).length;
-    const checkInCount = allocations.filter((item: any) => item.checkInTime).length;
-    const checkOutCount = allocations.filter((item: any) => item.checkOutTime).length;
+    const checkInCount = allocations.filter((item: Allocation) => item.checkInTime).length;
+    const checkOutCount = allocations.filter((item: Allocation) => item.checkOutTime).length;
     const voucherTotal = expenses.reduce(
-      (sum: number, item: any) => sum + Number(item.voucher || 0),
+      (sum: number, item: Expense) => sum + Number(item.voucher || 0),
       0
     );
     const bonusTotal = expenses.reduce(
-      (sum: number, item: any) => sum + Number(item.bonus || 0),
+      (sum: number, item: Expense) => sum + Number(item.bonus || 0),
       0
     );
     const mealTotal = expenses.reduce(
-      (sum: number, item: any) => sum + Number(item.mealAllowance || 0),
+      (sum: number, item: Expense) => sum + Number(item.mealAllowance || 0),
       0
     );
     const totalExpenses = voucherTotal + bonusTotal + mealTotal;
-    const resolvedOccurrences = occurrences.filter((item: any) => item.resolved).length;
+    const resolvedOccurrences = occurrences.filter((item: Occurrence) => item.resolved).length;
 
     return {
       totalPeople: allocations.length,
@@ -435,7 +445,7 @@ export default function PortalLiderPage() {
       setOperationForm(defaultOperationForm());
       await utils.portalLider.myScheduleCards.invalidate();
       setSelectedScheduleId(result.id);
-      setActiveTab("hoje");
+      setActiveTab("info");
     },
     onError: err => {
       toast.error(err.message || "Erro ao cadastrar operação.");
@@ -585,12 +595,12 @@ export default function PortalLiderPage() {
     setIsOccurrenceDialogOpen(true);
   };
 
-  const openEditOccurrenceDialog = (occurrence: any) => {
+  const openEditOccurrenceDialog = (occurrence: Occurrence) => {
     setEditingOccurrence(occurrence);
     setOccurrenceForm({
       employeeId: occurrence.employeeId ? String(occurrence.employeeId) : "operation",
       type: occurrence.type,
-      description: occurrence.description,
+      description: occurrence.description ?? "",
     });
     setIsOccurrenceDialogOpen(true);
   };
@@ -1003,16 +1013,162 @@ export default function PortalLiderPage() {
     </div>
   );
 
+  const renderQuickExpenseSection = ({
+    title,
+    description,
+    compact = false,
+  }: {
+    title: string;
+    description: string;
+    compact?: boolean;
+  }) => (
+    <Card className="bg-slate-800 border-slate-700">
+      <CardHeader>
+        <CardTitle className="text-white">{title}</CardTitle>
+        <CardDescription className="text-slate-400">
+          {description}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Vale</div>
+            <div className="mt-2 text-xl font-semibold text-white">
+              R$ {operationSummary.voucherTotal.toFixed(2)}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Bonus</div>
+            <div className="mt-2 text-xl font-semibold text-white">
+              R$ {operationSummary.bonusTotal.toFixed(2)}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Marmita</div>
+            <div className="mt-2 text-xl font-semibold text-white">
+              R$ {operationSummary.mealTotal.toFixed(2)}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Total do dia</div>
+            <div className="mt-2 text-xl font-semibold text-emerald-400">
+              R$ {operationSummary.totalExpenses.toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        {expenses.length === 0 ? (
+          <div className="rounded-md border border-dashed border-slate-700 p-4 text-sm text-slate-400">
+            Nenhum lançamento registrado para esta operação.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {expenses.map((expense: any) => (
+              <div
+                key={expense.id}
+                className="rounded-md border border-slate-700 p-3 text-sm text-slate-200"
+              >
+                <div className="font-semibold text-white">{expense.employeeName}</div>
+                <div className="text-xs text-slate-400">CPF: {expense.employeeCpf}</div>
+                <div className="mt-2 text-xs text-slate-300">
+                  Vale: R$ {parseFloat(String(expense.voucher || 0)).toFixed(2)} |{" "}
+                  Bonus: R$ {parseFloat(String(expense.bonus || 0)).toFixed(2)} |{" "}
+                  Marmita: R$ {parseFloat(String(expense.mealAllowance || 0)).toFixed(2)}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-emerald-400">
+                  Total: R$ {parseFloat(String(expense.total || 0)).toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {schedule?.allocations?.length === 0 ? (
+          <div className="rounded-md border border-dashed border-slate-700 p-6 text-center text-slate-400">
+            Nenhum diarista alocado nesta operação.
+          </div>
+        ) : (
+          <div className={compact ? "grid grid-cols-1 gap-3 xl:grid-cols-2" : "space-y-3"}>
+            {schedule?.allocations?.map((alloc: any) => {
+              const draft = getExpenseDraft(alloc.id);
+
+              return (
+                <Card
+                  key={`expense-${alloc.id}`}
+                  className="bg-slate-900/50 border-slate-700"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">{alloc.employeeName}</p>
+                        <p className="text-xs text-slate-400">{alloc.employeeCpf}</p>
+                      </div>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">
+                        {draft.type}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                      <Select
+                        value={draft.type}
+                        onValueChange={(value: ExpenseType) =>
+                          updateExpenseDraft(alloc.id, { type: value })
+                        }
+                      >
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="vale">Vale</SelectItem>
+                          <SelectItem value="bonus">Bonus</SelectItem>
+                          <SelectItem value="marmita">Marmita</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={draft.value}
+                        onChange={event =>
+                          updateExpenseDraft(alloc.id, {
+                            value: event.target.value,
+                          })
+                        }
+                        placeholder="Valor"
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                      <Button
+                        onClick={() =>
+                          selectedScheduleId &&
+                          handleQuickExpense(
+                            alloc.id,
+                            alloc.employeeCpf,
+                            selectedScheduleId
+                          )
+                        }
+                        disabled={quickExpenseMutation.isPending || !selectedScheduleId}
+                      >
+                        {quickExpenseMutation.isPending ? "Salvando..." : "Lançar"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
 
   if (!selectedScheduleId) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 md:p-6">
-        <div className="max-w-7xl mx-auto space-y-4">
+      <div className="space-y-4">
           <div className="text-center mb-6">
-            <h1 className="text-3xl md:text-4xl font-bold text-white">
+            <h1 className="text-3xl md:text-4xl font-bold">
               Portal do Líder
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Gestão operacional do dia, presença, lançamentos e equipe
             </p>
           </div>
@@ -1052,7 +1208,7 @@ export default function PortalLiderPage() {
                     className="rounded-2xl border border-slate-800/80 bg-slate-950/30 p-4 cursor-pointer hover:bg-slate-900/40 transition"
                     onClick={() => {
                       setSelectedScheduleId(scheduleItem.id);
-                      setActiveTab("hoje");
+                      setActiveTab("info");
                     }}
                   >
                     <div className="mb-4 flex items-center justify-between gap-3">
@@ -1108,7 +1264,7 @@ export default function PortalLiderPage() {
                       className="flex w-full items-center justify-between rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3 text-left transition hover:bg-slate-900"
                       onClick={() => {
                         setSelectedScheduleId(scheduleItem.id);
-                        setActiveTab("hoje");
+                        setActiveTab("info");
                       }}
                     >
                       <div>
@@ -1177,7 +1333,7 @@ export default function PortalLiderPage() {
                         <SelectValue placeholder="Selecione o turno" />
                       </SelectTrigger>
                       <SelectContent>
-                        {operationFormOptions?.shifts.map((shift: any) => (
+                        {operationFormOptions?.shifts.map((shift: OperationFormOptions["shifts"][number]) => (
                           <SelectItem key={shift.id} value={String(shift.id)}>
                             {shift.name} ({shift.startTime} - {shift.endTime})
                           </SelectItem>
@@ -1284,24 +1440,20 @@ export default function PortalLiderPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
       </div>
     );
   }
 
   if (scheduleLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 md:p-6">
-        <div className="max-w-4xl mx-auto flex justify-center py-12">
-          <Spinner />
-        </div>
+      <div className="flex justify-center py-12">
+        <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className="space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">Operação</h1>
@@ -1331,7 +1483,7 @@ export default function PortalLiderPage() {
               variant="outline"
               onClick={() => {
                 setSelectedScheduleId(null);
-                setActiveTab("hoje");
+                setActiveTab("info");
               }}
             >
               Voltar
@@ -1352,6 +1504,13 @@ export default function PortalLiderPage() {
           unresolvedOccurrencesCount: unresolvedOccurrences.length,
           occurrenceSeverity: unresolvedOccurrenceSeverity,
           occurrenceTooltip: unresolvedOccurrenceTooltip,
+        })}
+
+        {renderQuickExpenseSection({
+          title: "Lançamento rápido da operação",
+          description:
+            "Vale, bonus e marmita voltam a aparecer já no topo da operação, sem depender da aba dedicada.",
+          compact: true,
         })}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1913,9 +2072,15 @@ export default function PortalLiderPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {renderQuickExpenseSection({
+              title: "Atalho rápido de lançamentos",
+              description:
+                "Os lançamentos também ficam disponíveis na aba de informações para não se perderem no fluxo.",
+              compact: true,
+            })}
           </TabsContent>
         </Tabs>
-      </div>
 
       <Dialog
         open={isCloseOperationDialogOpen}

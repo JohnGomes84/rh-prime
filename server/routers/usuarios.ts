@@ -10,6 +10,7 @@ import {
   setUserModulePermission,
   setAllUserPermissions,
   listUsersWithPermissions,
+  invalidateUserPermissions,
 } from "../controle/permissionControl";
 import { logAudit } from "../controle/auditControl";
 
@@ -94,8 +95,9 @@ export const usuariosRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       
       await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
+      invalidateUserPermissions(input.userId);
       await logAudit(ctx.user.id, "UPDATE_ROLE", "users", input.userId, null, { role: input.role });
-      
+
       return { success: true };
     }),
 

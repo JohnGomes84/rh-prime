@@ -18,6 +18,19 @@ import { TRPCError } from "@trpc/server";
 import { checkPermission } from "../controle/permissionControl";
 import { validatePixKey } from "../controle/pixValidator";
 import type { SystemModule } from "../../drizzle/schema";
+import {
+  bankAccountType,
+  cnpjOptional,
+  cpfOptional,
+  dateStringOptional,
+  emailOptional,
+  employeeStatus,
+  moneyStringOptional,
+  pixKeyOptional,
+  pixKeyType,
+  positiveId,
+  requiredText,
+} from "@shared/validators";
 
 // Helper para verificar permissão
 async function requirePermission(
@@ -100,19 +113,15 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(2),
-          cpf: z.string().optional(),
-          email: z.string().email().optional().or(z.literal("")),
+          name: requiredText(2, "Nome"),
+          cpf: cpfOptional,
+          email: emailOptional,
           phone: z.string().optional(),
           city: z.string().optional(),
-          pixKey: z.string().optional(),
-          pixKeyType: z
-            .enum(["cpf", "email", "phone", "random", "cnpj"])
-            .optional(),
-          status: z
-            .enum(["diarista", "inativo", "pendente"])
-            .default("diarista"),
-          registrationDate: z.string().optional(),
+          pixKey: pixKeyOptional,
+          pixKeyType: pixKeyType.optional(),
+          status: employeeStatus.default("diarista"),
+          registrationDate: dateStringOptional,
           notes: z.string().optional(),
         })
       )
@@ -148,18 +157,16 @@ export const cadastrosRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
-          name: z.string().min(2).optional(),
-          cpf: z.string().optional(),
-          email: z.string().email().optional().or(z.literal("")),
+          id: positiveId,
+          name: requiredText(2, "Nome").optional(),
+          cpf: cpfOptional,
+          email: emailOptional,
           phone: z.string().optional(),
           city: z.string().optional(),
-          pixKey: z.string().optional(),
-          pixKeyType: z
-            .enum(["cpf", "email", "phone", "random", "cnpj"])
-            .optional(),
-          status: z.enum(["diarista", "inativo", "pendente"]).optional(),
-          registrationDate: z.string().optional(),
+          pixKey: pixKeyOptional,
+          pixKeyType: pixKeyType.optional(),
+          status: employeeStatus.optional(),
+          registrationDate: dateStringOptional,
           notes: z.string().optional(),
         })
       )
@@ -282,13 +289,14 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(2),
-          cnpj: z.string().optional(),
+          name: requiredText(2, "Nome"),
+          cnpj: cnpjOptional,
           city: z.string().optional(),
           address: z.string().optional(),
           contactName: z.string().optional(),
           contactPhone: z.string().optional(),
-          contactEmail: z.string().optional(),
+          contactEmail: emailOptional,
+          isActive: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -307,14 +315,14 @@ export const cadastrosRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
-          name: z.string().min(2).optional(),
-          cnpj: z.string().optional(),
+          id: positiveId,
+          name: requiredText(2, "Nome").optional(),
+          cnpj: cnpjOptional,
           city: z.string().optional(),
           address: z.string().optional(),
           contactName: z.string().optional(),
           contactPhone: z.string().optional(),
-          contactEmail: z.string().optional(),
+          contactEmail: emailOptional,
           isActive: z.boolean().optional(),
         })
       )
@@ -328,6 +336,7 @@ export const cadastrosRouter = router({
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         const { id, ...data } = input;
+        if (Object.keys(data).length === 0) return { success: true };
         await db.update(clients).set(data).where(eq(clients.id, id));
         return { success: true };
       }),
@@ -379,8 +388,8 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          clientId: z.number(),
-          name: z.string().min(1),
+          clientId: positiveId,
+          name: requiredText(1, "Nome"),
           address: z.string().optional(),
         })
       )
@@ -430,9 +439,10 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(2),
-          defaultPayValue: z.string().optional(),
-          defaultReceiveValue: z.string().optional(),
+          name: requiredText(2, "Nome da função"),
+          defaultPayValue: moneyStringOptional,
+          defaultReceiveValue: moneyStringOptional,
+          isActive: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -451,10 +461,10 @@ export const cadastrosRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
-          name: z.string().min(2).optional(),
-          defaultPayValue: z.string().optional(),
-          defaultReceiveValue: z.string().optional(),
+          id: positiveId,
+          name: requiredText(2, "Nome da função").optional(),
+          defaultPayValue: moneyStringOptional,
+          defaultReceiveValue: moneyStringOptional,
           isActive: z.boolean().optional(),
         })
       )
@@ -500,9 +510,10 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(1),
-          startTime: z.string(),
-          endTime: z.string(),
+          name: requiredText(1, "Nome do turno"),
+          startTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora inválida (HH:MM)"),
+          endTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora inválida (HH:MM)"),
+          isActive: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -521,10 +532,10 @@ export const cadastrosRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
+          id: positiveId,
           name: z.string().optional(),
-          startTime: z.string().optional(),
-          endTime: z.string().optional(),
+          startTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora inválida (HH:MM)").optional(),
+          endTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora inválida (HH:MM)").optional(),
           isActive: z.boolean().optional(),
         })
       )
@@ -573,7 +584,7 @@ export const cadastrosRouter = router({
     }),
 
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(2) }))
+      .input(z.object({ name: requiredText(2, "Nome"), isActive: z.boolean().optional() }))
       .mutation(async ({ ctx, input }) => {
         await requirePermission(
           ctx.user.id,
@@ -632,12 +643,13 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(2),
-          cnpj: z.string().optional(),
+          name: requiredText(2, "Nome"),
+          cnpj: cnpjOptional,
           city: z.string().optional(),
-          pixKey: z.string().optional(),
+          pixKey: pixKeyOptional,
           contactPhone: z.string().optional(),
-          contactEmail: z.string().optional(),
+          contactEmail: emailOptional,
+          isActive: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -656,13 +668,13 @@ export const cadastrosRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
-          name: z.string().min(2).optional(),
-          cnpj: z.string().optional(),
+          id: positiveId,
+          name: requiredText(2, "Nome").optional(),
+          cnpj: cnpjOptional,
           city: z.string().optional(),
-          pixKey: z.string().optional(),
+          pixKey: pixKeyOptional,
           contactPhone: z.string().optional(),
-          contactEmail: z.string().optional(),
+          contactEmail: emailOptional,
           isActive: z.boolean().optional(),
         })
       )
@@ -713,15 +725,13 @@ export const cadastrosRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(2),
+          name: requiredText(2, "Nome"),
           bankName: z.string().optional(),
           accountNumber: z.string().optional(),
           agency: z.string().optional(),
-          accountType: z
-            .enum(["checking", "savings", "investment"])
-            .default("checking"),
-          initialBalance: z.string().default("0"),
-          currentBalance: z.string().default("0"),
+          accountType: bankAccountType.default("checking"),
+          initialBalance: moneyStringOptional.default("0"),
+          currentBalance: moneyStringOptional.default("0"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -740,13 +750,13 @@ export const cadastrosRouter = router({
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
+          id: positiveId,
           name: z.string().optional(),
           bankName: z.string().optional(),
           accountNumber: z.string().optional(),
           agency: z.string().optional(),
-          accountType: z.enum(["checking", "savings", "investment"]).optional(),
-          currentBalance: z.string().optional(),
+          accountType: bankAccountType.optional(),
+          currentBalance: moneyStringOptional,
           isActive: z.boolean().optional(),
         })
       )

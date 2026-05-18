@@ -25,8 +25,10 @@ export function useAuth(options?: UseAuthOptions) {
     options?.redirectOnUnauthenticated ?? false;
   const redirectPath = options?.redirectPath;
   const utils = trpc.useUtils();
+  const localMode = !isOAuthConfigured();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
+    enabled: !localMode,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -55,10 +57,8 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    const localMode = !isOAuthConfigured();
     const user =
-      meQuery.data ??
-      (localMode && !meQuery.isLoading ? LOCAL_FALLBACK_USER : null);
+      (localMode ? LOCAL_FALLBACK_USER : meQuery.data ?? null);
     const error = localMode ? null : meQuery.error ?? logoutMutation.error ?? null;
 
     localStorage.setItem(
@@ -68,11 +68,12 @@ export function useAuth(options?: UseAuthOptions) {
 
     return {
       user,
-      loading: meQuery.isLoading || logoutMutation.isPending,
+      loading: (!localMode && meQuery.isLoading) || logoutMutation.isPending,
       error,
       isAuthenticated: Boolean(user),
     };
   }, [
+    localMode,
     meQuery.data,
     meQuery.error,
     meQuery.isLoading,

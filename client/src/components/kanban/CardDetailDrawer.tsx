@@ -574,7 +574,7 @@ export function CardDetailDrawer({
                   attachmentsQuery.data!.map((att) => (
                     <div key={att.id} className="flex items-center justify-between gap-2 text-xs">
                       <a
-                        href={att.fileUrl}
+                        href={`/api/blob/proxy?url=${encodeURIComponent(att.fileUrl)}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex flex-1 items-center gap-2 truncate hover:text-foreground"

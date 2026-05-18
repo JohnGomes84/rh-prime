@@ -314,7 +314,7 @@ export function CardInlineExpanded({
             >
               <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
               <a
-                href={a.fileUrl}
+                href={`/api/blob/proxy?url=${encodeURIComponent(a.fileUrl)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 truncate text-xs text-primary hover:underline"
@@ -322,7 +322,7 @@ export function CardInlineExpanded({
                 {a.fileName}
               </a>
               <a
-                href={a.fileUrl}
+                href={`/api/blob/proxy?url=${encodeURIComponent(a.fileUrl)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-muted-foreground"

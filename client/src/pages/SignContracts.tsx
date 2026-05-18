@@ -27,7 +27,7 @@ export function SignContracts() {
     const selected = contracts.find((item) => item.id === contractId);
     if (!selected) return;
 
-    const response = await fetch(selected.fileUrl);
+    const response = await fetch(`/api/blob/proxy?url=${encodeURIComponent(selected.fileUrl)}`, { credentials: "include" });
     const fileBytes = Array.from(new Uint8Array(await response.arrayBuffer()));
 
     await signDocument.mutateAsync({
@@ -135,7 +135,7 @@ export function SignContracts() {
                       variant="outline"
                       size="sm"
                       className="gap-2"
-                      onClick={() => window.open(selectedContract.fileUrl, "_blank")}
+                      onClick={() => window.open(`/api/blob/proxy?url=${encodeURIComponent(selectedContract.fileUrl)}`, "_blank")}
                     >
                       <Download className="w-4 h-4" />
                       Abrir arquivo

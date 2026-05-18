@@ -4,7 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { put } from "@vercel/blob";
+import { put, head } from "@vercel/blob";
 import { registerOAuthRoutes } from "./oauth.js";
 import { appRouter } from "../routers.js";
 import { createContext } from "./context.js";
@@ -128,7 +128,7 @@ export async function createConfiguredApp(
         const pathname = `admission/${Date.now()}-${safeName}`;
 
         const blob = await put(pathname, req.body, {
-          access: "public",
+          access: "private",
           contentType,
           addRandomSuffix: false,
         });
@@ -178,7 +178,7 @@ export async function createConfiguredApp(
         const pathname = `kanban/card-${cardIdParam}/${Date.now()}-${safeName}`;
 
         const blob = await put(pathname, req.body, {
-          access: "public",
+          access: "private",
           contentType,
           addRandomSuffix: false,
         });
@@ -195,6 +195,62 @@ export async function createConfiguredApp(
       }
     }
   );
+
+  // Proxy: stream do blob private pra client autenticado.
+  // Aceita ?url=<canonical blob url>.
+  app.get("/api/blob/proxy", async (req, res, next) => {
+    try {
+      const user = await sdk.authenticateRequest(req).catch(() => null);
+      if (!user) return res.status(401).json({ error: "unauthorized" });
+
+      const raw = String(req.query.url ?? "");
+      if (!raw) return res.status(400).json({ error: "url required" });
+
+      let parsed: URL;
+      try {
+        parsed = new URL(raw);
+      } catch {
+        return res.status(400).json({ error: "invalid url" });
+      }
+      if (!parsed.hostname.endsWith(".blob.vercel-storage.com")) {
+        return res.status(400).json({ error: "invalid host" });
+      }
+
+      // head() valida acesso + retorna metadata (incluindo downloadUrl assinado com token)
+      const meta = await head(raw);
+      const downloadUrl = (meta as any).downloadUrl ?? raw;
+
+      const upstream = await fetch(downloadUrl, {
+        headers: process.env.BLOB_READ_WRITE_TOKEN
+          ? { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
+          : {},
+      });
+
+      if (!upstream.ok || !upstream.body) {
+        return res.status(upstream.status).json({ error: `upstream ${upstream.status}` });
+      }
+
+      res.setHeader("Content-Type", meta.contentType ?? "application/octet-stream");
+      const safeName = (meta.pathname.split("/").pop() ?? "file").replace(/[^a-zA-Z0-9._-]/g, "_");
+      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      if (meta.size) res.setHeader("Content-Length", String(meta.size));
+
+      // Stream upstream body para resposta
+      const reader = upstream.body.getReader();
+      const pump = async () => {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(Buffer.from(value));
+        }
+        res.end();
+      };
+      pump().catch(next);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "10mb", extended: true }));

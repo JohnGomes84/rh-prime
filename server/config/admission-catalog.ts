@@ -39,7 +39,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "none",
     reviewPolicy: "manual_review",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "documentacao_pessoal",
   },
   {
@@ -51,7 +51,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "none",
     reviewPolicy: "manual_review",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "documentacao_pessoal",
   },
   {
@@ -63,7 +63,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "none",
     reviewPolicy: "manual_review",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "documentacao_pessoal",
   },
   {
@@ -76,7 +76,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "both_required",
     reviewPolicy: "auto_complete",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "documentacao_trabalhista",
   },
   {
@@ -89,7 +89,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "both_required",
     reviewPolicy: "auto_complete",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "documentacao_trabalhista",
   },
   {
@@ -114,7 +114,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "none",
     reviewPolicy: "manual_review",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "saude_seguranca",
   },
   {
@@ -127,7 +127,7 @@ export const ADMISSION_CATALOG_V1: AdmissionCatalogItem[] = [
     signaturePolicy: "employee_required",
     reviewPolicy: "auto_complete",
     required: true,
-    waivable: false,
+    waivable: true,
     category: "saude_seguranca",
   },
 ];

@@ -26,6 +26,9 @@ const ADMISSION_CATEGORY_MAP: Record<string, "Pessoal" | "Contratual" | "Saúde 
   saude_seguranca: "Saúde e Segurança",
   termos: "Termos",
   treinamentos: "Treinamentos",
+  dados_bancarios: "Outros",
+  dependentes: "Pessoal",
+  ficha_cadastral: "Contratual",
 };
 
 function mapAdmissionCategory(itemCategory: string) {

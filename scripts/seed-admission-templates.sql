@@ -96,7 +96,52 @@ VALUES
 <p style="margin-top:60px">_______________________________<br>{{funcionario_nome}}<br>COLABORADOR(A)</p>
 <p style="margin-top:40px">_______________________________<br>Responsavel SESMT / EMPRESA</p>',
 '["empresa_nome","empresa_cnpj","funcionario_nome","funcionario_cpf","cargo","departamento","data_admissao","riscos_identificados","cidade","data_atual"]',
-1, 'os_nr1')
+1, 'os_nr1'),
+
+('Ficha Cadastral do Colaborador', 'Outros',
+'<h1 style="text-align:center">FICHA CADASTRAL DO COLABORADOR</h1>
+<p><strong>Empresa:</strong> {{empresa_nome}} - CNPJ {{empresa_cnpj}}</p>
+<hr>
+<h2 style="font-size:14px">1. Dados Pessoais</h2>
+<p><strong>Nome completo:</strong> {{funcionario_nome}}</p>
+<p><strong>CPF:</strong> {{funcionario_cpf}} &nbsp;&nbsp; <strong>RG:</strong> {{funcionario_rg}}</p>
+<p><strong>Data de nascimento:</strong> ____/____/______ &nbsp;&nbsp; <strong>Sexo:</strong> [ ] M  [ ] F  [ ] Outro</p>
+<p><strong>Estado civil:</strong> [ ] Solteiro(a)  [ ] Casado(a)  [ ] Uniao estavel  [ ] Divorciado(a)  [ ] Viuvo(a)</p>
+<p><strong>Nacionalidade:</strong> ___________________ &nbsp;&nbsp; <strong>Naturalidade:</strong> ___________________</p>
+<p><strong>Nome do pai:</strong> _____________________________________________</p>
+<p><strong>Nome da mae:</strong> _____________________________________________</p>
+<h2 style="font-size:14px">2. Endereco</h2>
+<p><strong>Logradouro:</strong> {{funcionario_endereco}}</p>
+<p><strong>Bairro:</strong> ___________________ &nbsp;&nbsp; <strong>Cidade/UF:</strong> ___________________ &nbsp;&nbsp; <strong>CEP:</strong> ___________</p>
+<h2 style="font-size:14px">3. Contato</h2>
+<p><strong>Telefone:</strong> ___________________ &nbsp;&nbsp; <strong>Celular:</strong> ___________________</p>
+<p><strong>E-mail:</strong> _____________________________________________</p>
+<h2 style="font-size:14px">4. Documentos</h2>
+<p><strong>RG:</strong> {{funcionario_rg}} &nbsp;&nbsp; <strong>Orgao emissor/UF:</strong> ___________ &nbsp;&nbsp; <strong>Emissao:</strong> ____/____/______</p>
+<p><strong>Titulo de eleitor:</strong> ___________________ &nbsp;&nbsp; <strong>Zona:</strong> _____ <strong>Secao:</strong> _____</p>
+<p><strong>Reservista (homens):</strong> ___________________</p>
+<p><strong>CTPS:</strong> _________ &nbsp;&nbsp; <strong>Serie:</strong> _________ &nbsp;&nbsp; <strong>PIS/PASEP:</strong> ___________________</p>
+<p><strong>CNH:</strong> ___________________ &nbsp;&nbsp; <strong>Categoria:</strong> _____ <strong>Validade:</strong> ____/____/______</p>
+<h2 style="font-size:14px">5. Dados Bancarios</h2>
+<p><strong>Banco:</strong> ___________________ &nbsp;&nbsp; <strong>Agencia:</strong> _________ &nbsp;&nbsp; <strong>Conta:</strong> ___________________ &nbsp;&nbsp; <strong>Tipo:</strong> [ ] Corrente  [ ] Poupanca</p>
+<p><strong>Chave Pix:</strong> _____________________________________________</p>
+<h2 style="font-size:14px">6. Dados do Cargo</h2>
+<p><strong>Cargo:</strong> {{cargo}} &nbsp;&nbsp; <strong>Departamento:</strong> {{departamento}}</p>
+<p><strong>Data de admissao:</strong> {{data_admissao}} &nbsp;&nbsp; <strong>Salario:</strong> R$ {{salario}}</p>
+<p><strong>Jornada semanal:</strong> {{jornada_semanal}}h</p>
+<h2 style="font-size:14px">7. Dependentes (se houver)</h2>
+<p>Nome: ___________________________________  CPF: _______________  Data nasc.: ____/____/______  Grau: __________</p>
+<p>Nome: ___________________________________  CPF: _______________  Data nasc.: ____/____/______  Grau: __________</p>
+<p>Nome: ___________________________________  CPF: _______________  Data nasc.: ____/____/______  Grau: __________</p>
+<h2 style="font-size:14px">8. Contato de Emergencia</h2>
+<p><strong>Nome:</strong> ___________________________________ &nbsp;&nbsp; <strong>Parentesco:</strong> ___________________</p>
+<p><strong>Telefone:</strong> ___________________</p>
+<hr>
+<p>Declaro que as informacoes prestadas sao verdadeiras e me comprometo a comunicar imediatamente qualquer alteracao.</p>
+<p style="margin-top:40px">{{cidade}}, {{data_atual}}.</p>
+<p style="margin-top:60px">_______________________________<br>{{funcionario_nome}}<br>COLABORADOR(A)</p>',
+'["empresa_nome","empresa_cnpj","funcionario_nome","funcionario_cpf","funcionario_rg","funcionario_endereco","cargo","departamento","data_admissao","salario","jornada_semanal","cidade","data_atual"]',
+1, 'ficha_cadastral')
 ON DUPLICATE KEY UPDATE
 templateName = VALUES(templateName),
 templateType = VALUES(templateType),

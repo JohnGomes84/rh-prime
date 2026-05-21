@@ -944,7 +944,7 @@ export type InsertAdmissionChecklistItem = typeof admissionChecklistItems.$infer
 export const documentSignatures = mysqlTable("document_signatures", {
   id: int("id").autoincrement().primaryKey(),
   documentId: int("documentId").notNull(),
-  signatoryType: varchar("signatoryType", { length: 20 }).notNull(),
+  signatoryType: varchar("signatoryType", { length: 40 }).notNull(),
   signatoryId: int("signatoryId").notNull(),
   signedAt: timestamp("signedAt").defaultNow().notNull(),
   ipAddress: varchar("ipAddress", { length: 45 }),

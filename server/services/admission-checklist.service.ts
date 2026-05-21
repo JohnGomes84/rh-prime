@@ -211,7 +211,7 @@ export async function listChecklistWithEvidence(
   return enriched;
 }
 
-async function persistComputedStatus(item: AdmissionChecklistWithEvidence) {
+export async function persistComputedStatus(item: AdmissionChecklistWithEvidence) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
 

@@ -163,6 +163,14 @@ export default function AdmissionDetail() {
     onError: (e) => toast.error(e.message),
   });
 
+  const generateDocument = trpc.lifecycle.admission.generateDocument.useMutation({
+    onSuccess: async () => {
+      toast.success("Documento gerado");
+      await invalidateAdmissionQueries();
+    },
+    onError: (e) => toast.error(e.message ?? "Falha ao gerar documento"),
+  });
+
   const signEvidence = trpc.lifecycle.admission.signEvidence.useMutation({
     onSuccess: async () => {
       toast.success("Assinatura registrada");
@@ -530,7 +538,6 @@ export default function AdmissionDetail() {
                                 {V2_STATUS_LABELS[item.status] ?? item.status}
                               </Badge>
                               {item.required && <Badge variant="destructive">Obrigatório</Badge>}
-                              {item.kind && <Badge variant="outline">{item.kind}</Badge>}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -602,6 +609,22 @@ export default function AdmissionDetail() {
                           </div>
 
                           <div className="flex flex-wrap gap-2 md:justify-end">
+                            {item.kind === "generate_document" && !item.primaryEvidence && item.status !== "WAIVED" && (
+                              <Button
+                                size="sm"
+                                disabled={generateDocument.isPending}
+                                onClick={() =>
+                                  generateDocument.mutate({ workflowId: id, itemId: item.id })
+                                }
+                              >
+                                {generateDocument.isPending ? (
+                                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                ) : (
+                                  <FileText className="h-3.5 w-3.5 mr-1" />
+                                )}
+                                Gerar documento
+                              </Button>
+                            )}
                             {item.documentPolicy !== "none" && item.status !== "WAIVED" && (
                               <Button
                                 variant="outline"

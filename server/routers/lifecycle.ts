@@ -5,6 +5,7 @@ import { isFeatureEnabled } from "../_core/feature-flags.js";
 import {
   instantiateCatalogForWorkflow,
   listChecklistWithEvidence,
+  persistComputedStatus,
   reviewChecklistItem,
   syncMirror,
   validateFinalizationGates,
@@ -13,6 +14,9 @@ import {
 import { TRPCError } from "@trpc/server";
 import { createDocumentRecord, getPrimaryEvidence } from "../services/documents.service.js";
 import { addSignature } from "../services/signatures.service.js";
+import { renderTemplate } from "../services/template-render.service.js";
+import { getAdmissionCatalog } from "../config/admission-catalog.js";
+import { put } from "@vercel/blob";
 import { toDate, toDateOpt } from "../utils/type-converters.js";
 
 const ADMISSION_CATEGORY_MAP: Record<string, "Pessoal" | "Contratual" | "Saúde e Segurança" | "Benefícios" | "Termos" | "Treinamentos" | "Outros"> = {
@@ -22,6 +26,9 @@ const ADMISSION_CATEGORY_MAP: Record<string, "Pessoal" | "Contratual" | "Saúde 
   saude_seguranca: "Saúde e Segurança",
   termos: "Termos",
   treinamentos: "Treinamentos",
+  dados_bancarios: "Outros",
+  dependentes: "Pessoal",
+  ficha_cadastral: "Contratual",
 };
 
 function mapAdmissionCategory(itemCategory: string) {
@@ -191,7 +198,7 @@ export const lifecycleRouter = router({
         const item = checklist.find((entry) => entry.id === input.itemId);
         if (!item) throw new Error("Checklist item not found");
 
-        return createDocumentRecord({
+        const result = await createDocumentRecord({
           employeeId: workflow.resultEmployeeId ?? 0,
           cpf: workflow.candidateCpf ?? "",
           category: mapAdmissionCategory(item.category),
@@ -204,6 +211,68 @@ export const lifecycleRouter = router({
           isPrimaryEvidence: true,
           observations: input.observations ?? null,
         } as any);
+
+        // Recomputa status do item apos anexar evidencia (AWAITING_EVIDENCE -> COMPLETED se sem signature)
+        const refreshed = await listChecklistWithEvidence(input.workflowId);
+        const refreshedItem = refreshed.find((entry) => entry.id === input.itemId);
+        if (refreshedItem) {
+          await persistComputedStatus(refreshedItem);
+        }
+
+        return result;
+      }),
+
+    generateDocument: adminProcedure
+      .input(
+        z.object({
+          workflowId: z.number().int().positive(),
+          itemId: z.number().int().positive(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        assertAdmissionV2Enabled();
+        const workflow = await db.getAdmissionWorkflow(input.workflowId);
+        if (!workflow) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow nao encontrado" });
+
+        const checklist = await listChecklistWithEvidence(input.workflowId);
+        const item = checklist.find((entry) => entry.id === input.itemId);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item nao encontrado" });
+
+        const catalog = getAdmissionCatalog(workflow.catalogVersion ?? undefined);
+        const catalogItem = catalog.find((c) => c.code === item.code);
+        if (!catalogItem?.templateKey) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Item nao possui template associado" });
+        }
+
+        const { html, templateName } = await renderTemplate(catalogItem.templateKey, workflow as any);
+
+        const safeName = templateName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
+        const pathname = `admission/generated/${Date.now()}-${safeName}.html`;
+        const blob = await put(pathname, html, {
+          access: "private",
+          contentType: "text/html; charset=utf-8",
+          addRandomSuffix: false,
+        });
+
+        const result = await createDocumentRecord({
+          employeeId: workflow.resultEmployeeId ?? 0,
+          cpf: workflow.candidateCpf ?? "",
+          category: mapAdmissionCategory(item.category),
+          documentName: `${templateName}.html`,
+          fileUrl: blob.url,
+          fileType: "html",
+          origin: "generated",
+          admissionWorkflowId: input.workflowId,
+          admissionChecklistItemId: input.itemId,
+          isPrimaryEvidence: true,
+          observations: `Gerado automaticamente a partir do template ${catalogItem.templateKey}`,
+        } as any);
+
+        const refreshed = await listChecklistWithEvidence(input.workflowId);
+        const refreshedItem = refreshed.find((entry) => entry.id === input.itemId);
+        if (refreshedItem) await persistComputedStatus(refreshedItem);
+
+        return result;
       }),
 
     signEvidence: adminProcedure
@@ -226,13 +295,22 @@ export const lifecycleRouter = router({
         if (!signatoryId) throw new Error("Signatário não identificado");
 
         const ip = (ctx as any)?.req?.ip ?? null;
-        return addSignature({
+        const sig = await addSignature({
           documentId: primary.id,
           signatoryType: input.signatoryType,
           signatoryId,
           signatureMethod: input.signatureMethod,
           ipAddress: ip,
         } as any);
+
+        // Recomputa status do item apos assinar (AWAITING_SIGNATURE -> COMPLETED se completou both_required)
+        const refreshed = await listChecklistWithEvidence(input.workflowId);
+        const refreshedItem = refreshed.find((entry) => entry.id === input.itemId);
+        if (refreshedItem) {
+          await persistComputedStatus(refreshedItem);
+        }
+
+        return sig;
       }),
 
     finalize: adminProcedure

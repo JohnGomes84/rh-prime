@@ -304,6 +304,7 @@ export const kanbanRouter = router({
           description: z.string().max(10000).nullable().optional(),
           priority: priorityEnum.optional(),
           dueDate: z.string().nullable().optional(),
+          globalStatus: z.enum(["todo", "in_progress", "done"]).optional(),
         }),
       )
       .mutation(async ({ input, ctx }) => {

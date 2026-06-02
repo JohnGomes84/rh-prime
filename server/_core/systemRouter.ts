@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { isFeatureEnabled } from "./feature-flags.js";
 import { notifyOwner } from "./notification.js";
-import { adminProcedure, publicProcedure, router } from "./trpc.js";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./trpc.js";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -12,6 +13,11 @@ export const systemRouter = router({
     .query(() => ({
       ok: true,
     })),
+
+  flags: protectedProcedure.query(() => ({
+    admissionV2: isFeatureEnabled("admission-v2"),
+    kanbanV2: isFeatureEnabled("kanban-v2"),
+  })),
 
   notifyOwner: adminProcedure
     .input(

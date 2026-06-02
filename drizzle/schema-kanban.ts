@@ -1,5 +1,6 @@
 import {
   int,
+  json,
   mysqlEnum,
   mysqlTable,
   text,
@@ -26,6 +27,10 @@ export const kanbanBoards = mysqlTable(
     visibility: mysqlEnum("visibility", ["private", "team", "public"]).default("private").notNull(),
     departmentId: int("department_id"),
     archived: boolean("archived").default(false).notNull(),
+    // V2 fields
+    swimlaneDimension: varchar("swimlane_dimension", { length: 40 }),
+    isTemplate: boolean("is_template").default(false).notNull(),
+    processType: varchar("process_type", { length: 40 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
   },
@@ -49,6 +54,8 @@ export const kanbanLists = mysqlTable(
     name: varchar("name", { length: 80 }).notNull(),
     position: double("position").notNull(),
     archived: boolean("archived").default(false).notNull(),
+    // V2 field
+    slaDays: int("sla_days"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
   },
@@ -78,6 +85,11 @@ export const kanbanCards = mysqlTable(
     createdBy: int("created_by").notNull(),
     archived: boolean("archived").default(false).notNull(),
     completedAt: timestamp("completed_at"),
+    // V2 fields
+    entityType: varchar("entity_type", { length: 40 }),
+    entityId: int("entity_id"),
+    enteredListAt: timestamp("entered_list_at").defaultNow().notNull(),
+    globalStatus: varchar("global_status", { length: 20 }).default("todo").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
   },
@@ -85,6 +97,9 @@ export const kanbanCards = mysqlTable(
     listIdx: index("idx_kc_list").on(table.listId),
     boardIdx: index("idx_kc_board").on(table.boardId),
     posIdx: index("idx_kc_list_pos").on(table.listId, table.position),
+    entityIdx: index("idx_kc_entity").on(table.entityType, table.entityId),
+    enteredAtIdx: index("idx_kc_entered_at").on(table.enteredListAt),
+    globalStatusIdx: index("idx_kc_global_status").on(table.globalStatus),
   }),
 );
 
@@ -240,3 +255,48 @@ export const kanbanCardAttachments = mysqlTable(
 
 export type KanbanCardAttachment = typeof kanbanCardAttachments.$inferSelect;
 export type InsertKanbanCardAttachment = typeof kanbanCardAttachments.$inferInsert;
+
+// ============================================================
+// KANBAN_AUTOMATIONS (V2)
+// ============================================================
+export const kanbanAutomations = mysqlTable(
+  "kanban_automations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    boardId: int("board_id").notNull(),
+    triggerListId: int("trigger_list_id").notNull(),
+    actionType: varchar("action_type", { length: 40 }).notNull(),
+    actionConfig: json("action_config").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    boardIdx: index("idx_kauto_board").on(table.boardId),
+    triggerIdx: index("idx_kauto_trigger").on(table.triggerListId, table.isActive),
+  }),
+);
+
+export type KanbanAutomation = typeof kanbanAutomations.$inferSelect;
+export type InsertKanbanAutomation = typeof kanbanAutomations.$inferInsert;
+
+// ============================================================
+// KANBAN_CARD_HISTORY (V2) — FK card_id ON DELETE CASCADE
+// ============================================================
+export const kanbanCardHistory = mysqlTable(
+  "kanban_card_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    cardId: int("card_id").notNull(),
+    fromListId: int("from_list_id"),
+    toListId: int("to_list_id").notNull(),
+    userId: int("user_id").notNull(),
+    movedAt: timestamp("moved_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    cardIdx: index("idx_kch_card").on(table.cardId, table.movedAt),
+    toListIdx: index("idx_kch_to_list").on(table.toListId),
+  }),
+);
+
+export type KanbanCardHistory = typeof kanbanCardHistory.$inferSelect;
+export type InsertKanbanCardHistory = typeof kanbanCardHistory.$inferInsert;

@@ -54,6 +54,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
 const KanbanBoards = lazy(() => import("./pages/KanbanBoards"));
 const KanbanBoard = lazy(() => import("./pages/KanbanBoard"));
+const KanbanBoardV2 = lazy(() => import("./pages/kanban-v2/KanbanBoardV2"));
 
 function PageLoader() {
   return (
@@ -113,6 +114,7 @@ function Router() {
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
         <Route path="/kanban" component={KanbanBoards} />
         <Route path="/kanban/:id" component={KanbanBoard} />
+        <Route path="/kanban-v2" component={guarded(KanbanBoardV2, "admin")} />
         <Route path="/avaliacoes" component={guarded(ProfessionalAssessment, "manager")} />
         <Route path="/auditoria" component={guarded(Audit, "admin")} />
         <Route path="/analytics" component={guarded(PeopleAnalytics, "manager")} />

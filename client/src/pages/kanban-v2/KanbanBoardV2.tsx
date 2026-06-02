@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowLeft, GripVertical, KanbanSquare, Loader2, Search, Sparkles, UserCheck } from "lucide-react";
+import { ArrowLeft, GripVertical, KanbanSquare, Loader2, Plus, Search, Sparkles, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { KanbanCardV2 } from "./components/KanbanCardV2";
+import { NewCardDialog } from "./components/NewCardDialog";
 import { GLOBAL_STATUS_COLUMNS, type GlobalStatus, type KanbanCardV2Data } from "./types";
 
 type CardWithBoard = KanbanCardV2Data & {
@@ -180,6 +181,7 @@ export default function KanbanBoardV2() {
   const [searchTerm, setSearchTerm] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
   const [activeCard, setActiveCard] = useState<CardWithBoard | null>(null);
+  const [newCardOpen, setNewCardOpen] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -360,7 +362,13 @@ export default function KanbanBoardV2() {
               Vista unificada cross-board. Arraste cards entre colunas pra mudar o status global.
             </p>
           </div>
+          <Button size="sm" onClick={() => setNewCardOpen(true)}>
+            <Plus className="mr-1 h-4 w-4" />
+            Novo card
+          </Button>
         </div>
+
+        <NewCardDialog open={newCardOpen} onOpenChange={setNewCardOpen} />
 
         {/* Controles: busca + atribuido a mim */}
         <div className="flex flex-wrap gap-2">

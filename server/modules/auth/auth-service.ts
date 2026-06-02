@@ -26,7 +26,7 @@ export interface RegisterRequest {
 
 const ALLOWED_REGISTER_EMAILS = new Set(
   (process.env.ALLOWED_REGISTER_EMAILS ??
-    "adm@mlservicoseco.com.br,mayk.lopes@mlservicoseco.com.br,ediani@mlservicoseco.com.br,operacao@mlservicoseco.com.br,comercial@mlservicoseco.com.br")
+    "adm@mlservicoseco.com.br,mayk.lopes@mlservicoseco.com.br,ediani@mlservicoseco.com.br,operacao@mlservicoseco.com.br,comercial@mlservicoseco.com.br,rh@mlservicoseco.com.br")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)

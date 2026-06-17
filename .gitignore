@@ -122,3 +122,4 @@ temp/
 backups/
 *.sql.gz
 .vercel
+.env*

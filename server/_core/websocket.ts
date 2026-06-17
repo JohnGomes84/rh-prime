@@ -66,11 +66,14 @@ export function setupWebSocket(server: Server) {
   return wss;
 }
 
+const DB_NOTIFICATION_TYPES = new Set(['Férias', 'ASO', 'Banco de Horas', 'Contrato Experiência', 'Treinamento', 'Documento', 'EPI', 'Geral']);
+
 export async function broadcastNotification(payload: NotificationPayload) {
   if (payload.userId) {
     try {
+      const dbType = DB_NOTIFICATION_TYPES.has(payload.type) ? payload.type : 'Geral';
       await db.createNotification({
-        type: (payload.type as any) ?? 'Geral',
+        type: (dbType as any),
         title: payload.title,
         message: payload.message,
         severity: 'Info',

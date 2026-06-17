@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+// vite-plugin-manus-runtime is only loaded in Manus cloud environments
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -150,7 +150,7 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin()];
 
 export default defineConfig({
   plugins,
@@ -183,10 +183,6 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
-    hmr: process.env.NODE_ENV === "production" ? false : {
-      protocol: "wss",
-      host: process.env.VITE_HMR_HOST || "localhost",
-      port: parseInt(process.env.VITE_HMR_PORT || "443"),
-    },
+    hmr: process.env.NODE_ENV !== "production",
   },
 });

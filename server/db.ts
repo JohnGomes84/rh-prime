@@ -72,7 +72,7 @@ export async function getDb() {
     const needsTls = /tidbcloud\.com|sslmode=require|ssl=true/i.test(url);
     _pool = mysql.createPool({
       uri: url,
-      connectionLimit: Number(process.env.DB_POOL_LIMIT ?? 4),
+      connectionLimit: Number(process.env.DB_POOL_LIMIT ?? 15),
       idleTimeout: 30_000,
       enableKeepAlive: true,
       ...(needsTls

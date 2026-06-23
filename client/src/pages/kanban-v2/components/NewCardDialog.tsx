@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   CheckSquare,
+  ClipboardList,
   Loader2,
   Plus,
   Tag,
@@ -79,6 +80,24 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
     { enabled: open && !!boardId },
   );
 
+  const boards = boardsQuery.data ?? [];
+  const lists = listsQuery.data ?? [];
+  const labels = labelsQuery.data ?? [];
+
+  // Auto-select board if only one exists
+  useEffect(() => {
+    if (open && boards.length === 1 && !boardId) {
+      setBoardId((boards[0] as any).id);
+    }
+  }, [open, boards, boardId]);
+
+  // Auto-select first list (A Fazer) when lists load
+  useEffect(() => {
+    if (lists.length > 0 && !listId) {
+      setListId((lists[0] as any).id);
+    }
+  }, [lists, listId]);
+
   useEffect(() => {
     if (!open) {
       setBoardId(null);
@@ -128,12 +147,12 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
       }
       await Promise.all(promises);
 
-      toast.success("Card criado");
+      toast.success("Demanda criada");
       await utils.kanban.cards.listAcrossUserBoards.invalidate();
       onOpenChange(false);
     },
     onError: (e) => {
-      toast.error(e.message || "Falha ao criar card");
+      toast.error(e.message || "Falha ao criar demanda");
     },
   });
 
@@ -153,7 +172,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
 
   const handleSubmit = () => {
     if (!boardId || !listId || !title.trim()) {
-      toast.error("Board, coluna e titulo sao obrigatorios");
+      toast.error("Preencha o titulo da demanda");
       return;
     }
     createCard.mutate({
@@ -194,35 +213,33 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
     );
   };
 
-  const boards = boardsQuery.data ?? [];
-  const lists = listsQuery.data ?? [];
-  const labels = labelsQuery.data ?? [];
   const isPending = createCard.isPending || setAssigneesMut.isPending || setLabelsMut.isPending;
+  const showBoardSelector = boards.length > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Novo card
+            <ClipboardList className="h-4 w-4" />
+            Nova demanda
           </DialogTitle>
           <DialogDescription>
-            Preencha os detalhes da tarefa. Responsaveis, labels e checklist podem ser definidos ja na criacao.
+            Descreva a demanda e atribua os responsaveis. Eles receberao uma notificacao para aceitar.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Board + List */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Board selector — only shown when multiple boards exist */}
+          {showBoardSelector && (
             <div className="space-y-1.5">
-              <Label htmlFor="nc-board">Board *</Label>
+              <Label htmlFor="nc-board">Quadro</Label>
               <Select
                 value={boardId ? String(boardId) : ""}
                 onValueChange={(v) => setBoardId(Number(v))}
               >
                 <SelectTrigger id="nc-board">
-                  <SelectValue placeholder={boardsQuery.isLoading ? "Carregando..." : "Selecione"} />
+                  <SelectValue placeholder={boardsQuery.isLoading ? "Carregando..." : "Selecione o quadro"} />
                 </SelectTrigger>
                 <SelectContent>
                   {boards.map((b: any) => (
@@ -233,44 +250,16 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="nc-list">Coluna *</Label>
-              <Select
-                value={listId ? String(listId) : ""}
-                onValueChange={(v) => setListId(Number(v))}
-                disabled={!boardId || listsQuery.isLoading}
-              >
-                <SelectTrigger id="nc-list">
-                  <SelectValue
-                    placeholder={
-                      !boardId
-                        ? "Selecione board"
-                        : listsQuery.isLoading
-                          ? "Carregando..."
-                          : "Selecione"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {lists.map((l: any) => (
-                    <SelectItem key={l.id} value={String(l.id)}>
-                      {l.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          )}
 
           {/* Title */}
           <div className="space-y-1.5">
-            <Label htmlFor="nc-title">Titulo *</Label>
+            <Label htmlFor="nc-title">O que precisa ser feito? *</Label>
             <Input
               id="nc-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Revisar contrato de admissao"
+              placeholder="Ex: Revisar contrato de admissao do Joao"
               maxLength={200}
               autoFocus
             />
@@ -278,12 +267,12 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label htmlFor="nc-desc">Descricao</Label>
+            <Label htmlFor="nc-desc">Detalhes</Label>
             <Textarea
               id="nc-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Contexto, criterios de pronto, notas..."
+              placeholder="Contexto, instrucoes, criterios de conclusao..."
               rows={2}
               maxLength={10000}
               className="resize-none"
@@ -344,7 +333,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
                   <Loader2 className="h-3 w-3 animate-spin" /> Carregando membros...
                 </div>
               ) : uniqueMembers.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-1">Nenhum membro neste board.</p>
+                <p className="text-xs text-muted-foreground py-1">Nenhum membro neste quadro.</p>
               ) : (
                 <div className="max-h-[120px] overflow-y-auto rounded-md border p-1 space-y-0.5">
                   {uniqueMembers.map((member) => {
@@ -519,7 +508,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
           </Button>
           <Button onClick={handleSubmit} disabled={isPending || !title.trim() || !boardId || !listId}>
             {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            Criar card
+            Criar demanda
           </Button>
         </DialogFooter>
       </DialogContent>

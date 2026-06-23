@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import {
   Archive,
   Calendar,
+  Check,
   CheckSquare,
   ChevronDown,
   Clock,
   ExternalLink,
+  Hourglass,
   MessageSquare,
   MoreVertical,
   Paperclip,
@@ -30,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import {
@@ -46,6 +49,7 @@ type AssigneeData = {
   name: string | null;
   email: string | null;
   avatarFallback: string | null;
+  acceptedAt?: Date | string | null;
 };
 
 type LabelData = {
@@ -83,6 +87,7 @@ export function KanbanCardV2({
   onArchive?: () => void;
   onDelete?: () => void;
 }) {
+  const { user: currentUser } = useAuth();
   const utils = trpc.useUtils();
   const [expanded, setExpanded] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -113,6 +118,20 @@ export function KanbanCardV2({
     },
     onError: (e) => toast.error(e.message ?? "Falha ao salvar"),
   });
+
+  const acceptMut = trpc.kanban.cards.acceptAssignment.useMutation({
+    onSuccess: () => {
+      utils.kanban.cards.listAcrossUserBoards.invalidate();
+      toast.success("Demanda aceita");
+    },
+    onError: (e) => toast.error(e.message ?? "Falha ao aceitar"),
+  });
+
+  const myAssignment = currentUser?.id
+    ? assignees.find((a) => a.userId === currentUser.id)
+    : null;
+  const pendingAccept = myAssignment && !myAssignment.acceptedAt;
+  const hasPendingAssignees = assignees.some((a) => !a.acceptedAt);
 
   const sla = computeSla(card.enteredListAt, slaDays);
   const slaStyle = slaStyles[sla.state];
@@ -303,11 +322,35 @@ export function KanbanCardV2({
         </div>
       </div>
 
+      {/* Accept button */}
+      {pendingAccept && (
+        <div className="mt-1.5">
+          <button
+            type="button"
+            className="w-full flex items-center justify-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400"
+            disabled={acceptMut.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              acceptMut.mutate({ cardId: card.id });
+            }}
+          >
+            <Check className="h-3.5 w-3.5" />
+            {acceptMut.isPending ? "Aceitando..." : "Aceitar demanda"}
+          </button>
+        </div>
+      )}
+
       {/* Row 2: badges */}
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold leading-none", prioStyle.pill)}>
           {prioStyle.label}
         </span>
+        {hasPendingAssignees && !pendingAccept && (
+          <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] leading-none bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            <Hourglass className="h-2.5 w-2.5" />
+            Aguardando aceite
+          </span>
+        )}
         {sla.state !== "none" && (
           <span
             className={cn(
@@ -433,7 +476,7 @@ export function KanbanCardV2({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="low">Baixa</SelectItem>
-                  <SelectItem value="medium">Media</SelectItem>
+                  <SelectItem value="medium">Normal</SelectItem>
                   <SelectItem value="high">Alta</SelectItem>
                   <SelectItem value="urgent">Urgente</SelectItem>
                 </SelectContent>

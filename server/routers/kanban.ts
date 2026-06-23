@@ -448,6 +448,34 @@ export const kanbanRouter = router({
         await kdb.setCardLabels(input.cardId, input.labelIds);
         return { success: true };
       }),
+
+    acceptAssignment: protectedProcedure
+      .input(z.object({ cardId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const userId = ctx.user!.id;
+        const accepted = await kdb.acceptCardAssignment(input.cardId, userId);
+        if (!accepted) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Atribuição não encontrada" });
+        }
+
+        const card = await kdb.getCardById(input.cardId);
+        if (card) {
+          const board = await kdb.getBoardById(card.boardId);
+          const userName = ctx.user!.name ?? ctx.user!.email ?? "Usuário";
+          if (board) {
+            const { createNotification } = await import("../db.js");
+            await createNotification({
+              type: "Geral",
+              title: `Demanda aceita: ${card.title}`,
+              message: `${userName} aceitou a demanda "${card.title}" no board ${board.name}.`,
+              severity: "Info",
+              userId: card.createdBy,
+            });
+          }
+        }
+
+        return { success: true };
+      }),
   }),
 
   // ============================================================

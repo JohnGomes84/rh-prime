@@ -35,6 +35,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useRole } from "@/_core/hooks/useRole";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { KanbanCardV2 } from "./components/KanbanCardV2";
@@ -55,6 +56,7 @@ type AssigneeData = {
   email: string | null;
   fullName: string | null;
   avatarFallback: string | null;
+  acceptedAt: Date | null;
 };
 
 type LabelData = {
@@ -139,6 +141,7 @@ function SortableCard({
           name: a.name,
           email: a.email,
           avatarFallback: a.avatarFallback,
+          acceptedAt: a.acceptedAt,
         }))}
         labels={labels.map((l) => ({ labelId: l.labelId, name: l.name, color: l.color }))}
         checklist={checklist}
@@ -225,9 +228,10 @@ export default function KanbanBoardV2() {
   const flagsQuery = trpc.system.flags.useQuery();
   const cardsQuery = trpc.kanban.cards.listAcrossUserBoards.useQuery();
   const { user: currentUser } = useAuth();
+  const { isAdmin } = useRole();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [mineOnly, setMineOnly] = useState(false);
+  const [mineOnly, setMineOnly] = useState(!isAdmin);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [activeCard, setActiveCard] = useState<CardWithBoard | null>(null);
@@ -495,7 +499,7 @@ export default function KanbanBoardV2() {
           <h1 className="text-lg font-bold leading-none">Kanban</h1>
 
           <div className="hidden sm:flex items-center gap-1.5 ml-1 text-xs text-muted-foreground">
-            <span className="font-medium">{total} cards</span>
+            <span className="font-medium">{filteredCards.length} cards</span>
             {highPriorityCount > 0 && (
               <>
                 <span>·</span>
@@ -506,9 +510,32 @@ export default function KanbanBoardV2() {
 
           <div className="flex-1" />
 
+          <div className="flex items-center rounded-lg border bg-muted/50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setMineOnly(true)}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                mineOnly ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Minhas
+            </button>
+            <button
+              type="button"
+              onClick={() => setMineOnly(false)}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                !mineOnly ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Todas
+            </button>
+          </div>
+
           <Button size="sm" className="h-8 text-xs" onClick={() => setNewCardOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
-            Novo card
+            Nova demanda
           </Button>
         </div>
 
@@ -710,6 +737,7 @@ export default function KanbanBoardV2() {
                       name: a.name,
                       email: a.email,
                       avatarFallback: a.avatarFallback,
+                      acceptedAt: a.acceptedAt,
                     }))}
                     labels={(labelsByCard.get(activeCard.id) ?? []).map((l) => ({
                       labelId: l.labelId,

@@ -42,6 +42,7 @@ export type KanbanAssigneeDetails = {
   email: string | null;
   fullName: string | null;
   avatarFallback: string | null;
+  acceptedAt: Date | null;
 };
 
 export type KanbanBoardMemberDetails = {
@@ -559,6 +560,7 @@ export async function listCardAssignees(cardIds: number[]) {
       userName: users.name,
       userEmail: users.email,
       employeeName: employees.fullName,
+      acceptedAt: kanbanCardAssignees.acceptedAt,
     })
     .from(kanbanCardAssignees)
     .leftJoin(users, eq(users.id, kanbanCardAssignees.userId))
@@ -576,7 +578,22 @@ export async function listCardAssignees(cardIds: number[]) {
     email: row.userEmail ?? null,
     fullName: row.employeeName ?? row.userName ?? null,
     avatarFallback: buildAvatarFallback(row.employeeName ?? row.userName, row.userEmail),
+    acceptedAt: row.acceptedAt ?? null,
   })) satisfies KanbanAssigneeDetails[];
+}
+
+export async function acceptCardAssignment(cardId: number, userId: number): Promise<boolean> {
+  const db = await requireDb();
+  const result = await db
+    .update(kanbanCardAssignees)
+    .set({ acceptedAt: new Date() })
+    .where(
+      and(
+        eq(kanbanCardAssignees.cardId, cardId),
+        eq(kanbanCardAssignees.userId, userId),
+      ),
+    );
+  return (result as any)[0]?.affectedRows > 0;
 }
 
 // ============================================================

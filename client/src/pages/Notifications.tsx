@@ -1,38 +1,60 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Bell, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2, Bell, CheckCircle2, AlertCircle, AlertTriangle, Check } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+
+type NotificationItem = {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  severity: "Info" | "Aviso" | "Crítico";
+  isRead: boolean;
+  createdAt: Date | string;
+  dueDate?: Date | string | null;
+};
 
 export default function Notifications() {
+  const utils = trpc.useUtils();
   const { data: notifications, isLoading } = trpc.notifications.list.useQuery();
+  const countQuery = trpc.notifications.count.useQuery();
 
-  const handleMarkAsRead = (id: number) => {
-    toast.success("Notificação marcada como lida.");
-  };
+  const markRead = trpc.notifications.markRead.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.notifications.list.invalidate(),
+        utils.notifications.count.invalidate(),
+      ]);
+    },
+  });
 
-  const handleDelete = (id: number) => {
-    toast.success("Notificação removida.");
-  };
+  const markAllRead = trpc.notifications.markAllRead.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.notifications.list.invalidate(),
+        utils.notifications.count.invalidate(),
+      ]);
+    },
+  });
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case "warning":
-        return <AlertCircle className="h-5 w-5 text-yellow-600" />;
-      case "success":
-        return <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
+  const getIcon = (severity: string) => {
+    switch (severity) {
+      case "Crítico":
+        return <AlertCircle className="h-5 w-5 text-red-600" />;
+      case "Aviso":
+        return <AlertTriangle className="h-5 w-5 text-amber-600" />;
       default:
         return <Bell className="h-5 w-5 text-blue-600" />;
     }
   };
 
-  const getStatusColor = (isRead: boolean) => {
-    return isRead ? "secondary" : "default";
-  };
+  const unreadCount = (countQuery.data as number | undefined) ?? 0;
+  const items = (notifications ?? []) as NotificationItem[];
 
   if (isLoading) {
     return (
@@ -47,12 +69,32 @@ export default function Notifications() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notificações</h1>
-          <p className="text-muted-foreground">Alertas automáticos sobre férias, ASO, banco de horas e eventos importantes.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Notificações</h1>
+            <p className="text-muted-foreground">
+              Alertas e avisos do sistema.
+              {unreadCount > 0 && (
+                <span className="ml-2 font-medium text-foreground">
+                  {unreadCount} não lida{unreadCount > 1 ? "s" : ""}
+                </span>
+              )}
+            </p>
+          </div>
+          {unreadCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1.5" />
+              Marcar todas como lidas
+            </Button>
+          )}
         </div>
 
-        {!notifications || notifications.length === 0 ? (
+        {items.length === 0 ? (
           <Card className="border-0 shadow-sm">
             <CardContent className="py-12 text-center">
               <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -60,69 +102,59 @@ export default function Notifications() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {notifications.map((notif: any) => (
-              <Card key={notif.id} className="border-0 shadow-sm">
-                <CardContent className="py-4">
-                  <div className="flex items-start gap-4">
-                    <div className="pt-1">{getIcon(notif.type)}</div>
+          <div className="space-y-2">
+            {items.map((notif) => (
+              <Card
+                key={notif.id}
+                className={cn(
+                  "border-0 shadow-sm transition-colors",
+                  !notif.isRead && "bg-primary/[0.03] border-l-4 border-l-primary",
+                )}
+              >
+                <CardContent className="py-3">
+                  <div className="flex items-start gap-3">
+                    <div className="pt-0.5">{getIcon(notif.severity)}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-sm">{notif.title}</h3>
-                        <Badge variant={getStatusColor(notif.isRead)}>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h3 className={cn("text-sm", !notif.isRead ? "font-semibold" : "font-medium")}>
+                          {notif.title}
+                        </h3>
+                        <Badge
+                          variant={notif.isRead ? "secondary" : "default"}
+                          className="text-[10px] px-1.5 py-0"
+                        >
                           {notif.isRead ? "Lida" : "Nova"}
                         </Badge>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {notif.severity}
+                        </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">{notif.message}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">{notif.message}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
                         {formatDistanceToNow(new Date(notif.createdAt), {
                           addSuffix: true,
                           locale: ptBR,
                         })}
                       </p>
                     </div>
-                    <div className="flex gap-2">
-                      {!notif.isRead && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleMarkAsRead(notif.id)}
-                        >
-                          Marcar como lida
-                        </Button>
-                      )}
+                    {!notif.isRead && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(notif.id)}
+                        className="shrink-0"
+                        onClick={() => markRead.mutate({ id: notif.id })}
+                        disabled={markRead.isPending}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Check className="h-4 w-4 mr-1" />
+                        Lida
                       </Button>
-                    </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
-
-        <Card className="border-0 shadow-sm bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-base">Sobre as Notificações</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <p>O RH Prime envia notificações automáticas para alertá-lo sobre:</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Férias vencendo (30, 15 e 7 dias antes)</li>
-              <li>ASOs com validade próxima de expirar</li>
-              <li>Banco de horas vencendo</li>
-              <li>Contratos de experiência terminando</li>
-              <li>Afastamentos por INSS iniciando</li>
-              <li>Treinamentos obrigatórios vencidos</li>
-            </ul>
-            <p className="pt-2">Você pode configurar a frequência de notificações em Configurações.</p>
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );

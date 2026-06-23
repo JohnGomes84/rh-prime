@@ -140,6 +140,7 @@ export const kanbanCardAssignees = mysqlTable(
     userId: int("user_id").notNull(),
     employeeId: int("employee_id"),
     assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+    acceptedAt: timestamp("accepted_at"),
   },
   (table) => ({
     cardIdx: index("idx_kca_card").on(table.cardId),

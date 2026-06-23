@@ -91,7 +91,7 @@ export const slaStyles: Record<SlaState, { border: string; badge: string; label:
 
 export const priorityStyles: Record<Priority, { pill: string; label: string }> = {
   low: { pill: "bg-emerald-500 text-white", label: "BAIXA" },
-  medium: { pill: "bg-amber-500 text-white", label: "MEDIA" },
+  medium: { pill: "bg-amber-500 text-white", label: "NORMAL" },
   high: { pill: "bg-orange-500 text-white", label: "ALTA" },
   urgent: { pill: "bg-red-500 text-white", label: "URGENTE" },
 };

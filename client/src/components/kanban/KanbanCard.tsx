@@ -39,6 +39,7 @@ export type KanbanAssigneeData = {
   email: string | null;
   fullName: string | null;
   avatarFallback: string | null;
+  acceptedAt: Date | null;
 };
 
 export type KanbanChecklistCountData = {

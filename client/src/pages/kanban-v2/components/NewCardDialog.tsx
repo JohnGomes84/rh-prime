@@ -37,7 +37,7 @@ type Priority = "low" | "medium" | "high" | "urgent";
 
 const PRIORITY_CONFIG: Record<Priority, { label: string; dot: string }> = {
   low: { label: "Baixa", dot: "bg-emerald-500" },
-  medium: { label: "Media", dot: "bg-amber-500" },
+  medium: { label: "Normal", dot: "bg-amber-500" },
   high: { label: "Alta", dot: "bg-orange-500" },
   urgent: { label: "Urgente", dot: "bg-red-500" },
 };

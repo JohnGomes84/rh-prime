@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc.js";
 import * as kdb from "../modules/kanban/db.js";
 import { notifyKanbanCardAssignment, notifyKanbanCardComment, notifyKanbanCardStatusChange } from "../_core/kanban-notifications.js";
+import { broadcastNotification } from "../_core/websocket.js";
 
 async function assertAccess(
   userId: number,
@@ -327,9 +328,18 @@ export const kanbanRouter = router({
             const board = await kdb.getBoardById(input.boardId);
             if (card && board) {
               const assignees = await kdb.listCardAssignees([id]);
+              const notified = new Set<number>();
               const targets = assignees
                 .map((a) => a.userId)
                 .filter((uid, idx, arr) => arr.indexOf(uid) === idx && uid !== ctx.user!.id);
+              for (const uid of targets) notified.add(uid);
+
+              // Also notify the card creator (if not already in targets and not the one who changed)
+              if (card.createdBy && card.createdBy !== ctx.user!.id && !notified.has(card.createdBy)) {
+                targets.push(card.createdBy);
+                notified.add(card.createdBy);
+              }
+
               await Promise.all(
                 targets.map((userId) =>
                   notifyKanbanCardStatusChange({
@@ -463,14 +473,41 @@ export const kanbanRouter = router({
           const board = await kdb.getBoardById(card.boardId);
           const userName = ctx.user!.name ?? ctx.user!.email ?? "Usuário";
           if (board) {
+            const title = `✅ Demanda aceita: ${card.title}`;
+            const message = `${userName} aceitou a demanda "${card.title}" no quadro ${board.name}.`;
             const { createNotification } = await import("../db.js");
             await createNotification({
               type: "Geral",
-              title: `Demanda aceita: ${card.title}`,
-              message: `${userName} aceitou a demanda "${card.title}" no board ${board.name}.`,
+              title,
+              message,
               severity: "Info",
               userId: card.createdBy,
             });
+            broadcastNotification({
+              type: "Geral",
+              title,
+              message,
+              userId: card.createdBy,
+            });
+            // Email ao criador
+            try {
+              const { sendEmail } = await import("../integrations/email-service.js");
+              const { getUserById } = await import("../db.js");
+              const creator = card.createdBy ? await getUserById(card.createdBy) : null;
+              if (creator?.email) {
+                const esc = (s: string) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+                await sendEmail({
+                  to: creator.email,
+                  subject: title,
+                  html: `
+                    <h2>Demanda aceita</h2>
+                    <p>Olá ${esc(creator.name ?? "")},</p>
+                    <p><strong>${esc(userName)}</strong> aceitou a demanda <strong>${esc(card.title)}</strong> no quadro <em>${esc(board.name)}</em>.</p>
+                    <p>Atenciosamente,<br>RH Prime</p>
+                  `,
+                });
+              }
+            } catch { /* email best-effort */ }
           }
         }
 

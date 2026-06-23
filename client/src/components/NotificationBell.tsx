@@ -42,7 +42,7 @@ function severityClass(severity: string): string {
 }
 
 function targetFromTitle(title: string): string | null {
-  if (title.includes("Tarefa") || title.includes("designado") || title.includes("Kanban") || title.includes("demanda")) return "/kanban-v2";
+  if (title.includes("Tarefa") || title.includes("designado") || title.includes("Kanban") || title.includes("demanda") || title.includes("aceita") || title.includes("movido")) return "/kanban-v2";
   return null;
 }
 

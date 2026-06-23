@@ -252,17 +252,11 @@ async function scanKanbanDeadlines(): Promise<number> {
     }
 
     for (const userId of targets) {
-      const fired = await notifyOnce({
-        type: "Geral",
-        title: notifTitle,
-        message: `Quadro ${card.boardName}. Prazo: ${dueIso}${overdue ? " (vencido)" : ""}.`,
-        severity,
-        relatedEmployeeId: null,
-        dueDate: dueIso,
-      });
-      if (!fired) continue;
+      // Deduplicate: check if we already sent this exact deadline notification
+      if (await alreadyNotified({ type: "Geral", relatedEmployeeId: null, dueDate: dueIso })) continue;
 
       try {
+        // notifyKanbanCardDeadline handles: DB persist + WebSocket + email
         await notifyKanbanCardDeadline({
           userId,
           cardId: card.cardId,

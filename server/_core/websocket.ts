@@ -69,20 +69,8 @@ export function setupWebSocket(server: Server) {
 const DB_NOTIFICATION_TYPES = new Set(['Férias', 'ASO', 'Banco de Horas', 'Contrato Experiência', 'Treinamento', 'Documento', 'EPI', 'Geral']);
 
 export async function broadcastNotification(payload: NotificationPayload) {
-  if (payload.userId) {
-    try {
-      const dbType = DB_NOTIFICATION_TYPES.has(payload.type) ? payload.type : 'Geral';
-      await db.createNotification({
-        type: (dbType as any),
-        title: payload.title,
-        message: payload.message,
-        severity: 'Info',
-        userId: payload.userId,
-      } as any);
-    } catch (err) {
-      console.warn('[WebSocket] Persist notification failed:', err);
-    }
-  }
+  // DB persistence is handled by the caller (e.g. notifyKanbanCardAssignment).
+  // This function only pushes the payload over WebSocket.
 
   const key = payload.userId !== undefined ? String(payload.userId) : '';
   if (key && clients.has(key)) {

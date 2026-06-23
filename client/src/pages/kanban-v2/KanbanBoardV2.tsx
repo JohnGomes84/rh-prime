@@ -143,8 +143,6 @@ function SortableCard({
         labels={labels.map((l) => ({ labelId: l.labelId, name: l.name, color: l.color }))}
         checklist={checklist}
         canEdit={canEdit}
-        boardLabel={card.boardName}
-        boardColor={card.boardColor}
         onOpenDetail={onOpenDetail}
         onArchive={onArchive}
         onDelete={onDelete}
@@ -720,8 +718,6 @@ export default function KanbanBoardV2() {
                     }))}
                     checklist={checklistByCard.get(activeCard.id)}
                     canEdit
-                    boardLabel={activeCard.boardName}
-                    boardColor={activeCard.boardColor}
                   />
                 </div>
               )}

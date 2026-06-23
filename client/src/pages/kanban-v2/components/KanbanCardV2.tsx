@@ -65,8 +65,6 @@ export function KanbanCardV2({
   commentsCount = 0,
   attachmentsCount = 0,
   canEdit,
-  boardLabel,
-  boardColor,
   dragHandle,
   onOpenDetail,
   onArchive,
@@ -80,8 +78,6 @@ export function KanbanCardV2({
   commentsCount?: number;
   attachmentsCount?: number;
   canEdit: boolean;
-  boardLabel?: string;
-  boardColor?: string | null;
   dragHandle?: React.ReactNode;
   onOpenDetail?: () => void;
   onArchive?: () => void;
@@ -189,7 +185,7 @@ export function KanbanCardV2({
         if (!editingTitle) setExpanded((v) => !v);
       }}
     >
-      {/* Row 1: board chip + drag + title + actions */}
+      {/* Row 1: drag + title + actions */}
       <div className="flex items-start gap-1.5">
         {dragHandle && (
           <div className="mt-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
@@ -198,17 +194,7 @@ export function KanbanCardV2({
         )}
 
         <div className="flex-1 min-w-0">
-          {/* Board chip */}
-          {boardLabel && (
-            <span
-              className="mb-1 inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-[9px] font-medium text-white leading-none"
-              style={{ backgroundColor: boardColor ?? "#6366f1" }}
-            >
-              <span className="truncate">{boardLabel}</span>
-            </span>
-          )}
-
-          {/* Title */}
+          {/* Title — click to edit */}
           {editingTitle && canEdit ? (
             <Input
               value={titleDraft}
@@ -234,12 +220,12 @@ export function KanbanCardV2({
                 "text-sm font-medium leading-snug",
                 canEdit && "cursor-text hover:bg-muted/50 -mx-0.5 px-0.5 rounded",
               )}
-              onDoubleClick={(e) => {
+              onClick={(e) => {
                 if (!canEdit) return;
                 e.stopPropagation();
                 setEditingTitle(true);
               }}
-              title={canEdit ? "Duplo-clique para editar" : undefined}
+              title={canEdit ? "Clique para editar" : undefined}
             >
               {card.title}
             </div>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc.js";
 import * as kdb from "../modules/kanban/db.js";
-import { notifyKanbanCardAssignment, notifyKanbanCardComment } from "../_core/kanban-notifications.js";
+import { notifyKanbanCardAssignment, notifyKanbanCardComment, notifyKanbanCardStatusChange } from "../_core/kanban-notifications.js";
 
 async function assertAccess(
   userId: number,
@@ -312,7 +312,44 @@ export const kanbanRouter = router({
         const { id, boardId: _b, dueDate, ...rest } = input;
         const data: any = { ...rest };
         if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
+
+        let oldStatus: string | undefined;
+        if (input.globalStatus) {
+          const existing = await kdb.getCardById(id);
+          if (existing) oldStatus = existing.globalStatus ?? "todo";
+        }
+
         await kdb.updateCard(id, data);
+
+        if (input.globalStatus && oldStatus && oldStatus !== input.globalStatus) {
+          try {
+            const card = await kdb.getCardById(id);
+            const board = await kdb.getBoardById(input.boardId);
+            if (card && board) {
+              const assignees = await kdb.listCardAssignees([id]);
+              const targets = assignees
+                .map((a) => a.userId)
+                .filter((uid, idx, arr) => arr.indexOf(uid) === idx && uid !== ctx.user!.id);
+              await Promise.all(
+                targets.map((userId) =>
+                  notifyKanbanCardStatusChange({
+                    userId,
+                    cardId: card.id,
+                    cardTitle: card.title,
+                    boardId: board.id,
+                    boardName: board.name,
+                    oldStatus: oldStatus!,
+                    newStatus: input.globalStatus!,
+                    changedByName: ctx.user!.name ?? ctx.user!.email,
+                  }),
+                ),
+              );
+            }
+          } catch (err) {
+            console.warn("[kanban] status change notification failed:", err);
+          }
+        }
+
         return { success: true };
       }),
 

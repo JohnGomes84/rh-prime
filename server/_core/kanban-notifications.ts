@@ -7,6 +7,7 @@ import {
   generateKanbanAssignmentEmail,
   generateKanbanCommentEmail,
   generateKanbanDeadlineEmail,
+  generateKanbanStatusChangeEmail,
 } from "../integrations/email-service.js";
 import { ENV } from "./env.js";
 
@@ -168,6 +169,75 @@ interface CommentInput {
   boardName: string;
   authorName: string;
   bodyPreview: string;
+}
+
+interface StatusChangeInput {
+  userId: number;
+  cardId: number;
+  cardTitle: string;
+  boardId: number;
+  boardName: string;
+  oldStatus: string;
+  newStatus: string;
+  changedByName: string;
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  todo: "A Fazer",
+  in_progress: "Em Progresso",
+  done: "Concluído",
+};
+
+export async function notifyKanbanCardStatusChange(input: StatusChangeInput) {
+  if (input.userId === 0) return;
+  const oldLabel = STATUS_LABELS[input.oldStatus] ?? input.oldStatus;
+  const newLabel = STATUS_LABELS[input.newStatus] ?? input.newStatus;
+  const emoji = input.newStatus === "done" ? "✅" : "🔄";
+  const title = `${emoji} "${input.cardTitle}" movido para ${newLabel}`;
+  const message = `${input.changedByName} moveu de ${oldLabel} → ${newLabel}. Quadro ${input.boardName}.`;
+
+  try {
+    await db.createNotification({
+      type: "Geral" as any,
+      severity: "Info" as any,
+      title,
+      message,
+      userId: input.userId,
+    } as any);
+  } catch (err) {
+    console.error("[kanban-notify] status change persist failed:", err);
+  }
+
+  try {
+    await broadcastNotification({
+      type: "info",
+      title,
+      message,
+      userId: input.userId,
+      data: { kind: "kanban_status_change", boardId: input.boardId, cardId: input.cardId },
+    });
+  } catch { /* WS no-op */ }
+
+  try {
+    const contact = await getUserContact(input.userId);
+    if (contact?.email) {
+      await sendEmail({
+        to: contact.email,
+        subject: title,
+        html: generateKanbanStatusChangeEmail({
+          assigneeName: contact.name ?? "colega",
+          cardTitle: input.cardTitle,
+          boardName: input.boardName,
+          oldStatus: oldLabel,
+          newStatus: newLabel,
+          changedByName: input.changedByName,
+          cardUrl: cardUrl(input.boardId, input.cardId),
+        }),
+      });
+    }
+  } catch (err) {
+    console.error("[kanban-notify] status change email failed:", err);
+  }
 }
 
 export async function notifyKanbanCardComment(input: CommentInput) {

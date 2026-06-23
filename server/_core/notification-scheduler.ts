@@ -8,7 +8,7 @@ import {
 } from "../../drizzle/schema-kanban.js";
 import { notifyKanbanCardDeadline } from "./kanban-notifications.js";
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -181,6 +181,9 @@ async function scanKanbanDeadlines(): Promise<number> {
   const tomorrowDate = new Date(todayDate);
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+  const threeDaysDate = new Date(todayDate);
+  threeDaysDate.setDate(threeDaysDate.getDate() + 3);
+  const threeDays = threeDaysDate.toISOString().slice(0, 10);
 
   const candidates = await conn
     .select({
@@ -198,6 +201,7 @@ async function scanKanbanDeadlines(): Promise<number> {
         sql`${kanbanCards.completedAt} IS NULL`,
         sql`${kanbanCards.dueDate} IS NOT NULL`,
         or(
+          eq(kanbanCards.dueDate, threeDays as any),
           eq(kanbanCards.dueDate, tomorrow as any),
           lt(kanbanCards.dueDate, today as any)
         )
@@ -229,15 +233,30 @@ async function scanKanbanDeadlines(): Promise<number> {
 
     const dueIso = (card.dueDate as unknown as string) ?? "";
     const overdue = dueIso < today;
+    const isDueTomorrow = dueIso === tomorrow;
+    const isDue3Days = dueIso === threeDays;
+
+    let notifTitle: string;
+    let severity: "Info" | "Aviso" | "Crítico";
+    if (overdue) {
+      notifTitle = `🚨 Tarefa atrasada: ${card.cardTitle}`;
+      severity = "Crítico";
+    } else if (isDueTomorrow) {
+      notifTitle = `⏰ Tarefa vence amanhã: ${card.cardTitle}`;
+      severity = "Aviso";
+    } else if (isDue3Days) {
+      notifTitle = `📅 Tarefa vence em 3 dias: ${card.cardTitle}`;
+      severity = "Info";
+    } else {
+      continue;
+    }
 
     for (const userId of targets) {
       const fired = await notifyOnce({
         type: "Geral",
-        title: overdue
-          ? `🚨 Tarefa atrasada: ${card.cardTitle}`
-          : `⏰ Tarefa vence amanhã: ${card.cardTitle}`,
+        title: notifTitle,
         message: `Quadro ${card.boardName}. Prazo: ${dueIso}${overdue ? " (vencido)" : ""}.`,
-        severity: overdue ? "Crítico" : "Aviso",
+        severity,
         relatedEmployeeId: null,
         dueDate: dueIso,
       });
@@ -288,8 +307,8 @@ let intervalHandle: NodeJS.Timeout | null = null;
 export function startNotificationScheduler() {
   if (intervalHandle) return;
   setTimeout(() => { void runNotificationScan(); }, 5_000);
-  intervalHandle = setInterval(() => { void runNotificationScan(); }, ONE_DAY_MS);
-  console.log("[Scheduler] notification scanner started (daily)");
+  intervalHandle = setInterval(() => { void runNotificationScan(); }, SIX_HOURS_MS);
+  console.log("[Scheduler] notification scanner started (every 6h)");
 }
 
 export function stopNotificationScheduler() {

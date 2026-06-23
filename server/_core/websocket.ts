@@ -77,7 +77,8 @@ export async function broadcastNotification(payload: NotificationPayload) {
         title: payload.title,
         message: payload.message,
         severity: 'Info',
-      });
+        userId: payload.userId,
+      } as any);
     } catch (err) {
       console.warn('[WebSocket] Persist notification failed:', err);
     }

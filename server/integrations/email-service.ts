@@ -13,6 +13,10 @@ interface EmailOptions {
   replyTo?: string;
 }
 
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+}
+
 const DEFAULT_FROM = process.env.EMAIL_FROM ?? "noreply@mlservicoseco.com.br";
 const DEFAULT_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "adm@mlservicoseco.com.br";
 
@@ -63,7 +67,7 @@ export function generateASOExpiringEmail(
   return `
     <h2>Notificação: ASO Vencendo</h2>
     <p>Olá,</p>
-    <p>O ASO do funcionário <strong>${employeeName}</strong> vencerá em <strong>${daysUntilExpiry} dias</strong>.</p>
+    <p>O ASO do funcionário <strong>${esc(employeeName)}</strong> vencerá em <strong>${daysUntilExpiry} dias</strong>.</p>
     <p>Por favor, agende uma nova avaliação.</p>
     <p>Atenciosamente,<br>RH Prime</p>
   `;
@@ -76,9 +80,9 @@ export function generateVacationApprovedEmail(
 ): string {
   return `
     <h2>Férias Aprovadas</h2>
-    <p>Olá ${employeeName},</p>
+    <p>Olá ${esc(employeeName)},</p>
     <p>Suas férias foram aprovadas!</p>
-    <p><strong>Período:</strong> ${startDate} a ${endDate}</p>
+    <p><strong>Período:</strong> ${esc(startDate)} a ${esc(endDate)}</p>
     <p>Aproveite bem!</p>
     <p>Atenciosamente,<br>RH Prime</p>
   `;
@@ -92,14 +96,14 @@ export function generateKanbanAssignmentEmail(input: {
   cardUrl: string;
 }): string {
   const due = input.dueDate
-    ? `<p><strong>Prazo:</strong> ${input.dueDate}</p>`
+    ? `<p><strong>Prazo:</strong> ${esc(input.dueDate)}</p>`
     : "";
   return `
     <h2>Nova tarefa atribuída</h2>
-    <p>Olá ${input.assigneeName},</p>
-    <p>Você foi designado para a tarefa <strong>${input.cardTitle}</strong> no quadro <em>${input.boardName}</em>.</p>
+    <p>Olá ${esc(input.assigneeName)},</p>
+    <p>Você foi designado para a tarefa <strong>${esc(input.cardTitle)}</strong> no quadro <em>${esc(input.boardName)}</em>.</p>
     ${due}
-    <p><a href="${input.cardUrl}">Abrir tarefa</a></p>
+    <p><a href="${esc(input.cardUrl)}">Abrir tarefa</a></p>
     <p>Atenciosamente,<br>RH Prime</p>
   `;
 }
@@ -113,11 +117,11 @@ export function generateKanbanCommentEmail(input: {
   cardUrl: string;
 }): string {
   return `
-    <h2>${input.authorName} comentou em "${input.cardTitle}"</h2>
-    <p>Olá ${input.assigneeName},</p>
-    <p>Quadro: <em>${input.boardName}</em></p>
-    <blockquote style="border-left:3px solid #ccc;padding-left:8px;color:#555;">${input.bodyPreview}</blockquote>
-    <p><a href="${input.cardUrl}">Abrir tarefa</a></p>
+    <h2>${esc(input.authorName)} comentou em "${esc(input.cardTitle)}"</h2>
+    <p>Olá ${esc(input.assigneeName)},</p>
+    <p>Quadro: <em>${esc(input.boardName)}</em></p>
+    <blockquote style="border-left:3px solid #ccc;padding-left:8px;color:#555;">${esc(input.bodyPreview)}</blockquote>
+    <p><a href="${esc(input.cardUrl)}">Abrir tarefa</a></p>
     <p>Atenciosamente,<br>RH Prime</p>
   `;
 }
@@ -132,11 +136,30 @@ export function generateKanbanDeadlineEmail(input: {
 }): string {
   const headline = input.overdue ? "Tarefa atrasada" : "Tarefa vence amanhã";
   return `
-    <h2>${headline}: ${input.cardTitle}</h2>
-    <p>Olá ${input.assigneeName},</p>
-    <p>Quadro: <em>${input.boardName}</em></p>
-    <p><strong>Prazo:</strong> ${input.dueDate}${input.overdue ? " (vencido)" : ""}</p>
-    <p><a href="${input.cardUrl}">Abrir tarefa</a></p>
+    <h2>${headline}: ${esc(input.cardTitle)}</h2>
+    <p>Olá ${esc(input.assigneeName)},</p>
+    <p>Quadro: <em>${esc(input.boardName)}</em></p>
+    <p><strong>Prazo:</strong> ${esc(input.dueDate)}${input.overdue ? " (vencido)" : ""}</p>
+    <p><a href="${esc(input.cardUrl)}">Abrir tarefa</a></p>
+    <p>Atenciosamente,<br>RH Prime</p>
+  `;
+}
+
+export function generateKanbanStatusChangeEmail(input: {
+  assigneeName: string;
+  cardTitle: string;
+  boardName: string;
+  oldStatus: string;
+  newStatus: string;
+  changedByName: string;
+  cardUrl: string;
+}): string {
+  return `
+    <h2>Status atualizado: ${esc(input.cardTitle)}</h2>
+    <p>Olá ${esc(input.assigneeName)},</p>
+    <p><strong>${esc(input.changedByName)}</strong> moveu a tarefa <strong>${esc(input.cardTitle)}</strong> de <em>${esc(input.oldStatus)}</em> para <em>${esc(input.newStatus)}</em>.</p>
+    <p>Quadro: <em>${esc(input.boardName)}</em></p>
+    <p><a href="${esc(input.cardUrl)}">Abrir tarefa</a></p>
     <p>Atenciosamente,<br>RH Prime</p>
   `;
 }
@@ -147,7 +170,7 @@ export async function notifyCriticalEvent(
   adminEmail: string
 ): Promise<boolean> {
   const html = `
-    <h2>Alerta Crítico: ${event}</h2>
+    <h2>Alerta Crítico: ${esc(event)}</h2>
     <pre>${JSON.stringify(details, null, 2)}</pre>
     <p>Verifique o sistema imediatamente.</p>
   `;

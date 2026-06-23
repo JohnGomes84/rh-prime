@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
-import { Calendar, CheckSquare, ChevronDown, Clock, MessageSquare, Paperclip } from "lucide-react";
+import {
+  Archive,
+  Calendar,
+  CheckSquare,
+  ChevronDown,
+  Clock,
+  ExternalLink,
+  MessageSquare,
+  MoreVertical,
+  Paperclip,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -50,6 +68,9 @@ export function KanbanCardV2({
   boardLabel,
   boardColor,
   dragHandle,
+  onOpenDetail,
+  onArchive,
+  onDelete,
 }: {
   card: KanbanCardV2Data;
   slaDays: number | null;
@@ -62,6 +83,9 @@ export function KanbanCardV2({
   boardLabel?: string;
   boardColor?: string | null;
   dragHandle?: React.ReactNode;
+  onOpenDetail?: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const utils = trpc.useUtils();
   const [expanded, setExpanded] = useState(false);
@@ -87,7 +111,10 @@ export function KanbanCardV2({
   }, [card]);
 
   const updateCard = trpc.kanban.cards.update.useMutation({
-    onSuccess: () => utils.kanban.cards.listByBoard.invalidate({ boardId: card.boardId }),
+    onSuccess: () => {
+      utils.kanban.cards.listByBoard.invalidate({ boardId: card.boardId });
+      utils.kanban.cards.listAcrossUserBoards.invalidate();
+    },
     onError: (e) => toast.error(e.message ?? "Falha ao salvar"),
   });
 
@@ -101,7 +128,7 @@ export function KanbanCardV2({
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
   })();
 
-  const visibleAssignees = assignees.slice(0, 4);
+  const visibleAssignees = assignees.slice(0, 3);
   const extraAssignees = Math.max(0, assignees.length - visibleAssignees.length);
   const hasCounters =
     (checklist?.total ?? 0) > 0 || commentsCount > 0 || attachmentsCount > 0;
@@ -149,181 +176,253 @@ export function KanbanCardV2({
     }
   };
 
+  const hasMenu = !!(onOpenDetail || onArchive || onDelete);
+
   return (
     <div
       className={cn(
-        "rounded-md border border-l-4 bg-card p-3 shadow-sm transition-all",
+        "group/card rounded-md border border-l-[3px] bg-card p-2.5 shadow-sm transition-all",
         slaStyle.border,
-        !expanded && "hover:-translate-y-0.5 hover:shadow-md cursor-pointer",
+        !expanded && "hover:shadow-md cursor-pointer",
       )}
       onClick={() => {
         if (!editingTitle) setExpanded((v) => !v);
       }}
     >
-      {/* Board context chip (cross-board view) */}
-      {boardLabel && (
-        <div className="mb-1.5 flex items-center gap-1.5">
-          {dragHandle}
-          <span
-            className="inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium text-white"
-            style={{ backgroundColor: boardColor ?? "#6366f1" }}
-          >
-            <span className="truncate">{boardLabel}</span>
-          </span>
-        </div>
-      )}
-
-      {/* Linha 1: titulo + expand toggle */}
-      <div className="mb-1.5 flex items-start gap-2">
-        {!boardLabel && dragHandle}
-        {editingTitle && canEdit ? (
-          <Input
-            value={titleDraft}
-            autoFocus
-            className="h-7 text-sm font-semibold"
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={() => {
-              saveTitleIfChanged();
-              setEditingTitle(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              if (e.key === "Escape") {
-                setTitleDraft(card.title);
-                setEditingTitle(false);
-              }
-            }}
-          />
-        ) : (
-          <div
-            className={cn(
-              "flex-1 text-sm font-semibold leading-tight",
-              canEdit && "cursor-text hover:bg-muted/50 -mx-1 px-1 rounded",
-            )}
-            onDoubleClick={(e) => {
-              if (!canEdit) return;
-              e.stopPropagation();
-              setEditingTitle(true);
-            }}
-            title={canEdit ? "Duplo-clique para editar" : undefined}
-          >
-            {card.title}
+      {/* Row 1: board chip + drag + title + actions */}
+      <div className="flex items-start gap-1.5">
+        {dragHandle && (
+          <div className="mt-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+            {dragHandle}
           </div>
         )}
-        <button
-          type="button"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform"
-          style={{ transform: expanded ? "rotate(180deg)" : "" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-          aria-label={expanded ? "Recolher" : "Expandir"}
-        >
-          <ChevronDown className="h-3 w-3" />
-        </button>
+
+        <div className="flex-1 min-w-0">
+          {/* Board chip */}
+          {boardLabel && (
+            <span
+              className="mb-1 inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-[9px] font-medium text-white leading-none"
+              style={{ backgroundColor: boardColor ?? "#6366f1" }}
+            >
+              <span className="truncate">{boardLabel}</span>
+            </span>
+          )}
+
+          {/* Title */}
+          {editingTitle && canEdit ? (
+            <Input
+              value={titleDraft}
+              autoFocus
+              className="h-6 text-sm font-semibold px-1"
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => {
+                saveTitleIfChanged();
+                setEditingTitle(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  setTitleDraft(card.title);
+                  setEditingTitle(false);
+                }
+              }}
+            />
+          ) : (
+            <div
+              className={cn(
+                "text-sm font-medium leading-snug",
+                canEdit && "cursor-text hover:bg-muted/50 -mx-0.5 px-0.5 rounded",
+              )}
+              onDoubleClick={(e) => {
+                if (!canEdit) return;
+                e.stopPropagation();
+                setEditingTitle(true);
+              }}
+              title={canEdit ? "Duplo-clique para editar" : undefined}
+            >
+              {card.title}
+            </div>
+          )}
+        </div>
+
+        {/* Expand + menu (menu only on hover) */}
+        <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+          <button
+            type="button"
+            className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-transform"
+            style={{ transform: expanded ? "rotate(180deg)" : "" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+            aria-label={expanded ? "Recolher" : "Expandir"}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+
+          {hasMenu && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  aria-label="Acoes do card"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onOpenDetail && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDetail();
+                    }}
+                  >
+                    <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                    Abrir detalhes
+                  </DropdownMenuItem>
+                )}
+                {(onArchive || onDelete) && onOpenDetail && <DropdownMenuSeparator />}
+                {onArchive && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchive();
+                    }}
+                  >
+                    <Archive className="mr-2 h-3.5 w-3.5" />
+                    Arquivar
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    Excluir
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
 
-      {/* Linha 2: badges (prioridade + SLA) */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", prioStyle.pill)}>
+      {/* Row 2: badges */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold leading-none", prioStyle.pill)}>
           {prioStyle.label}
         </span>
         {sla.state !== "none" && (
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]",
+              "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] leading-none",
               slaStyle.badge,
             )}
             title={`SLA: ${slaDays} dias`}
           >
-            <Clock className="h-3 w-3" />
+            <Clock className="h-2.5 w-2.5" />
             {sla.state === "overdue"
-              ? `VENCIDO ${Math.abs(sla.daysRemaining ?? 0)}d`
+              ? `${Math.abs(sla.daysRemaining ?? 0)}d atraso`
               : `${sla.daysElapsed}/${slaDays}d`}
           </span>
         )}
         {due && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Calendar className="h-3 w-3" />
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground leading-none">
+            <Calendar className="h-2.5 w-2.5" />
             {due}
           </span>
         )}
       </div>
 
-      {/* Linha 3: assignees + labels */}
-      {(assignees.length > 0 || labels.length > 0) && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+      {/* Row 3: assignees + labels + counters */}
+      {(assignees.length > 0 || labels.length > 0 || (hasCounters && !expanded)) && (
+        <div className="mt-2 flex items-center gap-2 text-[10px]">
+          {/* Assignees */}
           {assignees.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex -space-x-1">
               {visibleAssignees.map((a) => (
                 <Avatar
                   key={`${card.id}-${a.userId}`}
-                  className="h-5 w-5 border border-card"
+                  className="h-5 w-5 border-2 border-card"
                   title={a.fullName ?? a.name ?? a.email ?? "Responsavel"}
                 >
-                  <AvatarFallback className="bg-primary text-[9px] font-semibold text-primary-foreground">
+                  <AvatarFallback className="bg-primary text-[8px] font-semibold text-primary-foreground">
                     {a.avatarFallback ?? "?"}
                   </AvatarFallback>
                 </Avatar>
               ))}
               {extraAssignees > 0 && (
-                <span className="inline-flex h-5 items-center justify-center rounded-full bg-muted px-1.5 text-[9px] font-semibold">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted border-2 border-card text-[8px] font-semibold">
                   +{extraAssignees}
                 </span>
               )}
             </div>
           )}
+
+          {/* Labels */}
           {labels.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-0.5">
               {labels.map((l) => (
                 <span
                   key={l.labelId}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+                  className="h-2 w-5 rounded-full"
                   style={{ backgroundColor: l.color }}
-                >
-                  {l.name}
-                </span>
+                  title={l.name}
+                />
               ))}
+            </div>
+          )}
+
+          {/* Spacer */}
+          {(assignees.length > 0 || labels.length > 0) && hasCounters && !expanded && (
+            <div className="flex-1" />
+          )}
+
+          {/* Inline counters */}
+          {hasCounters && !expanded && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {(checklist?.total ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <CheckSquare className="h-2.5 w-2.5" />
+                  {checklist!.done}/{checklist!.total}
+                </span>
+              )}
+              {commentsCount > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <MessageSquare className="h-2.5 w-2.5" />
+                  {commentsCount}
+                </span>
+              )}
+              {attachmentsCount > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <Paperclip className="h-2.5 w-2.5" />
+                  {attachmentsCount}
+                </span>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* Linha 4: counters */}
-      {hasCounters && !expanded && (
-        <div className="mt-2 flex items-center gap-3 border-t border-border pt-1.5 text-[11px] text-muted-foreground">
-          {(checklist?.total ?? 0) > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <CheckSquare className="h-3 w-3" />
-              {checklist!.done}/{checklist!.total}
-            </span>
-          )}
-          {commentsCount > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <MessageSquare className="h-3 w-3" />
-              {commentsCount}
-            </span>
-          )}
-          {attachmentsCount > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <Paperclip className="h-3 w-3" />
-              {attachmentsCount}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Expanded: edicao inline */}
+      {/* Expanded: inline quick edit */}
       {expanded && (
         <div
-          className="mt-3 space-y-3 border-t pt-3"
+          className="mt-2.5 space-y-2.5 border-t pt-2.5"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Descricao
             </div>
             <Textarea
@@ -331,19 +430,19 @@ export function KanbanCardV2({
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={saveDescIfChanged}
               disabled={!canEdit}
-              rows={3}
+              rows={2}
               placeholder="Adicionar descricao..."
-              className="text-xs"
+              className="text-xs resize-none"
             />
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 grid-cols-2">
             <div>
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Prioridade
               </div>
               <Select value={priorityDraft} onValueChange={onPriorityChange} disabled={!canEdit}>
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -355,7 +454,7 @@ export function KanbanCardV2({
               </Select>
             </div>
             <div>
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Prazo
               </div>
               <Input
@@ -363,26 +462,34 @@ export function KanbanCardV2({
                 value={dueDateDraft}
                 onChange={(e) => onDueDateChange(e.target.value)}
                 disabled={!canEdit}
-                className="h-8 text-xs"
+                className="h-7 text-xs"
               />
             </div>
           </div>
 
           {sla.state !== "none" && (
             <div className="rounded border bg-muted/40 p-2 text-[11px]">
-              <div className="font-semibold text-foreground">SLA da coluna: {slaDays} dias</div>
+              <div className="font-semibold text-foreground">SLA: {slaDays} dias</div>
               <div className="text-muted-foreground">
-                Entrou ha {sla.daysElapsed}d.{" "}
+                {sla.daysElapsed}d decorridos.{" "}
                 {sla.daysRemaining != null && sla.daysRemaining >= 0
-                  ? `${sla.daysRemaining}d restantes (${slaStyle.label})`
+                  ? `${sla.daysRemaining}d restantes`
                   : `vencido ha ${Math.abs(sla.daysRemaining ?? 0)}d`}
               </div>
             </div>
           )}
 
-          <div className="text-[10px] text-muted-foreground">
-            Comentarios/anexos/checklist editaveis disponiveis no Kanban v1. Inline edit v2: titulo (duplo-clique), descricao, prioridade, prazo.
-          </div>
+          {onOpenDetail && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs h-7"
+              onClick={onOpenDetail}
+            >
+              <ExternalLink className="mr-1.5 h-3 w-3" />
+              Detalhes completos
+            </Button>
+          )}
         </div>
       )}
     </div>

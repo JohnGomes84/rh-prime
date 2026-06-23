@@ -15,11 +15,25 @@ import {
 } from "@dnd-kit/core";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowLeft, GripVertical, KanbanSquare, Loader2, Plus, Search, Sparkles, UserCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Filter,
+  GripVertical,
+  KanbanSquare,
+  Loader2,
+  Plus,
+  Search,
+  Sparkles,
+  UserCheck,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
+import { CardDetailDrawer } from "@/components/kanban/CardDetailDrawer";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -50,18 +64,58 @@ type LabelData = {
   color: string;
 };
 
+type BoardMemberData = {
+  id: number;
+  userId: number;
+  role: "admin" | "editor" | "viewer";
+  userName: string | null;
+  userEmail: string | null;
+  employeeName: string | null;
+};
+
+type BoardLabelData = {
+  id: number;
+  boardId: number;
+  name: string;
+  color: string;
+};
+
+const COLUMN_STYLES: Record<GlobalStatus, { accent: string; bg: string; badge: string }> = {
+  todo: {
+    accent: "border-t-2 border-t-slate-400",
+    bg: "bg-slate-50/50 dark:bg-slate-900/20",
+    badge: "bg-slate-500",
+  },
+  in_progress: {
+    accent: "border-t-2 border-t-blue-500",
+    bg: "bg-blue-50/30 dark:bg-blue-950/20",
+    badge: "bg-blue-500",
+  },
+  done: {
+    accent: "border-t-2 border-t-emerald-500",
+    bg: "bg-emerald-50/30 dark:bg-emerald-950/20",
+    badge: "bg-emerald-500",
+  },
+};
+
 function SortableCard({
   card,
   assignees,
   labels,
   checklist,
   canEdit,
+  onOpenDetail,
+  onArchive,
+  onDelete,
 }: {
   card: CardWithBoard;
   assignees: AssigneeData[];
   labels: LabelData[];
   checklist?: { total: number; done: number };
   canEdit: boolean;
+  onOpenDetail?: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `card-${card.id}`,
@@ -91,6 +145,9 @@ function SortableCard({
         canEdit={canEdit}
         boardLabel={card.boardName}
         boardColor={card.boardColor}
+        onOpenDetail={onOpenDetail}
+        onArchive={onArchive}
+        onDelete={onDelete}
         dragHandle={
           <button
             type="button"
@@ -129,43 +186,36 @@ function StatusColumn({
     data: { type: "column", status },
   });
   const isOver = outerOver || innerOver;
+  const styles = COLUMN_STYLES[status];
 
   return (
     <div
       ref={setOuterRef}
       className={cn(
-        "flex min-h-[400px] w-full flex-col rounded-lg bg-muted/60 p-4 shadow-sm transition-colors",
-        isOver && "ring-2 ring-primary bg-primary/5",
+        "flex flex-col rounded-lg border transition-colors min-h-0",
+        styles.accent,
+        styles.bg,
+        isOver && "ring-2 ring-primary/50 bg-primary/5",
       )}
     >
-      <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide">
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {emoji} {label}
         </h3>
-        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+        <span
+          className={cn(
+            "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white",
+            styles.badge,
+          )}
+        >
           {cards.length}
         </span>
       </div>
-      <div ref={setInnerRef} className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "warning" }) {
-  return (
-    <div className="rounded-xl border bg-card p-3 text-center shadow-sm">
       <div
-        className={cn(
-          "text-2xl font-bold tabular-nums",
-          tone === "warning" ? "text-orange-600" : "text-primary",
-        )}
+        ref={setInnerRef}
+        className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 scrollbar-thin"
       >
-        {value}
-      </div>
-      <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
+        {children}
       </div>
     </div>
   );
@@ -180,17 +230,29 @@ export default function KanbanBoardV2() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [activeCard, setActiveCard] = useState<CardWithBoard | null>(null);
   const [newCardOpen, setNewCardOpen] = useState(false);
+  const [detailCard, setDetailCard] = useState<CardWithBoard | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  // Collision: prefer pointer-within (catches empty columns), fallback to rectIntersection
   const collisionDetection: CollisionDetection = (args) => {
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) return pointerCollisions;
     return rectIntersection(args);
   };
+
+  const boardMembersQuery = trpc.kanban.boards.listMembers.useQuery(
+    { boardId: detailCard?.boardId ?? 0 },
+    { enabled: !!detailCard },
+  );
+  const boardLabelsQuery = trpc.kanban.labels.listByBoard.useQuery(
+    { boardId: detailCard?.boardId ?? 0 },
+    { enabled: !!detailCard },
+  );
 
   const updateCard = trpc.kanban.cards.update.useMutation({
     onMutate: async (variables) => {
@@ -212,6 +274,22 @@ export default function KanbanBoardV2() {
       toast.error("Falha ao mover card");
     },
     onSettled: () => utils.kanban.cards.listAcrossUserBoards.invalidate(),
+  });
+
+  const archiveCard = trpc.kanban.cards.archive.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.cards.listAcrossUserBoards.invalidate();
+      toast.success("Card arquivado");
+    },
+    onError: (e) => toast.error(e.message ?? "Falha ao arquivar"),
+  });
+
+  const deleteCardHard = trpc.kanban.cards.deleteHard.useMutation({
+    onSuccess: async () => {
+      await utils.kanban.cards.listAcrossUserBoards.invalidate();
+      toast.success("Card excluido permanentemente");
+    },
+    onError: (e) => toast.error(e.message ?? "Falha ao excluir"),
   });
 
   const cardsRaw = useMemo(
@@ -247,6 +325,33 @@ export default function KanbanBoardV2() {
     return map;
   }, [cardsQuery.data]);
 
+  const uniqueAssignees = useMemo(() => {
+    const map = new Map<number, { userId: number; label: string }>();
+    for (const a of cardsQuery.data?.assignees ?? []) {
+      if (!map.has(a.userId)) {
+        map.set(a.userId, {
+          userId: a.userId,
+          label: (a as AssigneeData).fullName ?? (a as AssigneeData).name ?? (a as AssigneeData).email ?? `Usuario ${a.userId}`,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [cardsQuery.data]);
+
+  const uniqueLabels = useMemo(() => {
+    const map = new Map<number, { labelId: number; name: string; color: string }>();
+    for (const l of cardsQuery.data?.labels ?? []) {
+      if (!map.has((l as LabelData).labelId)) {
+        map.set((l as LabelData).labelId, {
+          labelId: (l as LabelData).labelId,
+          name: l.name,
+          color: l.color,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [cardsQuery.data]);
+
   const filteredCards = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return cardsRaw.filter((card) => {
@@ -265,9 +370,21 @@ export default function KanbanBoardV2() {
         (currentUser?.id != null &&
           (assigneesByCard.get(card.id) ?? []).some((a) => a.userId === currentUser.id));
 
-      return matchesSearch && matchesMine;
+      const matchesAssignee =
+        selectedAssigneeIds.length === 0 ||
+        (assigneesByCard.get(card.id) ?? []).some((a) =>
+          selectedAssigneeIds.includes(String(a.userId)),
+        );
+
+      const matchesLabel =
+        selectedLabelIds.length === 0 ||
+        (labelsByCard.get(card.id) ?? []).some((l) =>
+          selectedLabelIds.includes(String(l.labelId)),
+        );
+
+      return matchesSearch && matchesMine && matchesAssignee && matchesLabel;
     });
-  }, [cardsRaw, assigneesByCard, labelsByCard, searchTerm, mineOnly, currentUser?.id]);
+  }, [cardsRaw, assigneesByCard, labelsByCard, searchTerm, mineOnly, currentUser?.id, selectedAssigneeIds, selectedLabelIds]);
 
   const cardsByStatus = useMemo(() => {
     const map: Record<GlobalStatus, CardWithBoard[]> = {
@@ -340,71 +457,189 @@ export default function KanbanBoardV2() {
   }
 
   const total = cardsRaw.length;
-  const todoCount = cardsByStatus.todo.length;
-  const inProgressCount = cardsByStatus.in_progress.length;
-  const doneCount = cardsByStatus.done.length;
   const highPriorityCount = cardsRaw.filter(
     (c) => c.priority === "high" || c.priority === "urgent",
   ).length;
 
+  const activeFiltersCount =
+    (mineOnly ? 1 : 0) +
+    (selectedAssigneeIds.length > 0 ? 1 : 0) +
+    (selectedLabelIds.length > 0 ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setMineOnly(false);
+    setSelectedAssigneeIds([]);
+    setSelectedLabelIds([]);
+  };
+
+  const toggleAssignee = (id: string, checked: boolean) => {
+    setSelectedAssigneeIds((prev) =>
+      checked ? [...prev, id] : prev.filter((v) => v !== id),
+    );
+  };
+
+  const toggleLabel = (id: string, checked: boolean) => {
+    setSelectedLabelIds((prev) =>
+      checked ? [...prev, id] : prev.filter((v) => v !== id),
+    );
+  };
+
   return (
     <DashboardLayout>
-      <div className="space-y-4">
-        {/* HEADER */}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/kanban")}>
+      <div className="flex h-[calc(100dvh-5.5rem)] md:h-[calc(100dvh-6.5rem)] flex-col">
+        {/* Header */}
+        <div className="flex items-center gap-2 pb-2 shrink-0">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/kanban")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <KanbanSquare className="h-6 w-6 text-primary" />
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">Kanban v2</h1>
-            <p className="text-sm text-muted-foreground">
-              Vista unificada cross-board. Arraste cards entre colunas pra mudar o status global.
-            </p>
+          <KanbanSquare className="h-5 w-5 text-primary" />
+          <h1 className="text-lg font-bold leading-none">Kanban</h1>
+
+          <div className="hidden sm:flex items-center gap-1.5 ml-1 text-xs text-muted-foreground">
+            <span className="font-medium">{total} cards</span>
+            {highPriorityCount > 0 && (
+              <>
+                <span>·</span>
+                <span className="font-medium text-orange-600">{highPriorityCount} urgentes</span>
+              </>
+            )}
           </div>
-          <Button size="sm" onClick={() => setNewCardOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
+
+          <div className="flex-1" />
+
+          <Button size="sm" className="h-8 text-xs" onClick={() => setNewCardOpen(true)}>
+            <Plus className="mr-1 h-3.5 w-3.5" />
             Novo card
           </Button>
         </div>
 
-        <NewCardDialog open={newCardOpen} onOpenChange={setNewCardOpen} />
-
-        {/* Controles: busca + atribuido a mim */}
-        <div className="flex flex-wrap gap-2">
-          <div className="relative min-w-[260px] flex-1">
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 pb-3 shrink-0">
+          <div className="relative w-56 lg:w-72">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por titulo, board, responsavel ou label"
-              className="h-9 pl-8 text-sm"
+              placeholder="Buscar cards..."
+              className="h-8 pl-8 text-xs"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchTerm("")}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
-          <Button
-            variant={mineOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setMineOnly((v) => !v)}
-            disabled={!currentUser?.id}
-            className="h-9 gap-1.5"
-          >
-            <UserCheck className="h-3.5 w-3.5" />
-            Atribuido a mim
-          </Button>
+
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Filter className="h-3.5 w-3.5" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground leading-none py-0.5">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[260px] p-0" align="start">
+              <div className="p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={mineOnly}
+                    onCheckedChange={(c) => setMineOnly(!!c)}
+                    disabled={!currentUser?.id}
+                  />
+                  <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Atribuido a mim</span>
+                </label>
+
+                {uniqueAssignees.length > 0 && (
+                  <div>
+                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Responsaveis
+                    </div>
+                    <div className="max-h-[120px] overflow-y-auto space-y-0.5">
+                      {uniqueAssignees.map((a) => (
+                        <label
+                          key={a.userId}
+                          className="flex items-center gap-2 rounded px-1.5 py-1 text-sm cursor-pointer hover:bg-muted"
+                        >
+                          <Checkbox
+                            checked={selectedAssigneeIds.includes(String(a.userId))}
+                            onCheckedChange={(c) => toggleAssignee(String(a.userId), !!c)}
+                          />
+                          <span className="truncate">{a.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {uniqueLabels.length > 0 && (
+                  <div>
+                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Labels
+                    </div>
+                    <div className="max-h-[120px] overflow-y-auto space-y-0.5">
+                      {uniqueLabels.map((l) => (
+                        <label
+                          key={l.labelId}
+                          className="flex items-center gap-2 rounded px-1.5 py-1 text-sm cursor-pointer hover:bg-muted"
+                        >
+                          <Checkbox
+                            checked={selectedLabelIds.includes(String(l.labelId))}
+                            onCheckedChange={(c) => toggleLabel(String(l.labelId), !!c)}
+                          />
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded"
+                            style={{ backgroundColor: l.color }}
+                          />
+                          <span className="truncate">{l.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeFiltersCount > 0 && (
+                  <div className="border-t pt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs h-7"
+                      onClick={() => {
+                        setMineOnly(false);
+                        setSelectedAssigneeIds([]);
+                        setSelectedLabelIds([]);
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {(activeFiltersCount > 0 || searchTerm.trim()) && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearAllFilters}>
+              <X className="h-3 w-3" />
+              Limpar tudo
+            </Button>
+          )}
         </div>
 
-        {/* Stats */}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
-          <StatCard label="Total" value={total} />
-          <StatCard label="A Fazer" value={todoCount} />
-          <StatCard label="Em Progresso" value={inProgressCount} />
-          <StatCard label="Concluido" value={doneCount} />
-          <StatCard label="Alta Prioridade" value={highPriorityCount} tone="warning" />
-        </div>
+        <NewCardDialog open={newCardOpen} onOpenChange={setNewCardOpen} />
 
         {/* Board */}
         {cardsQuery.isLoading ? (
-          <div className="flex justify-center py-16">
+          <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
@@ -414,7 +649,7 @@ export default function KanbanBoardV2() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3 flex-1 min-h-0">
               {GLOBAL_STATUS_COLUMNS.map((col) => {
                 const colCards = cardsByStatus[col.value];
                 return (
@@ -430,7 +665,7 @@ export default function KanbanBoardV2() {
                       strategy={verticalListSortingStrategy}
                     >
                       {colCards.length === 0 ? (
-                        <div className="rounded-md border border-dashed py-6 text-center text-xs text-muted-foreground">
+                        <div className="flex flex-1 items-center justify-center rounded border border-dashed py-8 text-xs text-muted-foreground">
                           Arraste um card aqui
                         </div>
                       ) : (
@@ -442,6 +677,20 @@ export default function KanbanBoardV2() {
                             labels={labelsByCard.get(card.id) ?? []}
                             checklist={checklistByCard.get(card.id)}
                             canEdit
+                            onOpenDetail={() => setDetailCard(card)}
+                            onArchive={() => {
+                              if (!confirm("Arquivar este card?")) return;
+                              archiveCard.mutate({ id: card.id, boardId: card.boardId });
+                            }}
+                            onDelete={() => {
+                              if (
+                                !confirm(
+                                  `Excluir "${card.title}" permanentemente?\n\nComentarios, anexos, checklist e responsaveis serao removidos.\nEsta acao nao pode ser desfeita.`,
+                                )
+                              )
+                                return;
+                              deleteCardHard.mutate({ id: card.id, boardId: card.boardId });
+                            }}
                           />
                         ))
                       )}
@@ -453,7 +702,7 @@ export default function KanbanBoardV2() {
 
             <DragOverlay>
               {activeCard && (
-                <div className="opacity-90">
+                <div className="opacity-90 rotate-2">
                   <KanbanCardV2
                     card={activeCard}
                     slaDays={null}
@@ -479,6 +728,19 @@ export default function KanbanBoardV2() {
             </DragOverlay>
           </DndContext>
         )}
+
+        <CardDetailDrawer
+          cardId={detailCard?.id ?? null}
+          boardId={detailCard?.boardId ?? 0}
+          open={detailCard !== null}
+          onClose={() => {
+            setDetailCard(null);
+            utils.kanban.cards.listAcrossUserBoards.invalidate();
+          }}
+          canEdit
+          boardMembers={(boardMembersQuery.data ?? []) as BoardMemberData[]}
+          boardLabels={(boardLabelsQuery.data ?? []) as BoardLabelData[]}
+        />
       </div>
     </DashboardLayout>
   );

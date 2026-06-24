@@ -12,6 +12,9 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }).default("jwt"),
   role: mysqlEnum("role", ["admin", "gestor", "colaborador", "user"]).default("colaborador").notNull(),
 
+  resetToken: varchar("resetToken", { length: 128 }),
+  resetTokenExpiresAt: timestamp("resetTokenExpiresAt"),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

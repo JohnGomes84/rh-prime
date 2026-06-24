@@ -34,6 +34,7 @@ const ProfessionalAssessment = lazy(() => import("./pages/ProfessionalAssessment
 const Audit = lazy(() => import("./pages/Audit"));
 const PeopleAnalytics = lazy(() => import("./pages/PeopleAnalytics"));
 const Login = lazy(() => import("./pages/Login").then(m => ({ default: (m as any).default || (m as any).Login || (() => null) })));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const UserManagement = lazy(() => import("./pages/UserManagement").then(m => ({ default: (m as any).default || (m as any).UserManagement || (() => null) })));
 const UserHierarchy = lazy(() => import("./pages/UserHierarchy").then(m => ({ default: (m as any).default || (m as any).UserHierarchy || (() => null) })));
 const SecuritySettings = lazy(() => import("./pages/SecuritySettings").then(m => ({ default: (m as any).default || (m as any).SecuritySettings || (() => null) })));
@@ -119,6 +120,7 @@ function Router() {
         <Route path="/auditoria" component={guarded(Audit, "admin")} />
         <Route path="/analytics" component={guarded(PeopleAnalytics, "manager")} />
         <Route path="/login" component={Login} />
+        <Route path="/reset-password" component={ResetPassword} />
         <Route path="/usuarios" component={guarded(UserManagement, "admin")} />
         <Route path="/hierarquia" component={guarded(UserHierarchy, "admin")} />
         <Route path="/seguranca-config" component={guarded(SecuritySettings, "admin")} />

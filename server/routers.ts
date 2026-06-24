@@ -30,7 +30,7 @@ import { complianceRouter as compliancePortariaRouter } from './routers/complian
 import { kanbanRouter } from './routers/kanban.js';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters.js";
-import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError } from "./modules/auth/auth-service.js";
+import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError, forgotPassword, resetPassword } from "./modules/auth/auth-service.js";
 import { validatePasswordStrength } from "./auth/jwt-service.js";
 import { createDocumentRecord } from "./services/documents.service.js";
 
@@ -160,6 +160,29 @@ export const appRouter = router({
         }
         setSessionCookie(ctx, result.token);
         return result;
+      }),
+    forgotPassword: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        await forgotPassword(input.email);
+        return { success: true };
+      }),
+    resetPassword: publicProcedure
+      .input(
+        z.object({
+          token: z.string().min(1),
+          password: z.string().min(8),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const ok = await resetPassword(input.token, input.password);
+        if (!ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Link expirado ou inválido. Solicite um novo.",
+          });
+        }
+        return { success: true };
       }),
   }),
 

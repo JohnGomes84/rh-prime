@@ -1,4 +1,4 @@
-import { eq, desc, asc, and, gte, lte, sql, like, or, count, sum } from "drizzle-orm";
+import { eq, desc, asc, and, gte, gt, lte, sql, like, or, count, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
 import {
@@ -2579,6 +2579,34 @@ export async function deleteUser(id: number) {
     
     return db.delete(users).where(eq(users.id, id));
   }, "deleteUser");
+}
+
+export async function setResetToken(userId: number, token: string, expiresAt: Date) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.update(users).set({ resetToken: token, resetTokenExpiresAt: expiresAt } as any).where(eq(users.id, userId));
+  }, "setResetToken");
+}
+
+export async function getUserByResetToken(token: string) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    const result = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.resetToken, token), gt(users.resetTokenExpiresAt, new Date())));
+    return result[0] || null;
+  }, "getUserByResetToken");
+}
+
+export async function clearResetToken(userId: number) {
+  return withDBRetry(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+    await db.update(users).set({ resetToken: null, resetTokenExpiresAt: null } as any).where(eq(users.id, userId));
+  }, "clearResetToken");
 }
 
 export async function listUsers() {

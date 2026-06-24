@@ -12,6 +12,8 @@ export type LocalUserRecord = {
   name: string | null;
   loginMethod: string | null;
   role: LocalUserRole;
+  resetToken: string | null;
+  resetTokenExpiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -44,6 +46,8 @@ function fromSerializable(
 ): LocalUserRecord {
   return {
     ...user,
+    resetToken: user.resetToken ?? null,
+    resetTokenExpiresAt: user.resetTokenExpiresAt ? new Date(user.resetTokenExpiresAt as unknown as string) : null,
     createdAt: new Date(user.createdAt),
     updatedAt: new Date(user.updatedAt),
   };
@@ -91,6 +95,8 @@ async function ensureSeedAdmin() {
     name: "Administrador Local",
     loginMethod: "jwt",
     role: "admin",
+    resetToken: null,
+    resetTokenExpiresAt: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -142,6 +148,8 @@ export const localDevUsers = {
       name: data.name ?? null,
       loginMethod: data.loginMethod ?? "jwt",
       role: (data.role as LocalUserRole | undefined) ?? "colaborador",
+      resetToken: null,
+      resetTokenExpiresAt: null,
       createdAt: now,
       updatedAt: now,
     };

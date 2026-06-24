@@ -102,6 +102,8 @@ export const memoryDb = {
       role: data.role ?? "colaborador",
       loginMethod: data.loginMethod ?? "jwt",
       openId: data.openId ?? null,
+      resetToken: null,
+      resetTokenExpiresAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

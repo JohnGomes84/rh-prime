@@ -1,11 +1,14 @@
+import crypto from 'node:crypto';
 import * as db from '../../db.js';
 import {
   hashPassword,
   verifyPassword,
   createToken,
   verifyToken as verifyJwtToken,
+  validatePasswordStrength,
   type UserRole,
 } from '../../auth/jwt-service.js';
+import { sendEmail } from '../../integrations/email-service.js';
 
 export interface AuthPayload {
   id: number;
@@ -24,7 +27,9 @@ export interface RegisterRequest {
   name: string;
 }
 
-const ALLOWED_REGISTER_EMAILS = new Set(
+const ALLOWED_DOMAIN = "mlservicoseco.com.br";
+
+const ADMIN_EMAILS = new Set(
   (process.env.ALLOWED_REGISTER_EMAILS ??
     "adm@mlservicoseco.com.br,mayk.lopes@mlservicoseco.com.br,ediani@mlservicoseco.com.br,operacao@mlservicoseco.com.br,comercial@mlservicoseco.com.br,rh@mlservicoseco.com.br")
     .split(",")
@@ -41,7 +46,8 @@ export class RegisterEmailNotAllowedError extends Error {
 
 export function isEmailAllowedToRegister(email: string): boolean {
   if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") return true;
-  return ALLOWED_REGISTER_EMAILS.has(email.trim().toLowerCase());
+  const domain = email.trim().toLowerCase().split("@")[1];
+  return domain === ALLOWED_DOMAIN;
 }
 
 export { hashPassword, verifyPassword as comparePassword };
@@ -88,7 +94,7 @@ export async function register(request: RegisterRequest): Promise<{ token: strin
     return { token: generateToken(payload), user: payload };
   }
 
-  const role = ALLOWED_REGISTER_EMAILS.has(request.email.trim().toLowerCase())
+  const role = ADMIN_EMAILS.has(request.email.trim().toLowerCase())
     ? 'admin'
     : 'colaborador';
   const newUser = await db.createUser({
@@ -129,5 +135,48 @@ export async function changePassword(userId: number, oldPassword: string, newPas
 
   const newHash = await hashPassword(newPassword);
   await db.updateUser(userId, { passwordHash: newHash });
+  return true;
+}
+
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+export async function forgotPassword(email: string): Promise<void> {
+  const user = await db.getUser(email);
+  if (!user) return; // silent — don't reveal whether email exists
+
+  const token = crypto.randomBytes(48).toString("base64url");
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+
+  await db.setResetToken(user.id, token, expiresAt);
+
+  const appUrl = process.env.APP_URL ?? "https://public-self-eight.vercel.app";
+  const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+  await sendEmail({
+    to: user.email,
+    subject: "RH Prime — Redefinição de senha",
+    html: `
+      <h2>Redefinição de senha</h2>
+      <p>Olá ${user.name ? user.name : ""},</p>
+      <p>Recebemos uma solicitação para redefinir sua senha.</p>
+      <p><a href="${resetUrl}" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Redefinir minha senha</a></p>
+      <p style="font-size:13px;color:#666;">Este link expira em 1 hora. Se você não solicitou, ignore este email.</p>
+      <p>Atenciosamente,<br>RH Prime</p>
+    `,
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<boolean> {
+  const strength = validatePasswordStrength(newPassword);
+  if (!strength.valid) {
+    throw new Error(strength.errors.join("; "));
+  }
+
+  const user = await db.getUserByResetToken(token);
+  if (!user) return false;
+
+  const newHash = await hashPassword(newPassword);
+  await db.updateUser(user.id, { passwordHash: newHash });
+  await db.clearResetToken(user.id);
   return true;
 }

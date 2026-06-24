@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import type { Server } from "http";
 import helmet from "helmet";
 import cors from "cors";
@@ -86,7 +86,7 @@ export async function createConfiguredApp(
     max: ENV.rateLimitMax,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: req => req.path.startsWith("/api/ws"),
+    skip: (req: Request) => req.path.startsWith("/api/ws"),
   });
 
   const authLimiter = rateLimit({
@@ -102,7 +102,7 @@ export async function createConfiguredApp(
   app.post(
     "/api/upload-evidence",
     express.raw({ type: () => true, limit: UPLOAD_MAX_BYTES }),
-    async (req, res, next) => {
+    async (req: Request, res: Response, next: NextFunction) => {
       try {
         const user = await sdk.authenticateRequest(req).catch(() => null);
         if (!user) return res.status(401).json({ error: "unauthorized" });
@@ -148,7 +148,7 @@ export async function createConfiguredApp(
   app.post(
     "/api/upload-attachment",
     express.raw({ type: () => true, limit: UPLOAD_MAX_BYTES }),
-    async (req, res, next) => {
+    async (req: Request, res: Response, next: NextFunction) => {
       try {
         const user = await sdk.authenticateRequest(req).catch(() => null);
         if (!user) return res.status(401).json({ error: "unauthorized" });
@@ -198,7 +198,7 @@ export async function createConfiguredApp(
 
   // Proxy: stream do blob private pra client autenticado.
   // Aceita ?url=<canonical blob url>.
-  app.get("/api/blob/proxy", async (req, res, next) => {
+  app.get("/api/blob/proxy", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = await sdk.authenticateRequest(req).catch(() => null);
       if (!user) return res.status(401).json({ error: "unauthorized" });
@@ -270,7 +270,7 @@ export async function createConfiguredApp(
     })
   );
 
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", timestamp: Date.now() });
   });
 

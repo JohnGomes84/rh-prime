@@ -901,6 +901,7 @@ export async function deleteBoardHard(id: number): Promise<void> {
 }
 
 export async function listCardsAcrossUserBoards(userId: number, userRole?: string) {
+  const isPrivileged = userRole === "admin" || userRole === "gestor";
   const boards = await listBoardsForUser(userId, userRole);
   const boardIds = boards.map((b) => b.id);
   if (boardIds.length === 0) {
@@ -916,18 +917,43 @@ export async function listCardsAcrossUserBoards(userId: number, userRole?: strin
   }
   const db = await requireDb();
 
-  const cardRows = await db
-    .select({
-      card: kanbanCards,
-      boardName: kanbanBoards.name,
-      boardColor: kanbanBoards.color,
-      listName: kanbanLists.name,
-    })
-    .from(kanbanCards)
-    .innerJoin(kanbanBoards, eq(kanbanBoards.id, kanbanCards.boardId))
-    .innerJoin(kanbanLists, eq(kanbanLists.id, kanbanCards.listId))
-    .where(and(inArray(kanbanCards.boardId, boardIds), eq(kanbanCards.archived, false)))
-    .orderBy(asc(kanbanCards.dueDate));
+  let cardRows;
+  if (isPrivileged) {
+    // Admin/gestor sees all cards on their boards
+    cardRows = await db
+      .select({
+        card: kanbanCards,
+        boardName: kanbanBoards.name,
+        boardColor: kanbanBoards.color,
+        listName: kanbanLists.name,
+      })
+      .from(kanbanCards)
+      .innerJoin(kanbanBoards, eq(kanbanBoards.id, kanbanCards.boardId))
+      .innerJoin(kanbanLists, eq(kanbanLists.id, kanbanCards.listId))
+      .where(and(inArray(kanbanCards.boardId, boardIds), eq(kanbanCards.archived, false)))
+      .orderBy(asc(kanbanCards.dueDate));
+  } else {
+    // Colaborador only sees cards assigned to them
+    cardRows = await db
+      .selectDistinct({
+        card: kanbanCards,
+        boardName: kanbanBoards.name,
+        boardColor: kanbanBoards.color,
+        listName: kanbanLists.name,
+      })
+      .from(kanbanCards)
+      .innerJoin(kanbanBoards, eq(kanbanBoards.id, kanbanCards.boardId))
+      .innerJoin(kanbanLists, eq(kanbanLists.id, kanbanCards.listId))
+      .innerJoin(kanbanCardAssignees, eq(kanbanCardAssignees.cardId, kanbanCards.id))
+      .where(
+        and(
+          inArray(kanbanCards.boardId, boardIds),
+          eq(kanbanCards.archived, false),
+          eq(kanbanCardAssignees.userId, userId),
+        ),
+      )
+      .orderBy(asc(kanbanCards.dueDate));
+  }
 
   const cards = cardRows.map((r) => ({
     ...r.card,

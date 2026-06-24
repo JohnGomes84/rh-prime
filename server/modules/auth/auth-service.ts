@@ -140,17 +140,22 @@ export async function changePassword(userId: number, oldPassword: string, newPas
 
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 export async function forgotPassword(email: string): Promise<void> {
   const user = await db.getUser(email);
-  if (!user) return; // silent — don't reveal whether email exists
+  if (!user) return;
 
-  const token = crypto.randomBytes(48).toString("base64url");
+  const rawToken = crypto.randomBytes(48).toString("base64url");
+  const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
 
-  await db.setResetToken(user.id, token, expiresAt);
+  await db.setResetToken(user.id, tokenHash, expiresAt);
 
   const appUrl = process.env.APP_URL ?? "https://public-self-eight.vercel.app";
-  const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
 
   await sendEmail({
     to: user.email,
@@ -172,7 +177,8 @@ export async function resetPassword(token: string, newPassword: string): Promise
     throw new Error(strength.errors.join("; "));
   }
 
-  const user = await db.getUserByResetToken(token);
+  const tokenHash = hashToken(token);
+  const user = await db.getUserByResetToken(tokenHash);
   if (!user) return false;
 
   const newHash = await hashPassword(newPassword);

@@ -97,7 +97,7 @@ export async function createConfiguredApp(
   });
 
   app.use("/api/", apiLimiter);
-  app.use(/\/api\/trpc\/auth\.(login|register)/, authLimiter);
+  app.use(/\/api\/trpc\/auth\.(login|register|forgotPassword|resetPassword)/, authLimiter);
 
   app.post(
     "/api/upload-evidence",

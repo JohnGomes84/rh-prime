@@ -50,6 +50,8 @@ import {
   ClipboardCheck,
   TimerOff,
   Kanban,
+  Network,
+  UserCog,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -103,6 +105,9 @@ const menuItems: MenuItem[] = [
   // Sistema
   { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Bell, label: "Notificações", path: "/notificacoes", section: "Sistema" },
+  { icon: UserCog, label: "Usuários", path: "/usuarios", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Network, label: "Hierarquia", path: "/hierarquia", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Shield, label: "Segurança", path: "/seguranca-config", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Settings, label: "Configurações", path: "/configuracoes", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Shield, label: "Privacidade (LGPD)", path: "/privacidade", section: "Sistema" },
 ];

@@ -123,3 +123,10 @@ backups/
 *.sql.gz
 .vercel
 .env*
+.openclaude/
+.playwright-mcp/
+storage/
+*.png
+scripts/apply-hostinger.mjs
+scripts/apply-kanban-missing.mjs
+scripts/apply-missing-columns.mjs

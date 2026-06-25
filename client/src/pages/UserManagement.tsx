@@ -28,18 +28,51 @@ import {
   Users,
   Mail,
   Search,
+  Clock,
+  KeyRound,
+  Link2,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type UserRole = "admin" | "gestor" | "colaborador";
+type UserStatus = "active" | "inactive";
+
+type AccessUser = {
+  id: number;
+  email: string;
+  name: string | null;
+  role: string;
+  status?: UserStatus;
+  createdAt?: string | Date;
+  lastLoginAt?: string | Date | null;
+  linkedEmployeeId?: number | null;
+  linkedEmployeeName?: string | null;
+};
 
 const ROLE_CONFIG: Record<UserRole, { label: string; color: string; icon: typeof Shield }> = {
   admin: { label: "Administrador", color: "bg-red-100 text-red-700", icon: ShieldCheck },
   gestor: { label: "Gestor", color: "bg-blue-100 text-blue-700", icon: Shield },
   colaborador: { label: "Colaborador", color: "bg-slate-100 text-slate-700", icon: User },
 };
+
+const STATUS_CONFIG: Record<UserStatus, { label: string; color: string }> = {
+  active: { label: "Ativo", color: "bg-emerald-100 text-emerald-700" },
+  inactive: { label: "Inativo", color: "bg-zinc-100 text-zinc-700" },
+};
+
+function asUserRole(value: string | null | undefined): UserRole {
+  return value === "admin" || value === "gestor" || value === "colaborador"
+    ? value
+    : "colaborador";
+}
+
+function asUserStatus(value: string | null | undefined): UserStatus {
+  return value === "inactive" ? "inactive" : "active";
+}
 
 function getInitials(name: string | null, email: string): string {
   if (name) {
@@ -50,10 +83,23 @@ function getInitials(name: string | null, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
+function formatDateTime(value: string | Date | null | undefined): string {
+  if (!value) return "Nunca";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Nunca";
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function UserManagement() {
   const [search, setSearch] = useState("");
   const [newOpen, setNewOpen] = useState(false);
-  const [editUser, setEditUser] = useState<{ id: number; name: string; role: UserRole } | null>(null);
+  const [editUser, setEditUser] = useState<AccessUser | null>(null);
 
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -62,10 +108,13 @@ export default function UserManagement() {
 
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<UserRole>("colaborador");
+  const [resetPassword, setResetPassword] = useState("");
+  const [linkEmployeeId, setLinkEmployeeId] = useState("");
 
   const utils = trpc.useUtils();
 
   const usersQuery = trpc.users.listUsers.useQuery();
+  const employeesQuery = trpc.employees.list.useQuery({ limit: 1000 });
   const createUser = trpc.users.register.useMutation({
     onSuccess: () => {
       utils.users.listUsers.invalidate();
@@ -88,28 +137,58 @@ export default function UserManagement() {
     onError: (e) => toast.error(e.message),
   });
 
-  const users = usersQuery.data ?? [];
+  const setUserStatus = trpc.users.setUserStatus.useMutation({
+    onSuccess: () => {
+      utils.users.listUsers.invalidate();
+      toast.success("Status atualizado");
+      setEditUser(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const resetUserPassword = trpc.users.resetUserPassword.useMutation({
+    onSuccess: () => {
+      toast.success("Senha redefinida");
+      setResetPassword("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const linkEmployee = trpc.users.linkEmployee.useMutation({
+    onSuccess: () => {
+      utils.users.listUsers.invalidate();
+      toast.success("Funcionário vinculado");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const users = (usersQuery.data ?? []) as AccessUser[];
+  const employees = ((employeesQuery.data as any)?.data ?? []) as Array<{ id: number; fullName: string }>;
   const term = search.trim().toLowerCase();
   const filtered = term
     ? users.filter(
         (u) =>
           (u.name ?? "").toLowerCase().includes(term) ||
           u.email.toLowerCase().includes(term) ||
-          (ROLE_CONFIG[u.role as UserRole]?.label ?? "").toLowerCase().includes(term),
+          ROLE_CONFIG[asUserRole(u.role)].label.toLowerCase().includes(term) ||
+          STATUS_CONFIG[asUserStatus(u.status)].label.toLowerCase().includes(term),
       )
     : users;
 
   const stats = {
     total: users.length,
-    admin: users.filter((u) => u.role === "admin").length,
-    gestor: users.filter((u) => u.role === "gestor").length,
-    colaborador: users.filter((u) => u.role === "colaborador").length,
+    active: users.filter((u) => asUserStatus(u.status) === "active").length,
+    admin: users.filter((u) => asUserRole(u.role) === "admin").length,
+    gestor: users.filter((u) => asUserRole(u.role) === "gestor").length,
+    colaborador: users.filter((u) => asUserRole(u.role) === "colaborador").length,
   };
 
-  function openEdit(u: (typeof users)[0]) {
-    setEditUser({ id: u.id, name: u.name ?? "", role: u.role as UserRole });
+  function openEdit(u: AccessUser) {
+    setEditUser(u);
     setEditName(u.name ?? "");
-    setEditRole(u.role as UserRole);
+    setEditRole(asUserRole(u.role));
+    setResetPassword("");
+    setLinkEmployeeId(u.linkedEmployeeId ? String(u.linkedEmployeeId) : "");
   }
 
   if (usersQuery.isLoading) {
@@ -145,8 +224,8 @@ export default function UserManagement() {
                   <Users className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-2xl font-bold">{stats.active}</p>
+                  <p className="text-xs text-muted-foreground">Ativos</p>
                 </div>
               </div>
             </CardContent>
@@ -193,7 +272,8 @@ export default function UserManagement() {
             ) : (
               <div className="divide-y">
                 {filtered.map((u) => {
-                  const rc = ROLE_CONFIG[u.role as UserRole] ?? ROLE_CONFIG.colaborador;
+                  const rc = ROLE_CONFIG[asUserRole(u.role)];
+                  const sc = STATUS_CONFIG[asUserStatus(u.status)];
                   return (
                     <div
                       key={u.id}
@@ -209,9 +289,22 @@ export default function UserManagement() {
                           <Mail className="h-3 w-3" />
                           <span className="truncate">{u.email}</span>
                         </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Último login: {formatDateTime(u.lastLoginAt)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Link2 className="h-3 w-3" />
+                            {u.linkedEmployeeName ?? "Sem funcionário vinculado"}
+                          </span>
+                        </div>
                       </div>
                       <Badge variant="secondary" className={cn("text-xs", rc.color)}>
                         {rc.label}
+                      </Badge>
+                      <Badge variant="secondary" className={cn("text-xs", sc.color)}>
+                        {sc.label}
                       </Badge>
                     </div>
                   );
@@ -331,6 +424,124 @@ export default function UserManagement() {
                   <SelectItem value="colaborador">Colaborador</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Status da conta</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Usuarios inativos nao conseguem entrar nem redefinir senha.
+                  </p>
+                </div>
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "text-xs",
+                    STATUS_CONFIG[asUserStatus(editUser?.status)].color,
+                  )}
+                >
+                  {STATUS_CONFIG[asUserStatus(editUser?.status)].label}
+                </Badge>
+              </div>
+              <Button
+                className="mt-3 w-full"
+                variant={asUserStatus(editUser?.status) === "active" ? "destructive" : "outline"}
+                disabled={!editUser || setUserStatus.isPending}
+                onClick={() =>
+                  editUser &&
+                  setUserStatus.mutate({
+                    userId: editUser.id,
+                    status: asUserStatus(editUser.status) === "active" ? "inactive" : "active",
+                  })
+                }
+              >
+                {setUserStatus.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : asUserStatus(editUser?.status) === "active" ? (
+                  <UserX className="h-4 w-4 mr-2" />
+                ) : (
+                  <UserCheck className="h-4 w-4 mr-2" />
+                )}
+                {asUserStatus(editUser?.status) === "active" ? "Desativar usuario" : "Reativar usuario"}
+              </Button>
+            </div>
+            <div>
+              <Label>Funcionário vinculado</Label>
+              {employeesQuery.error && (
+                <p className="mb-2 text-xs text-red-600">
+                  Falha ao carregar funcionários: {employeesQuery.error.message}
+                </p>
+              )}
+              <Select value={linkEmployeeId} onValueChange={setLinkEmployeeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um funcionário" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.length === 0 ? (
+                    <SelectItem value="__empty" disabled>
+                      Nenhum funcionário disponível
+                    </SelectItem>
+                  ) : (
+                    employees.map((employee) => (
+                      <SelectItem key={employee.id} value={String(employee.id)}>
+                        {employee.fullName}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <Button
+                className="mt-2 w-full"
+                variant="outline"
+                disabled={
+                  !editUser ||
+                  !linkEmployeeId ||
+                  linkEmployee.isPending ||
+                  String(editUser?.linkedEmployeeId ?? "") === linkEmployeeId
+                }
+                onClick={() =>
+                  editUser &&
+                  linkEmployee.mutate({
+                    userId: editUser.id,
+                    employeeId: Number(linkEmployeeId),
+                  })
+                }
+              >
+                {linkEmployee.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Link2 className="h-4 w-4 mr-2" />
+                )}
+                Vincular funcionário
+              </Button>
+            </div>
+            <div>
+              <Label>Nova senha</Label>
+              <Input
+                type="password"
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                placeholder="Senha temporária forte"
+              />
+              <Button
+                className="mt-2 w-full"
+                variant="outline"
+                disabled={!editUser || !resetPassword || resetUserPassword.isPending}
+                onClick={() =>
+                  editUser &&
+                  resetUserPassword.mutate({
+                    userId: editUser.id,
+                    password: resetPassword,
+                  })
+                }
+              >
+                {resetUserPassword.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4 mr-2" />
+                )}
+                Redefinir senha
+              </Button>
             </div>
           </div>
           <DialogFooter>

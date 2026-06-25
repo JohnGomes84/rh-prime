@@ -114,6 +114,24 @@ describe('Auth Service', () => {
 
       expect(result).toBeNull();
     });
+
+    it('deve rejeitar login de usuario inativo', async () => {
+      const email = 'inactive@example.com';
+      const password = 'TestPassword123!';
+
+      const registerResult = await register({
+        email,
+        password,
+        name: 'Inactive User',
+      });
+
+      expect(registerResult).toBeDefined();
+      await updateUser(registerResult!.user.id, { status: 'inactive' } as any);
+
+      const result = await login({ email, password });
+
+      expect(result).toBeNull();
+    });
   });
 
   describe('Register', () => {

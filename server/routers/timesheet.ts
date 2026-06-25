@@ -6,6 +6,8 @@ import { withDBRetry } from "../utils/retry.js";
 import { evaluateClockRecord, getActiveScheduleRule } from "../utils/journey-engine.js";
 import { resolveEmployeeIdInScope } from "../utils/scope.js";
 import { evaluateGeofence } from "../utils/geofence.js";
+import { storagePut } from "../storage.js";
+import { nanoid } from "nanoid";
 
 async function loadGeofenceConfig(): Promise<{ lat: number; lng: number; radiusM: number } | null> {
   const settings = (await db.listSettings()) as Array<{ key: string; value: string }>;
@@ -29,6 +31,21 @@ async function resolveEmployeeId(
 export const timesheetRouter = router({
   // CONTROLE DE PONTO
   // ============================================================
+
+  uploadSelfie: protectedProcedure
+    .input(z.object({
+      employeeId: z.number().int().positive().optional(),
+      imageBase64: z.string().min(1).max(1_500_000),
+      contentType: z.enum(["image/jpeg", "image/png"]).default("image/jpeg"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const employeeId = await resolveEmployeeId(input.employeeId, ctx.user);
+      const cleaned = input.imageBase64.replace(/^data:image\/(jpeg|png);base64,/, "");
+      const buffer = Buffer.from(cleaned, "base64");
+      const extension = input.contentType === "image/png" ? "png" : "jpg";
+      const key = `timesheet-selfies/${employeeId}/${new Date().toISOString().slice(0, 10)}/${nanoid()}.${extension}`;
+      return storagePut(key, buffer, input.contentType);
+    }),
 
   // Registrar entrada
   clockIn: protectedProcedure

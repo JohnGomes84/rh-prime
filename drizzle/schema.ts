@@ -11,6 +11,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   loginMethod: varchar("loginMethod", { length: 64 }).default("jwt"),
   role: mysqlEnum("role", ["admin", "gestor", "colaborador", "user"]).default("colaborador").notNull(),
+  status: mysqlEnum("status", ["active", "inactive"]).default("active").notNull(),
 
   resetToken: varchar("resetToken", { length: 128 }),
   resetTokenExpiresAt: timestamp("resetTokenExpiresAt"),
@@ -1174,4 +1175,4 @@ export type InsertReadAuditLog = typeof readAuditLogs.$inferInsert;
 // ============================================================
 // KANBAN (boards/lists/cards/labels/members) — fase 8
 // ============================================================
-export * from "./schema-kanban";
+export * from "./schema-kanban.js";

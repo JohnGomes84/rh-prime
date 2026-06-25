@@ -233,10 +233,10 @@ export const appRouter = router({
       .input(z.object({
         search: z.string().optional(),
         page: z.number().min(1).default(1).optional(),
-        limit: z.number().min(1).max(100).default(20).optional(),
+        limit: z.number().min(1).max(2000).default(20).optional(),
       }).optional())
       .query(async ({ input, ctx }) => {
-        const { applyEmployeeMaskList } = await import('./utils/data-masking');
+        const { applyEmployeeMaskList } = await import('./utils/data-masking.js');
         const employees = await db.listEmployees(input?.search);
         const page = input?.page || 1;
         const limit = input?.limit || 20;
@@ -252,8 +252,8 @@ export const appRouter = router({
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => {
-        const { applyEmployeeMask } = await import('./utils/data-masking');
-        const { assertEmployeeInScope } = await import('./utils/scope');
+        const { applyEmployeeMask } = await import('./utils/data-masking.js');
+        const { assertEmployeeInScope } = await import('./utils/scope.js');
         if (ctx.user) {
           await assertEmployeeInScope(ctx.user as any, input.id);
         }
@@ -279,7 +279,7 @@ export const appRouter = router({
           viewerEmployeeId: viewerEmpId,
         });
       }),
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         fullName: z.string().min(1),
         socialName: z.string().optional(),
@@ -372,7 +372,7 @@ export const appRouter = router({
     managerHistory: protectedProcedure
       .input(z.object({ employeeId: z.number().int().positive() }))
       .query(async ({ input, ctx }) => {
-        const { assertEmployeeInScope } = await import('./utils/scope');
+        const { assertEmployeeInScope } = await import('./utils/scope.js');
         if (ctx.user) await assertEmployeeInScope(ctx.user as any, input.employeeId);
         return db.listEmployeeManagerHistory(input.employeeId);
       }),
@@ -662,7 +662,7 @@ export const appRouter = router({
       .input(z.object({ employeeId: z.number().optional() }).optional())
       .query(async ({ input, ctx }) => {
         if (input?.employeeId && ctx.user) {
-          const { assertEmployeeInScope } = await import('./utils/scope');
+          const { assertEmployeeInScope } = await import('./utils/scope.js');
           await assertEmployeeInScope(ctx.user as any, input.employeeId);
         }
         return db.listVacations(input?.employeeId);
@@ -1235,7 +1235,7 @@ export const appRouter = router({
     importYear: adminProcedure
       .input(z.object({ year: z.number().int().min(1900).max(2100) }))
       .mutation(async ({ input }) => {
-        const { listHolidays: fetchHolidays } = await import('./integrations/brasil-api');
+        const { listHolidays: fetchHolidays } = await import('./integrations/brasil-api.js');
         const remote = await fetchHolidays(input.year);
         const existing = await db.listHolidays();
         const existingDates = new Set(
@@ -1419,21 +1419,21 @@ export const appRouter = router({
     count: protectedProcedure
       .input(z.object({ startDate: z.string(), endDate: z.string() }))
       .query(async ({ input }) => {
-        const { countBusinessDays } = await import("./utils/business-days");
+        const { countBusinessDays } = await import("./utils/business-days.js");
         const days = await countBusinessDays(input.startDate, input.endDate);
         return { days };
       }),
     add: protectedProcedure
       .input(z.object({ startDate: z.string(), businessDays: z.number().int() }))
       .query(async ({ input }) => {
-        const { addBusinessDays } = await import("./utils/business-days");
+        const { addBusinessDays } = await import("./utils/business-days.js");
         const result = await addBusinessDays(input.startDate, input.businessDays);
         return { date: result.toISOString().slice(0, 10) };
       }),
     isBusinessDay: protectedProcedure
       .input(z.object({ date: z.string() }))
       .query(async ({ input }) => {
-        const { isBusinessDay } = await import("./utils/business-days");
+        const { isBusinessDay } = await import("./utils/business-days.js");
         return { isBusinessDay: await isBusinessDay(input.date) };
       }),
   }),

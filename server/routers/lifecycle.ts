@@ -379,7 +379,7 @@ export const lifecycleRouter = router({
       .input(z.object({ employeeId: z.number().int().positive() }))
       .query(async ({ input, ctx }) => {
         if (ctx.user) {
-          const { assertEmployeeInScope } = await import("../utils/scope");
+          const { assertEmployeeInScope } = await import("../utils/scope.js");
           await assertEmployeeInScope(ctx.user as any, input.employeeId);
         }
         return db.listEmployeeMovements(input.employeeId);

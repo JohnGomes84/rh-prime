@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc.js";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc.js";
 import { validateCPF, validateCNPJ, fetchAddressByCEP } from "../integrations/cpf-validator.js";
 import { sendEmail } from "../integrations/email-service.js";
 import { registerWebhook, triggerWebhook, unregisterWebhook, listWebhooks } from "../integrations/webhooks.js";
@@ -31,7 +31,7 @@ export const integrationsRouter = router({
     }),
 
   // Email Service
-  sendEmail: protectedProcedure
+  sendEmail: adminProcedure
     .input(z.object({
       to: z.string().email(),
       subject: z.string(),
@@ -47,7 +47,7 @@ export const integrationsRouter = router({
     }),
 
   // Webhook Management
-  registerWebhook: protectedProcedure
+  registerWebhook: adminProcedure
     .input(z.object({
       url: z.string().url(),
       event: z.enum([
@@ -68,14 +68,14 @@ export const integrationsRouter = router({
       return webhook;
     }),
 
-  unregisterWebhook: protectedProcedure
+  unregisterWebhook: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const success = unregisterWebhook(input.id);
       return { success };
     }),
 
-  listWebhooks: protectedProcedure.query(async () => {
+  listWebhooks: adminProcedure.query(async () => {
     return listWebhooks();
   }),
 });

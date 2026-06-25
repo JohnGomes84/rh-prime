@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import * as db from '../db.js';
+import { sdk } from './sdk.js';
 
 interface NotificationPayload {
   type: 'approval' | 'alert' | 'info' | 'error' | 'Geral' | 'Férias' | 'ASO' | 'Banco de Horas';
@@ -22,12 +23,13 @@ const clients = new Map<string, ClientConnection>();
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: '/api/ws' });
 
-  wss.on('connection', (ws: WebSocket, req) => {
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const userId = url.searchParams.get('userId');
-
-    if (!userId) {
-      ws.close(1008, 'Missing userId');
+  wss.on('connection', async (ws: WebSocket, req) => {
+    let userId: string;
+    try {
+      const user = await sdk.authenticateRequest(req as any);
+      userId = String(user.id);
+    } catch {
+      ws.close(1008, 'Unauthorized');
       return;
     }
 

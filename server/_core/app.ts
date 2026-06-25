@@ -36,6 +36,38 @@ const ATTACHMENT_ALLOWED_TYPES = new Set<string>([
   "text/plain",
 ]);
 
+function sameOriginAllowed(req: Request) {
+  const source = req.headers.origin ?? req.headers.referer;
+  if (!source) return true;
+
+  let sourceUrl: URL;
+  try {
+    sourceUrl = new URL(Array.isArray(source) ? source[0] : source);
+  } catch {
+    return false;
+  }
+
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const requestHost = (
+    Array.isArray(forwardedHost)
+      ? forwardedHost[0]
+      : forwardedHost ?? req.headers.host ?? ""
+  )
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+
+  if (sourceUrl.host.toLowerCase() === requestHost) return true;
+
+  return ENV.corsOrigins.some(origin => {
+    try {
+      return new URL(origin).origin === sourceUrl.origin;
+    } catch {
+      return false;
+    }
+  });
+}
+
 interface CreateAppOptions {
   server?: Server;
   serveClient?: boolean;
@@ -256,6 +288,12 @@ export async function createConfiguredApp(
   app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
   registerOAuthRoutes(app);
+
+  app.use("/api/trpc", (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== "POST") return next();
+    if (sameOriginAllowed(req)) return next();
+    return res.status(403).json({ error: "cross-origin request blocked" });
+  });
 
   app.use(
     "/api/trpc",

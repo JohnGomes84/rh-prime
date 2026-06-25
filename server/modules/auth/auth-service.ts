@@ -44,8 +44,14 @@ export class RegisterEmailNotAllowedError extends Error {
   }
 }
 
+export function isPublicRegistrationEnabled(): boolean {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") return true;
+  return process.env.PUBLIC_REGISTRATION_ENABLED === "true";
+}
+
 export function isEmailAllowedToRegister(email: string): boolean {
   if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") return true;
+  if (!isPublicRegistrationEnabled()) return false;
   const domain = email.trim().toLowerCase().split("@")[1];
   return domain === ALLOWED_DOMAIN;
 }
@@ -71,6 +77,7 @@ export function generateToken(payload: AuthPayload): string {
 export async function login(request: LoginRequest): Promise<{ token: string; user: AuthPayload } | null> {
   const user = await db.getUser(request.email);
   if (!user || !user.passwordHash) return null;
+  if ((user as any).status === "inactive") return null;
 
   const isValid = await verifyPassword(request.password, user.passwordHash);
   if (!isValid) return null;
@@ -144,9 +151,25 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+function buildResetPasswordUrl(rawToken: string): string {
+  const configured = process.env.APP_URL ?? "https://public-self-eight.vercel.app";
+  let origin: string;
+
+  try {
+    origin = new URL(configured).origin;
+  } catch {
+    origin = "https://public-self-eight.vercel.app";
+  }
+
+  const url = new URL("/reset-password", origin);
+  url.searchParams.set("token", rawToken);
+  return url.toString();
+}
+
 export async function forgotPassword(email: string): Promise<void> {
   const user = await db.getUser(email);
   if (!user) return;
+  if ((user as any).status === "inactive") return;
 
   const rawToken = crypto.randomBytes(48).toString("base64url");
   const tokenHash = hashToken(rawToken);
@@ -154,8 +177,7 @@ export async function forgotPassword(email: string): Promise<void> {
 
   await db.setResetToken(user.id, tokenHash, expiresAt);
 
-  const appUrl = process.env.APP_URL ?? "https://public-self-eight.vercel.app";
-  const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
+  const resetUrl = buildResetPasswordUrl(rawToken);
 
   await sendEmail({
     to: user.email,
@@ -180,6 +202,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
   const tokenHash = hashToken(token);
   const user = await db.getUserByResetToken(tokenHash);
   if (!user) return false;
+  if ((user as any).status === "inactive") return false;
 
   const newHash = await hashPassword(newPassword);
   await db.updateUser(user.id, { passwordHash: newHash });

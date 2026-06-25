@@ -53,7 +53,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (cancelled) return;
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/ws?userId=${userId}`;
+      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
       websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {

@@ -75,6 +75,10 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
     { boardId: boardId ?? 0 },
     { enabled: open && !!boardId },
   );
+  const candidatesQuery = trpc.kanban.boards.listUserCandidates.useQuery(
+    { boardId: boardId ?? 0 },
+    { enabled: open && !!boardId },
+  );
   const labelsQuery = trpc.kanban.labels.listByBoard.useQuery(
     { boardId: boardId ?? 0 },
     { enabled: open && !!boardId },
@@ -122,12 +126,17 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
   }, [boardId]);
 
   const uniqueMembers = useMemo(() => {
-    const byUserId = new Map<number, (typeof membersQuery.data extends (infer T)[] | undefined ? T : never)>();
+    const byUserId = new Map<number, any>();
     for (const m of membersQuery.data ?? []) {
       if (!byUserId.has(m.userId)) byUserId.set(m.userId, m);
     }
+    for (const candidate of candidatesQuery.data ?? []) {
+      if (!byUserId.has(candidate.userId)) {
+        byUserId.set(candidate.userId, { ...candidate, role: "novo" });
+      }
+    }
     return Array.from(byUserId.values());
-  }, [membersQuery.data]);
+  }, [candidatesQuery.data, membersQuery.data]);
 
   const createCard = trpc.kanban.cards.create.useMutation({
     onSuccess: async (result) => {
@@ -328,12 +337,12 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
                   </span>
                 )}
               </div>
-              {membersQuery.isLoading ? (
+              {membersQuery.isLoading || candidatesQuery.isLoading ? (
                 <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Carregando membros...
+                  <Loader2 className="h-3 w-3 animate-spin" /> Carregando usuarios...
                 </div>
               ) : uniqueMembers.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-1">Nenhum membro neste quadro.</p>
+                <p className="text-xs text-muted-foreground py-1">Nenhum usuario disponivel.</p>
               ) : (
                 <div className="max-h-[120px] overflow-y-auto rounded-md border p-1 space-y-0.5">
                   {uniqueMembers.map((member) => {

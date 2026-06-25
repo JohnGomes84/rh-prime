@@ -37,7 +37,7 @@ type GlobalStatus = "todo" | "in_progress" | "done";
 type BoardMemberOption = {
   id: number;
   userId: number;
-  role: "admin" | "editor" | "viewer";
+  role: "admin" | "editor" | "viewer" | "novo";
   userName: string | null;
   userEmail: string | null;
   employeeName: string | null;
@@ -115,7 +115,7 @@ export function CardDetailDrawer({
 
   const candidatesQuery = trpc.kanban.boards.listUserCandidates.useQuery(
     { boardId },
-    { enabled: open && !!cardId && addMemberOpen },
+    { enabled: open && !!cardId },
   );
 
   const addMemberMut = trpc.kanban.boards.addMember.useMutation({
@@ -143,7 +143,13 @@ export function CardDetailDrawer({
   });
 
   const setAssigneesMut = trpc.kanban.cards.setAssignees.useMutation({
-    onSuccess: () => invalidateAll(),
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateAll(),
+        utils.kanban.boards.listMembers.invalidate({ boardId }),
+        utils.kanban.boards.listUserCandidates.invalidate({ boardId }),
+      ]);
+    },
     onError: (error) => toast.error(error.message ?? "Falha ao salvar responsaveis"),
   });
 
@@ -289,6 +295,26 @@ export function CardDetailDrawer({
   const availableCandidates = useMemo(() => {
     const memberIds = new Set(uniqueBoardMembers.map((m) => m.userId));
     return (candidatesQuery.data ?? []).filter((c) => !memberIds.has(c.userId));
+  }, [candidatesQuery.data, uniqueBoardMembers]);
+
+  const assigneeOptions = useMemo(() => {
+    const byUserId = new Map<number, BoardMemberOption>();
+    for (const member of uniqueBoardMembers) {
+      byUserId.set(member.userId, member);
+    }
+    for (const candidate of candidatesQuery.data ?? []) {
+      if (!byUserId.has(candidate.userId)) {
+        byUserId.set(candidate.userId, {
+          id: -candidate.userId,
+          userId: candidate.userId,
+          role: "novo",
+          userName: candidate.userName,
+          userEmail: candidate.userEmail,
+          employeeName: candidate.employeeName,
+        });
+      }
+    }
+    return Array.from(byUserId.values());
   }, [candidatesQuery.data, uniqueBoardMembers]);
 
   // --- Auto-save handlers ---
@@ -467,7 +493,7 @@ export function CardDetailDrawer({
                   </Label>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-muted-foreground">
-                      {selectedAssigneeIds.length} de {uniqueBoardMembers.length}
+                      {selectedAssigneeIds.length} de {assigneeOptions.length}
                     </span>
                     {canEdit && (
                       <Popover open={addMemberOpen} onOpenChange={setAddMemberOpen}>
@@ -539,10 +565,14 @@ export function CardDetailDrawer({
                   </div>
                 </div>
                 <div className="mt-1.5 space-y-0.5">
-                  {uniqueBoardMembers.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">Nenhum membro disponivel.</p>
+                  {candidatesQuery.isLoading && assigneeOptions.length === 0 ? (
+                    <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Carregando usuarios...
+                    </div>
+                  ) : assigneeOptions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2">Nenhum usuario disponivel.</p>
                   ) : (
-                    uniqueBoardMembers.map((member) => {
+                    assigneeOptions.map((member) => {
                       const displayName =
                         member.employeeName ?? member.userName ?? member.userEmail ?? `Usuario ${member.userId}`;
                       const initials = displayName

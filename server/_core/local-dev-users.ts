@@ -3,6 +3,7 @@ import path from "path";
 import { hashPassword } from "../auth/jwt-service.js";
 
 type LocalUserRole = "admin" | "gestor" | "colaborador" | "user";
+type LocalUserStatus = "active" | "inactive";
 
 export type LocalUserRecord = {
   id: number;
@@ -12,6 +13,7 @@ export type LocalUserRecord = {
   name: string | null;
   loginMethod: string | null;
   role: LocalUserRole;
+  status: LocalUserStatus;
   resetToken: string | null;
   resetTokenExpiresAt: Date | null;
   createdAt: Date;
@@ -46,6 +48,7 @@ function fromSerializable(
 ): LocalUserRecord {
   return {
     ...user,
+    status: (user as any).status ?? "active",
     resetToken: user.resetToken ?? null,
     resetTokenExpiresAt: user.resetTokenExpiresAt ? new Date(user.resetTokenExpiresAt as unknown as string) : null,
     createdAt: new Date(user.createdAt),
@@ -95,6 +98,7 @@ async function ensureSeedAdmin() {
     name: "Administrador Local",
     loginMethod: "jwt",
     role: "admin",
+    status: "active",
     resetToken: null,
     resetTokenExpiresAt: null,
     createdAt: now,
@@ -129,6 +133,7 @@ export const localDevUsers = {
     name?: string | null;
     passwordHash?: string | null;
     role?: string;
+    status?: string;
     loginMethod?: string | null;
     openId?: string | null;
   }) {
@@ -148,6 +153,7 @@ export const localDevUsers = {
       name: data.name ?? null,
       loginMethod: data.loginMethod ?? "jwt",
       role: (data.role as LocalUserRole | undefined) ?? "colaborador",
+      status: (data.status as LocalUserStatus | undefined) ?? "active",
       resetToken: null,
       resetTokenExpiresAt: null,
       createdAt: now,
@@ -165,6 +171,7 @@ export const localDevUsers = {
       name: string | null;
       passwordHash: string | null;
       role: string;
+      status: string;
       loginMethod: string | null;
       openId: string | null;
     }>
@@ -181,6 +188,9 @@ export const localDevUsers = {
       role:
         (data.role as LocalUserRole | undefined) ??
         users[index]!.role,
+      status:
+        (data.status as LocalUserStatus | undefined) ??
+        users[index]!.status,
       updatedAt: new Date(),
     };
     users[index] = nextUser;
@@ -201,6 +211,7 @@ export const localDevUsers = {
     name?: string | null;
     loginMethod?: string | null;
     role?: string;
+    status?: string;
     passwordHash?: string | null;
   }) {
     const existing = await this.getUser(data.email);
@@ -211,6 +222,7 @@ export const localDevUsers = {
         name: data.name ?? existing.name,
         loginMethod: data.loginMethod ?? existing.loginMethod,
         role: data.role ?? existing.role,
+        status: data.status ?? existing.status,
         passwordHash: data.passwordHash ?? existing.passwordHash,
       });
       return;
@@ -222,6 +234,7 @@ export const localDevUsers = {
       name: data.name ?? null,
       loginMethod: data.loginMethod ?? "jwt",
       role: data.role ?? "colaborador",
+      status: data.status ?? "active",
       passwordHash: data.passwordHash ?? null,
     });
   },

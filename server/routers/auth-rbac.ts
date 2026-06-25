@@ -26,6 +26,10 @@ export const authRbacRouter = router({
         throw new Error('Email ou senha inválidos');
       }
 
+      if ((user as any).status === 'inactive') {
+        throw new Error('Usuario inativo. Fale com um administrador.');
+      }
+
       // Verificar senha
       const passwordValid = await verifyPassword(input.password, user.passwordHash);
       if (!passwordValid) {
@@ -123,13 +127,17 @@ export const authRbacRouter = router({
       throw new Error('Apenas administradores podem listar usuários');
     }
 
-    const result = await db.listUsers();
+    const result = await db.listUsersWithAccessInfo();
     return result.map(user => ({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
+      status: (user as any).status ?? 'active',
       createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
+      linkedEmployeeId: user.linkedEmployeeId,
+      linkedEmployeeName: user.linkedEmployeeName,
     }));
   }),
 
@@ -147,9 +155,87 @@ export const authRbacRouter = router({
       if (ctx.user?.role !== 'admin') {
         throw new Error('Apenas administradores podem alterar roles');
       }
+      if (ctx.user.id === input.userId && input.role !== 'admin') {
+        throw new Error('Você não pode remover seu próprio acesso de administrador');
+      }
 
       await db.updateUser(input.userId, { role: input.role });
 
+      return { success: true };
+    }),
+
+  setUserStatus: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        status: z.enum(['active', 'inactive']),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.role !== 'admin') {
+        throw new Error('Apenas administradores podem alterar status de usuarios');
+      }
+      if (ctx.user.id === input.userId && input.status === 'inactive') {
+        throw new Error('Voce nao pode desativar seu proprio usuario');
+      }
+
+      const target = await db.getUserById(input.userId);
+      if (!target) {
+        throw new Error('Usuario nao encontrado');
+      }
+
+      if (target.role === 'admin' && input.status === 'inactive') {
+        const users = await db.listUsers();
+        const activeAdmins = users.filter(
+          (user) => user.role === 'admin' && ((user as any).status ?? 'active') === 'active',
+        );
+        if (activeAdmins.length <= 1) {
+          throw new Error('Nao e possivel desativar o ultimo administrador ativo');
+        }
+      }
+
+      await db.updateUser(input.userId, { status: input.status });
+      return { success: true };
+    }),
+
+  resetUserPassword: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres'),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.role !== 'admin') {
+        throw new Error('Apenas administradores podem redefinir senhas');
+      }
+
+      const passwordValidation = validatePasswordStrength(input.password);
+      if (!passwordValidation.valid) {
+        throw new Error(passwordValidation.errors.join(', '));
+      }
+
+      const passwordHash = await hashPassword(input.password);
+      await db.updateUser(input.userId, {
+        passwordHash,
+      });
+
+      return { success: true };
+    }),
+
+  linkEmployee: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        employeeId: z.number().int().positive(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.role !== 'admin') {
+        throw new Error('Apenas administradores podem vincular usuários a funcionários');
+      }
+
+      await db.linkEmployeeToUser(input.employeeId, input.userId);
       return { success: true };
     }),
 

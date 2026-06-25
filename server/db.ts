@@ -47,6 +47,7 @@ import {
   approvals, InsertApproval,
   consentRecords, InsertConsentRecord,
   readAuditLogs, InsertReadAuditLog,
+  loginLogs,
 } from "../drizzle/schema.js";
 import { ENV } from './_core/env.js';
 import { isLocalDevUsersEnabled, localDevUsers } from "./_core/local-dev-users.js";
@@ -111,6 +112,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       name: user.name,
       loginMethod: user.loginMethod,
       role: user.role,
+      status: (user as any).status ?? "active",
       passwordHash: user.passwordHash,
     });
     return;
@@ -1182,7 +1184,7 @@ export async function recordLoginLog(data: {
   return withDBRetry(async () => {
     const conn = await getDb();
     if (!conn) return;
-    const { loginLogs } = await import('../drizzle/schema');
+    const { loginLogs } = await import('../drizzle/schema.js');
     await conn.insert(loginLogs).values({
       userId: data.userId ?? null,
       email: data.email ?? null,
@@ -2220,7 +2222,7 @@ export async function createTimeRecord(data: {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
 
-      const { computeRecordHash } = await import("./utils/portaria-671");
+      const { computeRecordHash } = await import("./utils/portaria-671.js");
       const employee = await db.select({ cpf: employees.cpf }).from(employees).where(eq(employees.id, data.employeeId)).limit(1);
       const cpf = employee[0]?.cpf ?? "00000000000";
       const nsr = await getNextNsr();
@@ -2530,6 +2532,7 @@ export async function createUser(data: {
   name?: string;
   passwordHash?: string;
   role?: string;
+  status?: string;
   loginMethod?: string;
 }) {
   return withDBRetry(async () => {
@@ -2544,6 +2547,7 @@ export async function createUser(data: {
       name: data.name,
       passwordHash: data.passwordHash,
       role: (data.role as any) || 'colaborador',
+      status: (data.status as any) || "active",
       loginMethod: data.loginMethod || 'jwt',
     });
     
@@ -2557,6 +2561,7 @@ export async function updateUser(id: number, data: Partial<{
   name: string | null;
   passwordHash: string | null;
   role: string;
+  status: string;
 }>) {
   return withDBRetry(async () => {
     if (isLocalDevUsersEnabled()) {
@@ -2618,6 +2623,49 @@ export async function listUsers() {
     if (!db) throw new Error("DB not available");
     return db.select().from(users);
   }, "listUsers");
+}
+
+export async function listUsersWithAccessInfo() {
+  return withDBRetry(async () => {
+    if (isLocalDevUsersEnabled()) {
+      const localUsers = await localDevUsers.listUsers();
+      return localUsers.map((user) => ({
+        ...user,
+        lastLoginAt: null as Date | null,
+        linkedEmployeeId: null as number | null,
+        linkedEmployeeName: null as string | null,
+      }));
+    }
+
+    const db = await getDb();
+    if (!db) throw new Error("DB not available");
+
+    const allUsers = await db.select().from(users).orderBy(asc(users.name), asc(users.email));
+
+    return Promise.all(
+      allUsers.map(async (user) => {
+        const [lastLogin] = await db
+          .select({ timestamp: loginLogs.timestamp })
+          .from(loginLogs)
+          .where(and(eq(loginLogs.userId, user.id), eq(loginLogs.success, true)))
+          .orderBy(desc(loginLogs.timestamp))
+          .limit(1);
+
+        const [linkedEmployee] = await db
+          .select({ id: employees.id, fullName: employees.fullName })
+          .from(employees)
+          .where(eq(employees.userId, user.id))
+          .limit(1);
+
+        return {
+          ...user,
+          lastLoginAt: lastLogin?.timestamp ?? null,
+          linkedEmployeeId: linkedEmployee?.id ?? null,
+          linkedEmployeeName: linkedEmployee?.fullName ?? null,
+        };
+      }),
+    );
+  }, "listUsersWithAccessInfo");
 }
 
 export async function getUsersByRole(role: string) {

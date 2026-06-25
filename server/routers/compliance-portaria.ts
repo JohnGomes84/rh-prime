@@ -154,7 +154,7 @@ export const complianceRouter = router({
       const end = input?.endDate ? new Date(input.endDate) : new Date();
       end.setHours(23, 59, 59, 999);
       const records = (await db.listAllTimeRecords(start, end)) as any[];
-      const { computeRecordHash } = await import("../utils/portaria-671");
+      const { computeRecordHash } = await import("../utils/portaria-671.js");
 
       let valid = 0;
       let broken = 0;

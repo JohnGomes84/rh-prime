@@ -420,6 +420,7 @@ export const kanbanRouter = router({
         const previousIds = new Set(previous.map((a) => a.userId));
         const newlyAssigned = input.userIds.filter((id) => !previousIds.has(id));
 
+        await kdb.ensureBoardMembers(input.boardId, input.userIds, "viewer");
         await kdb.setCardAssignees(input.cardId, input.userIds);
 
         if (newlyAssigned.length > 0) {

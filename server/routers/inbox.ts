@@ -75,7 +75,7 @@ export const inboxRouter = router({
       const req = await db.getRequest(input.id);
       if (!req) return null;
       if (ctx.user) {
-        const { assertEmployeeInScope } = await import("../utils/scope");
+        const { assertEmployeeInScope } = await import("../utils/scope.js");
         await assertEmployeeInScope(ctx.user as any, (req as any).employeeId);
       }
       const approvals = await db.listApprovals(input.id);
@@ -106,7 +106,7 @@ export const inboxRouter = router({
 
       // Se input.employeeId é passado e é diferente do próprio, valida escopo
       if (input.employeeId) {
-        const { assertEmployeeInScope } = await import("../utils/scope");
+        const { assertEmployeeInScope } = await import("../utils/scope.js");
         await assertEmployeeInScope(ctx.user as any, input.employeeId);
       }
 
@@ -134,7 +134,7 @@ export const inboxRouter = router({
     .mutation(async ({ input, ctx }) => {
       const req = await db.getRequest(input.id);
       if (!req) throw new Error("Solicitação não encontrada");
-      const { assertEmployeeInScope } = await import("../utils/scope");
+      const { assertEmployeeInScope } = await import("../utils/scope.js");
       await assertEmployeeInScope(ctx.user as any, (req as any).employeeId);
 
       await db.createApproval({

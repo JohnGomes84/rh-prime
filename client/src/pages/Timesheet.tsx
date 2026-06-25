@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
+import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import {
   Clock, LogIn, LogOut, Calendar, Timer, AlertCircle,
-  CheckCircle2, XCircle, ChevronLeft, ChevronRight,
+  CheckCircle2, UserRound, ChevronLeft, ChevronRight, MapPin,
+  Camera, Wifi, ShieldCheck, ClipboardCopy, FileWarning,
 } from 'lucide-react';
 
 function LiveClock() {
@@ -31,8 +33,16 @@ function LiveClock() {
 
 export default function Timesheet() {
   const { user } = useAuth();
-  const employeeId = String(user?.id || '');
+  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
+  const sessionQuery = trpc.auth.session.useQuery(undefined, { enabled: !!user?.id });
+  const linkedEmployee = sessionQuery.data?.employee ?? null;
+  const canUseTimesheet = Boolean(linkedEmployee?.id);
+  const [lastReceipt, setLastReceipt] = useState<any | null>(null);
+  const [lastLocation, setLastLocation] = useState<string | undefined>();
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [cameraAvailable, setCameraAvailable] = useState(() => typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
+  const locationAvailable = typeof navigator !== 'undefined' && 'geolocation' in navigator;
 
   const [monthOffset, setMonthOffset] = useState(0);
   const targetDate = useMemo(() => {
@@ -46,7 +56,7 @@ export default function Timesheet() {
   // Buscar ponto aberto
   const { data: openRecord, isLoading: loadingOpen } = trpc.timesheet.getOpenRecord.useQuery(
     undefined,
-    { enabled: !!user?.id, refetchInterval: 30000 }
+    { enabled: canUseTimesheet, refetchInterval: 30000 }
   );
 
   // Buscar registros do mês
@@ -55,14 +65,24 @@ export default function Timesheet() {
 
   const { data: records = [], isLoading: loadingRecords } = trpc.timesheet.listRecords.useQuery(
     { startDate, endDate },
-    { enabled: !!user?.id }
+    { enabled: canUseTimesheet }
   );
 
   // Buscar resumo mensal
   const { data: summary } = trpc.timesheet.monthlySummary.useQuery(
     { month: targetMonth, year: targetYear },
-    { enabled: !!user?.id }
+    { enabled: canUseTimesheet }
   );
+
+  useEffect(() => {
+    const updateOnline = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+    };
+  }, []);
 
   // Mutations
   const captureLocation = (): Promise<string | undefined> =>
@@ -81,7 +101,15 @@ export default function Timesheet() {
     });
 
   const clockInMutation = trpc.timesheet.clockIn.useMutation({
-    onSuccess: () => {
+    onSuccess: (data: any, variables: any) => {
+      setLastReceipt({
+        type: 'Entrada',
+        at: new Date(),
+        nsr: data?.nsr,
+        recordId: data?.id,
+        location: variables?.location,
+        status: 'PENDING',
+      });
       toast.success('Entrada registrada com sucesso');
       utils.timesheet.getOpenRecord.invalidate();
       utils.timesheet.listRecords.invalidate();
@@ -91,7 +119,15 @@ export default function Timesheet() {
   });
 
   const clockOutMutation = trpc.timesheet.clockOut.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, variables: any) => {
+      setLastReceipt({
+        type: 'Saída',
+        at: new Date(),
+        nsr: (openRecord as any)?.nsr,
+        recordId: (openRecord as any)?.id,
+        location: variables?.notes?.replace('[saÃ­da] ', '').replace('[saída] ', ''),
+        status: data?.status ?? 'APPROVED',
+      });
       const ev = data?.evaluation;
       if (ev?.delayMinutes > 0) {
         toast.warning(`Saída registrada. Atraso de ${ev.delayMinutes}min no início.`);
@@ -107,8 +143,9 @@ export default function Timesheet() {
     onError: (err) => toast.error(err.message || 'Falha ao registrar saída'),
   });
 
+  const uploadSelfieMutation = trpc.timesheet.uploadSelfie.useMutation();
   const isWorking = !!openRecord;
-  const isPending = clockInMutation.isPending || clockOutMutation.isPending;
+  const isPending = clockInMutation.isPending || clockOutMutation.isPending || uploadSelfieMutation.isPending;
 
   const captureSelfie = (): Promise<string | undefined> =>
     new Promise((resolve) => {
@@ -130,7 +167,10 @@ export default function Timesheet() {
             resolve(dataUrl);
           }, 600);
         })
-        .catch(() => resolve(undefined));
+        .catch(() => {
+          setCameraAvailable(false);
+          resolve(undefined);
+        });
     });
 
   const fingerprint = (): string => {
@@ -145,13 +185,30 @@ export default function Timesheet() {
   };
 
   const handleToggleClock = async () => {
-    const [location, selfieUrl] = await Promise.all([captureLocation(), captureSelfie()]);
+    if (!canUseTimesheet) {
+      toast.error('Seu usuario ainda nao esta vinculado a um funcionario.');
+      return;
+    }
+    const [location, selfieDataUrl] = await Promise.all([captureLocation(), captureSelfie()]);
+    setLastLocation(location);
     const deviceFingerprint = fingerprint();
     if (isWorking) {
       clockOutMutation.mutate({
         notes: location ? `[saída] ${location}` : undefined,
       });
     } else {
+      let selfieUrl: string | undefined;
+      if (selfieDataUrl) {
+        try {
+          const uploaded = await uploadSelfieMutation.mutateAsync({
+            imageBase64: selfieDataUrl,
+            contentType: selfieDataUrl.startsWith('data:image/png') ? 'image/png' : 'image/jpeg',
+          });
+          selfieUrl = uploaded.url;
+        } catch {
+          toast.warning('Selfie nao foi enviada. A batida sera registrada sem foto.');
+        }
+      }
       clockInMutation.mutate({
         location,
         selfieUrl,
@@ -177,6 +234,41 @@ export default function Timesheet() {
 
   const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
+  const todayRecords = useMemo(() => {
+    const now = new Date();
+    return (records as any[]).filter((record) => {
+      const clockIn = new Date(record.clockIn);
+      return clockIn.getFullYear() === now.getFullYear()
+        && clockIn.getMonth() === now.getMonth()
+        && clockIn.getDate() === now.getDate();
+    }).sort((a, b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime());
+  }, [records]);
+
+  const todayRecord = openRecord ?? todayRecords[todayRecords.length - 1] ?? null;
+  const todayClockIn = todayRecord ? new Date((todayRecord as any).clockIn) : null;
+  const todayClockOut = (todayRecord as any)?.clockOut ? new Date((todayRecord as any).clockOut) : null;
+  const currentStatusLabel = isWorking ? 'Trabalhando' : todayClockOut ? 'Jornada encerrada' : 'Aguardando entrada';
+  const nextActionLabel = isWorking ? 'Registrar Saída' : 'Registrar Entrada';
+  const todayWorkedHours = todayClockIn && todayClockOut
+    ? ((todayClockOut.getTime() - todayClockIn.getTime()) / 3600000).toFixed(2)
+    : null;
+
+  const copyReceipt = async () => {
+    if (!lastReceipt) return;
+    const text = [
+      'Comprovante de ponto',
+      `Tipo: ${lastReceipt.type}`,
+      `Horario: ${lastReceipt.at.toLocaleString('pt-BR')}`,
+      `Funcionario: ${linkedEmployee?.fullName ?? '-'}`,
+      `NSR: ${lastReceipt.nsr ?? '-'}`,
+      `Registro: ${lastReceipt.recordId ?? '-'}`,
+      `Localizacao: ${lastReceipt.location ?? 'nao capturada'}`,
+      `Status: ${lastReceipt.status ?? '-'}`,
+    ].join('\n');
+    await navigator.clipboard?.writeText(text);
+    toast.success('Comprovante copiado');
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'APPROVED': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Aprovado</Badge>;
@@ -196,6 +288,135 @@ export default function Timesheet() {
         </div>
 
         {/* Relógio + Botão de Ponto */}
+        {!sessionQuery.isLoading && !canUseTimesheet && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-medium text-amber-950">Usuario sem funcionario vinculado</p>
+                  <p className="text-sm text-amber-800">
+                    Para registrar jornada, vincule este login ao cadastro do funcionario em Usuarios ou no cadastro do funcionario.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {linkedEmployee && (
+          <Card className="border-slate-200">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <UserRound className="h-5 w-5 text-slate-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Funcionario vinculado</p>
+                  <p className="font-medium">{linkedEmployee.fullName}</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="w-fit gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Pronto para registro
+              </Badge>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>Jornada de hoje</span>
+                <Badge variant={isWorking ? 'default' : 'outline'}>
+                  {currentStatusLabel}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Entrada</p>
+                  <p className="mt-1 font-semibold tabular-nums">
+                    {todayClockIn ? todayClockIn.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Intervalo</p>
+                  <p className="mt-1 font-semibold text-muted-foreground">Em breve</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Retorno</p>
+                  <p className="mt-1 font-semibold text-muted-foreground">Em breve</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Saida</p>
+                  <p className="mt-1 font-semibold tabular-nums">
+                    {todayClockOut ? todayClockOut.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Proxima acao: <strong>{nextActionLabel}</strong>
+                </span>
+                <span className="text-muted-foreground">
+                  {todayWorkedHours ? `${todayWorkedHours}h trabalhadas hoje` : isWorking ? `Em andamento ha ${elapsedTime || '00:00:00'}` : 'Sem horas fechadas hoje'}
+                </span>
+              </div>
+
+              <Button variant="outline" size="sm" className="w-fit gap-2" onClick={() => setLocation('/inbox')}>
+                <FileWarning className="h-4 w-4" />
+                Solicitar ajuste de ponto
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Condicoes da batida</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><Wifi className="h-4 w-4" /> Conexao</span>
+                <Badge variant={isOnline ? 'outline' : 'destructive'}>{isOnline ? 'Online' : 'Offline'}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Localizacao</span>
+                <Badge variant={locationAvailable ? 'outline' : 'secondary'}>{locationAvailable ? 'Disponivel' : 'Indisponivel'}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><Camera className="h-4 w-4" /> Camera</span>
+                <Badge variant={cameraAvailable ? 'outline' : 'secondary'}>{cameraAvailable ? 'Disponivel' : 'Nao liberada'}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Antifraude</span>
+                <Badge variant="outline">Fingerprint ativo</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {lastReceipt && (
+          <Card className="border-emerald-200 bg-emerald-50">
+            <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="font-semibold text-emerald-950">Comprovante de {lastReceipt.type.toLowerCase()} registrado</p>
+                <p className="text-sm text-emerald-800">
+                  {lastReceipt.at.toLocaleString('pt-BR')} · NSR {lastReceipt.nsr ?? '-'} · Registro {lastReceipt.recordId ?? '-'}
+                </p>
+                <p className="text-xs text-emerald-700">
+                  Localizacao: {lastReceipt.location ?? 'nao capturada'}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={copyReceipt} className="w-fit gap-2">
+                <ClipboardCopy className="h-4 w-4" />
+                Copiar comprovante
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className={isWorking ? 'border-emerald-300 bg-emerald-50/50' : ''}>
           <CardContent className="pt-6 pb-6">
             <div className="flex flex-col items-center gap-6">
@@ -213,7 +434,7 @@ export default function Timesheet() {
               <Button
                 size="lg"
                 onClick={handleToggleClock}
-                disabled={isPending || loadingOpen}
+                disabled={!canUseTimesheet || isPending || loadingOpen || sessionQuery.isLoading}
                 className={`gap-3 px-8 py-6 text-lg font-semibold transition-all ${
                   isWorking
                     ? 'bg-red-600 hover:bg-red-700 text-white'

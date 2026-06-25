@@ -691,6 +691,26 @@ export async function addBoardMember(boardId: number, userId: number, role: Boar
   return { id: (result as any)[0].id };
 }
 
+export async function ensureBoardMembers(boardId: number, userIds: number[], role: BoardAccessRole = "viewer") {
+  const db = await requireDb();
+  const uniqueIds = Array.from(new Set(userIds));
+  if (uniqueIds.length === 0) return;
+
+  const board = await getBoardById(boardId);
+  if (!board) return;
+
+  const existingRows = await db
+    .select({ userId: kanbanBoardMembers.userId })
+    .from(kanbanBoardMembers)
+    .where(and(eq(kanbanBoardMembers.boardId, boardId), inArray(kanbanBoardMembers.userId, uniqueIds)));
+  const existingIds = new Set(existingRows.map((row) => row.userId));
+
+  const toInsert = uniqueIds.filter((userId) => userId !== board.ownerId && !existingIds.has(userId));
+  if (toInsert.length === 0) return;
+
+  await db.insert(kanbanBoardMembers).values(toInsert.map((userId) => ({ boardId, userId, role })));
+}
+
 export async function removeBoardMember(boardId: number, userId: number) {
   const db = await requireDb();
   await db

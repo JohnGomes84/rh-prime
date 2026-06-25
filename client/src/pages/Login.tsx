@@ -14,6 +14,8 @@ import { AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react";
 
 type Tab = "login" | "register" | "forgot";
 
+const publicRegistrationEnabled = import.meta.env.VITE_PUBLIC_REGISTRATION_ENABLED === "true";
+
 export function Login() {
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<Tab>("login");
@@ -64,6 +66,7 @@ export function Login() {
   });
 
   const switchTab = (next: Tab) => {
+    if (next === "register" && !publicRegistrationEnabled) return;
     setError("");
     setSuccess("");
     setTab(next);
@@ -139,16 +142,18 @@ export function Login() {
               >
                 Entrar
               </button>
-              <button
-                onClick={() => switchTab("register")}
-                className={`flex-1 py-2 text-sm font-medium border-b-2 transition ${
-                  tab === "register"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Cadastrar
-              </button>
+              {publicRegistrationEnabled && (
+                <button
+                  onClick={() => switchTab("register")}
+                  className={`flex-1 py-2 text-sm font-medium border-b-2 transition ${
+                    tab === "register"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Cadastrar
+                </button>
+              )}
             </div>
           )}
 
@@ -212,7 +217,7 @@ export function Login() {
           )}
 
           {/* Register */}
-          {tab === "register" && (
+          {publicRegistrationEnabled && tab === "register" && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="reg-email" className="text-sm font-medium text-gray-700">

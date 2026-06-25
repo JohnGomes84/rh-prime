@@ -1,0 +1,16 @@
+.claude/
+.codex/
+.edge-headless-*/
+.openclaude/
+.playwright-mcp/
+.pnpm-store/
+.vercel/output/
+logs/
+storage/
+node_modules/
+*.png
+*.log
+*.sql.gz
+scripts/apply-hostinger.mjs
+scripts/apply-kanban-missing.mjs
+scripts/apply-missing-columns.mjs

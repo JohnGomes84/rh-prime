@@ -317,6 +317,9 @@ export default function KanbanBoard() {
     if (overData?.type === "list-drop") {
       targetListId = overData.listId as number;
       targetIndex = cardsByList.get(targetListId)?.length ?? 0;
+    } else if (overData?.type === "list") {
+      targetListId = (overData.list as KanbanListData).id;
+      targetIndex = 0;
     } else if (overData?.type === "card") {
       const overCard = overData.card as KanbanCardData;
       targetListId = overCard.listId;

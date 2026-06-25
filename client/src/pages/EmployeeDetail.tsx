@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
+import { useRole } from "@/_core/hooks/useRole";
 import {
   ArrowLeft,
   Loader2,
@@ -55,6 +56,7 @@ export default function EmployeeDetail() {
   const params = useParams<{ id: string }>();
   const empId = Number(params.id);
   const [, setLocation] = useLocation();
+  const { isAdmin } = useRole();
 
   const { data: employee, isLoading } = trpc.employees.get.useQuery({ id: empId });
   const { data: contracts } = trpc.contracts.list.useQuery({ employeeId: empId });
@@ -175,7 +177,7 @@ export default function EmployeeDetail() {
                 <Button variant="outline" onClick={() => setLocation(`/calculadoras?employeeId=${employee.id}`)}>
                   Calculadoras CLT
                 </Button>
-                <LinkUserButton employeeId={employee.id} currentUserId={employee.userId ?? null} />
+                {isAdmin && <LinkUserButton employeeId={employee.id} currentUserId={employee.userId ?? null} />}
               </>
             )}
           </div>
@@ -1022,7 +1024,9 @@ function HierarchyCard({ employee }: { employee: any }) {
 
 function LinkUserButton({ employeeId, currentUserId }: { employeeId: number; currentUserId: number | null }) {
   const utils = trpc.useUtils();
-  const usersQuery = trpc.users.listUsers.useQuery();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string>(currentUserId ? String(currentUserId) : "");
+  const usersQuery = trpc.users.listUsers.useQuery(undefined, { enabled: open });
   const linkMutation = trpc.employees.linkUser.useMutation({
     onSuccess: () => {
       toast.success("Usuário vinculado");
@@ -1030,9 +1034,6 @@ function LinkUserButton({ employeeId, currentUserId }: { employeeId: number; cur
     },
     onError: (e) => toast.error(e.message),
   });
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<string>(currentUserId ? String(currentUserId) : "");
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>

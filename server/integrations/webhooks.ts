@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 /**
  * Sistema de Webhooks para eventos críticos do RH Prime
  * Permite integração com sistemas externos
@@ -91,8 +93,13 @@ export async function triggerWebhook(
  * Gerar assinatura HMAC para validar webhook
  */
 function generateSignature(payload: WebhookPayload): string {
-  const crypto = require('crypto');
-  const secret = process.env.WEBHOOK_SECRET || 'webhook-secret';
+  const secret = process.env.WEBHOOK_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("WEBHOOK_SECRET or JWT_SECRET is required in production");
+    }
+    return "unsigned-development-webhook";
+  }
   
   return crypto
     .createHmac('sha256', secret)

@@ -28,6 +28,7 @@ import { inboxRouter } from './routers/inbox.js';
 import { lgpdRouter } from './routers/compliance-lgpd.js';
 import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria.js';
 import { kanbanRouter } from './routers/kanban.js';
+import { managerialReportsRouter } from './routers/managerial-reports.js';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters.js";
 import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError, forgotPassword, resetPassword } from "./modules/auth/auth-service.js";
@@ -1355,6 +1356,7 @@ export const appRouter = router({
   // REPORTS
   // ============================================================
   reports: reportsRouter,
+  managerialReports: managerialReportsRouter,
   // ============================================================
   // PAYROLL
   // ============================================================

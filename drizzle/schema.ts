@@ -1176,3 +1176,4 @@ export type InsertReadAuditLog = typeof readAuditLogs.$inferInsert;
 // KANBAN (boards/lists/cards/labels/members) — fase 8
 // ============================================================
 export * from "./schema-kanban.js";
+export * from "./schema-managerial-reports.js";

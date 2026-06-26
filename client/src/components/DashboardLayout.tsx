@@ -34,6 +34,7 @@ import {
   Clock,
   FolderOpen,
   FileText,
+  ClipboardList,
   ArrowRightLeft,
   Bell,
   Settings,
@@ -101,6 +102,7 @@ const menuItems: MenuItem[] = [
   // Análise
   { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: FileText, label: "Relatórios", path: "/relatorios", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: ClipboardList, label: "Relatórios Gerenciais", path: "/relatorios-gerenciais", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Análise", requiredRoles: [...ADMIN_ONLY] },
   // Sistema
   { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },

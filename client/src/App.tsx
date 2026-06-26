@@ -27,6 +27,7 @@ const Integration = lazy(() => import("./pages/Integration"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Reports = lazy(() => import("./pages/Reports"));
+const ManagerialReports = lazy(() => import("./pages/ManagerialReports"));
 const Recruitment = lazy(() => import("./pages/Recruitment"));
 const Timesheet = lazy(() => import("./pages/Timesheet"));
 const Payroll = lazy(() => import("./pages/Payroll"));
@@ -98,6 +99,7 @@ function Router() {
         <Route path="/notificacoes" component={Notifications} />
         <Route path="/configuracoes" component={guarded(Settings, "admin")} />
         <Route path="/relatorios" component={guarded(Reports, "manager")} />
+        <Route path="/relatorios-gerenciais" component={guarded(ManagerialReports, "manager")} />
         <Route path="/recrutamento" component={guarded(Recruitment, "manager")} />
         <Route path="/ponto" component={Timesheet} />
         <Route path="/horas-extras" component={OvertimeManagement} />

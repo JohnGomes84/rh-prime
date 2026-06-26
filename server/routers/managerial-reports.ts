@@ -32,17 +32,25 @@ export const managerialReportsRouter = router({
         })
         .optional(),
     )
-    .query(async ({ input }) => {
-      const reports = await mrDb.listReports(input ?? {});
+    .query(async ({ input, ctx }) => {
+      // Visibility: validators (gestor/admin) see all reports; everyone else
+      // sees only the reports they authored.
+      const scope = isValidator(ctx.user.role) ? {} : { authorId: ctx.user.id };
+      const reports = await mrDb.listReports({ ...(input ?? {}), ...scope });
       const now = new Date();
       return reports.map((r) => ({ ...r, overdue: isOverdue(r, now) }));
     }),
 
   getReport: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const data = await mrDb.getReport(input.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Relatório não encontrado" });
+      // Visibility: only the author or a validator may open a specific report.
+      // Use NOT_FOUND (not FORBIDDEN) so existence is not leaked to others.
+      if (!isValidator(ctx.user.role) && data.report.authorId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Relatório não encontrado" });
+      }
       return {
         ...data,
         overdue: isOverdue(data.report, new Date()),

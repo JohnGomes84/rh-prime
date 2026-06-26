@@ -56,6 +56,28 @@ describe("managerialReports authorization", () => {
     ).rejects.toThrow(/autor|validador/i);
   });
 
+  it("colaborador só lista os próprios relatórios (escopo por authorId)", async () => {
+    const spy = vi.spyOn(mrDb, "listReports").mockResolvedValue([]);
+    await caller("colaborador", 7).managerialReports.listReports({});
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ authorId: 7 }));
+  });
+
+  it("validador (gestor) lista todos os relatórios (sem filtro de autor)", async () => {
+    const spy = vi.spyOn(mrDb, "listReports").mockResolvedValue([]);
+    await caller("gestor", 7).managerialReports.listReports({});
+    expect(spy).toHaveBeenCalledWith(expect.not.objectContaining({ authorId: expect.anything() }));
+  });
+
+  it("colaborador não-autor recebe NOT_FOUND ao abrir relatório alheio", async () => {
+    vi.spyOn(mrDb, "getReport").mockResolvedValue({
+      report: { id: 5, authorId: 999, status: "enviado", dueDate: "2026-06-30" } as any,
+      items: [],
+    });
+    await expect(
+      caller("colaborador", 1).managerialReports.getReport({ id: 5 }),
+    ).rejects.toThrow(/não encontrado/i);
+  });
+
   it("updateItem rejeita itemId que não pertence ao reportId (anti-IDOR)", async () => {
     // Caller IS the author (passes ownership), but the itemId belongs to another report.
     vi.spyOn(mrDb, "getReport").mockResolvedValue({

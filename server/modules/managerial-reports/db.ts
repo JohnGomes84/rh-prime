@@ -9,6 +9,7 @@ export interface ListFilter {
   cadence?: "semanal" | "mensal";
   status?: "rascunho" | "enviado" | "validado" | "devolvido";
   periodRef?: string;
+  authorId?: number;
 }
 
 export async function listReports(filter: ListFilter = {}): Promise<MrReport[]> {
@@ -19,6 +20,7 @@ export async function listReports(filter: ListFilter = {}): Promise<MrReport[]> 
   if (filter.cadence) conds.push(eq(mrReports.cadence, filter.cadence));
   if (filter.status) conds.push(eq(mrReports.status, filter.status));
   if (filter.periodRef) conds.push(eq(mrReports.periodRef, filter.periodRef));
+  if (filter.authorId) conds.push(eq(mrReports.authorId, filter.authorId));
   const q = db.select().from(mrReports);
   const rows = conds.length ? await q.where(and(...conds)) : await q;
   return rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));

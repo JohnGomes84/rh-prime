@@ -15,6 +15,11 @@ function isValidator(role: string | undefined): boolean {
   return role === "admin" || role === "gestor";
 }
 
+// Only the report's author or a validator (gestor/admin) may edit/submit a report.
+function canEdit(authorId: number, user: { id: number; role?: string }): boolean {
+  return authorId === user.id || isValidator(user.role);
+}
+
 export const managerialReportsRouter = router({
   listReports: protectedProcedure
     .input(
@@ -75,9 +80,12 @@ export const managerialReportsRouter = router({
         nextPriorities: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const data = await mrDb.getReport(input.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!canEdit(data.report.authorId, ctx.user)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o autor ou um validador podem editar" });
+      }
       if (data.report.status === "validado") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Relatório validado é imutável" });
       }
@@ -95,11 +103,19 @@ export const managerialReportsRouter = router({
         itemStatus: z.enum(ITEM_STATUSES).optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const data = await mrDb.getReport(input.reportId);
       if (!data) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!canEdit(data.report.authorId, ctx.user)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o autor ou um validador podem editar" });
+      }
       if (data.report.status === "validado") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Relatório validado é imutável" });
+      }
+      // Guard against IDOR: the item must belong to the report whose status we just checked.
+      const ownsItem = data.items.some((i) => i.id === input.itemId);
+      if (!ownsItem) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado neste relatório" });
       }
       await mrDb.updateItemFields(input.itemId, {
         value: input.value,
@@ -110,9 +126,12 @@ export const managerialReportsRouter = router({
 
   submitForValidation: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const data = await mrDb.getReport(input.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!canEdit(data.report.authorId, ctx.user)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o autor ou um validador podem enviar" });
+      }
       if (!["rascunho", "devolvido"].includes(data.report.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Só rascunho/devolvido podem ser enviados" });
       }

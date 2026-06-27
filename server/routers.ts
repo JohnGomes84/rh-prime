@@ -731,12 +731,22 @@ export const appRouter = router({
   vacationPeriods: router({
     list: protectedProcedure
       .input(z.object({ vacationId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        const vacation = await db.getVacation(input.vacationId);
+        if (!vacation) return [];
+        if (ctx.user) {
+          const { assertEmployeeInScope } = await import("./utils/scope.js");
+          await assertEmployeeInScope(ctx.user as any, (vacation as any).employeeId);
+        }
         return db.listVacationPeriods(input.vacationId);
       }),
     listByEmployee: protectedProcedure
       .input(z.object({ employeeId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        if (ctx.user) {
+          const { assertEmployeeInScope } = await import("./utils/scope.js");
+          await assertEmployeeInScope(ctx.user as any, input.employeeId);
+        }
         return db.listVacationPeriodsByEmployee(input.employeeId);
       }),
     create: protectedProcedure

@@ -698,6 +698,31 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getUpcomingVacationDeadlines(input?.daysAhead);
       }),
+    listWithEmployee: protectedProcedure
+      .input(z.object({ employeeId: z.number().optional() }).optional())
+      .query(async ({ input, ctx }) => {
+        // Escopo: admin/gestor veem todos; colaborador vê apenas o próprio.
+        const role = ctx.user?.role as string | undefined;
+        const isPrivileged = role === "admin" || role === "gestor";
+        let scopeEmployeeId = input?.employeeId;
+        if (!isPrivileged) {
+          const own = ctx.user
+            ? await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null)
+            : null;
+          // -1 garante resultado vazio quando o usuário não está vinculado a um funcionário.
+          scopeEmployeeId = (own as any)?.id ?? -1;
+        } else if (scopeEmployeeId && ctx.user) {
+          const { assertEmployeeInScope } = await import("./utils/scope.js");
+          await assertEmployeeInScope(ctx.user as any, scopeEmployeeId);
+        }
+        const allVacations = await db.listVacations(scopeEmployeeId);
+        const allEmployees = await db.listEmployees();
+        const empMap = new Map((allEmployees as any[]).map((e) => [e.id, e.fullName]));
+        return (allVacations as any[]).map((v) => ({
+          ...v,
+          employeeName: empMap.get(v.employeeId) ?? `ID ${v.employeeId}`,
+        }));
+      }),
   }),
 
   // ============================================================

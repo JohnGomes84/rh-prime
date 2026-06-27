@@ -152,6 +152,35 @@ export const inboxRouter = router({
         resolvedAt: new Date(),
       } as any);
 
+      // Post-approval hooks
+      if (input.decision === "APPROVED") {
+        const reqData = req as any;
+        if (reqData.kind === "ferias" && reqData.payload) {
+          const p = reqData.payload as Record<string, any>;
+          if (p.vacationId && p.startDate && p.endDate && p.days) {
+            const abonoDays = Number(p.abonoDays ?? 0);
+            await db.createVacationPeriod({
+              vacationId: p.vacationId,
+              employeeId: reqData.employeeId,
+              startDate: new Date(p.startDate),
+              endDate: new Date(p.endDate),
+              days: p.days,
+              isPecuniaryAllowance: abonoDays > 0,
+              pecuniaryDays: abonoDays,
+              noticeDate: new Date(),
+              status: "Agendada",
+            } as any);
+            const vacation = await db.getVacation(p.vacationId);
+            if (vacation) {
+              await db.updateVacation(p.vacationId, {
+                daysTaken: ((vacation as any).daysTaken ?? 0) + p.days + abonoDays,
+                status: "Agendada",
+              } as any);
+            }
+          }
+        }
+      }
+
       return { success: true };
     }),
 

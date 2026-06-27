@@ -156,3 +156,16 @@ powershell .\scripts\doctor-agents.ps1
 
 - 2026-06-24: GitHub Actions CI now uses Node 24 in `.github/workflows/ci.yml`.
 - `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` is set in CI to match GitHub's Node 24 action runtime migration.
+
+## Recent Férias CRUD Work
+
+- 2026-06-27: The read-only `/ferias` page became a full vacation management module with a CLT-compliant request/approval workflow (plan in `docs/superpowers/plans/2026-06-25-ferias-crud.md`).
+- `client/src/pages/Vacations.tsx` was rewritten: stats (vencidas / 60d / agendadas), an expandable períodos-aquisitivos table showing the gozo periods, and a dialog that lets a colaborador request vacation (creates an Inbox `kind: "ferias"` request) or an admin/gestor schedule it directly. It also fixed pre-existing wrong field names (`acquisitivePeriodStart`/`totalDaysEntitled` → schema's `acquisitionStart`/`daysEntitled`).
+- `server/routers/inbox.ts`: approving a `kind: "ferias"` request now creates the `vacationPeriod` and updates `vacation.daysTaken`/`status`. CLT validation (`server/utils/vacation-rules.ts` `validateVacationRequest`) is enforced **server-side** in `inbox.create` and in the approval hook; the gozo `days` is always derived from the dates on the server via `calendarDaysBetween`, never trusted from the client payload.
+- `decide()` is now idempotent: it refuses to decide an already `APPROVED`/`REJECTED`/`CANCELLED` request, preventing duplicate vacation periods and double-counted `daysTaken`.
+- `server/routers.ts`: added `vacations.listWithEmployee` (joins employee `fullName`) and scoped it plus `vacationPeriods.list`/`listByEmployee` by role/scope (admin/gestor see all, colaborador only own) to close IDOR, matching the recent authorization-hardening direction.
+- `server/_core/notification-scheduler.ts`: added a 90-day concessão heads-up. The dedup key in `alreadyNotified` now also considers the notification title (when provided) so the 90-day Info alert no longer suppresses the later 30-day Aviso for the same `concessionLimit`.
+- `client/src/pages/Inbox.tsx`: rich rendering of the `kind: "ferias"` payload (período aquisitivo, gozo solicitado, abono).
+- Tests added: `server/routers/inbox-ferias.test.ts` (approval hook, tampered-`days` payload, idempotency, rejection). Task 1's `server/utils/vacation-rules.test.ts` already covered the pure CLT rules.
+- Validation passed on merged `main`: `pnpm check`, `pnpm test` (206 passing), and `pnpm build`. Browser end-to-end (logged-in flow against a live DB) remains a manual step.
+- Merged to `main` as `15cd96f` and pushed (`ba6cd0a..15cd96f`).

@@ -20,6 +20,12 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useRole } from "@/_core/hooks/useRole";
 
+function formatDate(d: string | Date | null | undefined) {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
+}
+
 const KIND_LABEL: Record<string, string> = {
   ferias: "Férias",
   atestado: "Atestado",
@@ -271,6 +277,16 @@ export default function Inbox() {
                               {item.description && (
                                 <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
                               )}
+                              {item.kind === "ferias" && item.payload && (() => {
+                                const p = item.payload as Record<string, any>;
+                                return (
+                                  <div className="mt-2 rounded-md bg-muted/50 p-2 text-xs space-y-1">
+                                    <p><strong>Período aquisitivo:</strong> {formatDate(p.acquisitionStart)} a {formatDate(p.acquisitionEnd)}</p>
+                                    <p><strong>Gozo solicitado:</strong> {formatDate(p.startDate)} a {formatDate(p.endDate)} ({p.days} dias)</p>
+                                    {p.abonoDays > 0 && <p><strong>Abono pecuniário:</strong> {p.abonoDays} dias</p>}
+                                  </div>
+                                );
+                              })()}
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />

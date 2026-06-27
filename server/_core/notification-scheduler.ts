@@ -16,6 +16,7 @@ function todayStr(): string {
 
 async function alreadyNotified(opts: {
   type: string;
+  title?: string;
   relatedEmployeeId: number | null;
   dueDate: string;
 }): Promise<boolean> {
@@ -25,6 +26,9 @@ async function alreadyNotified(opts: {
     eq(notifications.type, opts.type as any),
     eq(notifications.dueDate, opts.dueDate as any),
   ];
+  if (opts.title !== undefined) {
+    conditions.push(eq(notifications.title, opts.title));
+  }
   if (opts.relatedEmployeeId !== null) {
     conditions.push(eq(notifications.relatedEmployeeId, opts.relatedEmployeeId));
   } else {
@@ -46,7 +50,7 @@ async function notifyOnce(payload: {
   relatedEmployeeId: number | null;
   dueDate: string;
 }): Promise<boolean> {
-  if (await alreadyNotified({ type: payload.type, relatedEmployeeId: payload.relatedEmployeeId, dueDate: payload.dueDate })) {
+  if (await alreadyNotified({ type: payload.type, title: payload.title, relatedEmployeeId: payload.relatedEmployeeId, dueDate: payload.dueDate })) {
     return false;
   }
   await db.createNotification({
@@ -83,6 +87,20 @@ async function scanVacations(): Promise<number> {
       title: "🚨 Férias vencidas",
       message: `Período concessivo venceu em ${dueDate}.`,
       severity: "Crítico",
+      relatedEmployeeId: v.employeeId ?? null,
+      dueDate,
+    });
+    if (fired) created++;
+  }
+  // 90-day early heads-up (distinct title keeps it from colliding with the 30-day Aviso)
+  const ninetyDay = await db.getUpcomingVacationDeadlines(90);
+  for (const v of ninetyDay as any[]) {
+    const dueDate = new Date(v.concessionLimit).toISOString().slice(0, 10);
+    const fired = await notifyOnce({
+      type: "Férias",
+      title: "📋 Férias: prazo concessivo em 90 dias",
+      message: `Período concessivo termina em ${dueDate}. Providencie o agendamento.`,
+      severity: "Info",
       relatedEmployeeId: v.employeeId ?? null,
       dueDate,
     });

@@ -27,6 +27,18 @@ export interface VacationValidationResult {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/**
+ * Dias corridos (inclusivos) entre duas datas ISO yyyy-MM-dd.
+ * Fonte da verdade do servidor para o número de dias de gozo — nunca confiar
+ * no valor enviado pelo cliente.
+ */
+export function calendarDaysBetween(startDate: string, endDate: string): number {
+  const s = new Date(startDate + 'T00:00:00');
+  const e = new Date(endDate + 'T00:00:00');
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+  return Math.max(0, Math.round((e.getTime() - s.getTime()) / MS_PER_DAY) + 1);
+}
+
 export function validateVacationRequest(
   input: VacationRequestInput,
 ): VacationValidationResult {

@@ -29,6 +29,8 @@ import { lgpdRouter } from './routers/compliance-lgpd.js';
 import { complianceRouter as compliancePortariaRouter } from './routers/compliance-portaria.js';
 import { kanbanRouter } from './routers/kanban.js';
 import { managerialReportsRouter } from './routers/managerial-reports.js';
+import { operationalRoutinesRouter } from './routers/operational-routines.js';
+import { demandsRouter } from './routers/demands.js';
 import { TRPCError } from '@trpc/server';
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters.js";
 import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError, forgotPassword, resetPassword } from "./modules/auth/auth-service.js";
@@ -1448,6 +1450,16 @@ export const appRouter = router({
   // KANBAN (boards/lists/cards — fase 8)
   // ============================================================
   kanban: kanbanRouter,
+
+  // ============================================================
+  // OPERATIONAL ROUTINES (recurring operational work + reminders)
+  // ============================================================
+  operationalRoutines: operationalRoutinesRouter,
+
+  // ============================================================
+  // DEMANDS (estrutura funcional de demandas — workflow simples)
+  // ============================================================
+  demands: demandsRouter,
 
   // ============================================================
   // BUSINESS DAYS (BR working day calculator)

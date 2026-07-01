@@ -1177,3 +1177,5 @@ export type InsertReadAuditLog = typeof readAuditLogs.$inferInsert;
 // ============================================================
 export * from "./schema-kanban.js";
 export * from "./schema-managerial-reports.js";
+export * from "./schema-operational-routines.js";
+export * from "./schema-demands.js";

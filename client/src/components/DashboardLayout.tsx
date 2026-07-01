@@ -35,6 +35,7 @@ import {
   FolderOpen,
   FileText,
   ClipboardList,
+  CalendarClock,
   ArrowRightLeft,
   Bell,
   Settings,
@@ -75,6 +76,7 @@ const menuItems: MenuItem[] = [
   // Geral
   { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
   { icon: Inbox, label: "Caixa de entrada", path: "/inbox", section: "Geral" },
+  { icon: ClipboardList, label: "Demandas", path: "/demandas", section: "Geral" },
   { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: Building2, label: "Departamentos", path: "/departamentos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
@@ -103,6 +105,7 @@ const menuItems: MenuItem[] = [
   { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: FileText, label: "Relatórios", path: "/relatorios", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: ClipboardList, label: "Relatórios Gerenciais", path: "/relatorios-gerenciais", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: CalendarClock, label: "Rotinas Operacionais", path: "/rotinas-operacionais", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Análise", requiredRoles: [...ADMIN_ONLY] },
   // Sistema
   { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },

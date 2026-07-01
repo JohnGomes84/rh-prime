@@ -25,7 +25,7 @@ function parseDbUrl(url: string) {
 }
 
 export default defineConfig({
-  schema: ["./drizzle/schema.ts", "./drizzle/schema-kanban.ts"],
+  schema: ["./drizzle/schema.ts", "./drizzle/schema-kanban.ts", "./drizzle/schema-managerial-reports.ts", "./drizzle/schema-operational-routines.ts", "./drizzle/schema-demands.ts"],
   out: "./drizzle",
   dialect: "mysql",
   dbCredentials: needsTls

@@ -7,6 +7,7 @@ import {
   kanbanCards,
 } from "../../drizzle/schema-kanban.js";
 import { notifyKanbanCardDeadline } from "./kanban-notifications.js";
+import { dispatchRoutineReminders, generateDueOccurrences } from "../modules/operational-routines/db.js";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
@@ -299,19 +300,31 @@ export async function runNotificationScan(): Promise<{
   timeBank: number;
   birthdays: number;
   kanban: number;
+  operationalRoutines: number;
 }> {
-  const [vacations, exams, timeBank, birthdays, kanban] = await Promise.all([
+  const [vacations, exams, timeBank, birthdays, kanban, operationalRoutines] = await Promise.all([
     scanVacations().catch((e) => { console.warn("[Scheduler] vacations scan:", e); return 0; }),
     scanMedicalExams().catch((e) => { console.warn("[Scheduler] exams scan:", e); return 0; }),
     scanTimeBank().catch((e) => { console.warn("[Scheduler] time bank scan:", e); return 0; }),
     scanBirthdays().catch((e) => { console.warn("[Scheduler] birthdays scan:", e); return 0; }),
     scanKanbanDeadlines().catch((e) => { console.warn("[Scheduler] kanban scan:", e); return 0; }),
+    (async () => {
+      const generated = await generateDueOccurrences(1).catch((e) => {
+        console.warn("[Scheduler] operational routine generation:", e);
+        return { created: 0, skipped: 0 };
+      });
+      const reminders = await dispatchRoutineReminders().catch((e) => {
+        console.warn("[Scheduler] operational routine reminders:", e);
+        return 0;
+      });
+      return generated.created + reminders;
+    })(),
   ]);
-  const total = vacations + exams + timeBank + birthdays + kanban;
+  const total = vacations + exams + timeBank + birthdays + kanban + operationalRoutines;
   if (total > 0) {
-    console.log(`[Scheduler] created ${total} notifications (vac:${vacations} exams:${exams} bank:${timeBank} bday:${birthdays} kanban:${kanban})`);
+    console.log(`[Scheduler] created ${total} notifications/events (vac:${vacations} exams:${exams} bank:${timeBank} bday:${birthdays} kanban:${kanban} routines:${operationalRoutines})`);
   }
-  return { vacations, exams, timeBank, birthdays, kanban };
+  return { vacations, exams, timeBank, birthdays, kanban, operationalRoutines };
 }
 
 let intervalHandle: NodeJS.Timeout | null = null;

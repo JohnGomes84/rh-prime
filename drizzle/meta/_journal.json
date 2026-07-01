@@ -176,6 +176,62 @@
       "when": 1778626000000,
       "tag": "0024_onboarding_v2_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1782839163447,
+      "tag": "0028_demands",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1782839163448,
+      "tag": "0026_kanban_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1782839163449,
+      "tag": "0027_kanban_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1782839163450,
+      "tag": "0029_kanban_v2_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1782839163451,
+      "tag": "0030_kanban_v2_global_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1782839163452,
+      "tag": "0031_user_account_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1782839163453,
+      "tag": "0032_managerial_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1782839163454,
+      "tag": "0033_operational_routines",
+      "breakpoints": true
     }
   ]
 }

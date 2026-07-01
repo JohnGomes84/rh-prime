@@ -28,6 +28,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Reports = lazy(() => import("./pages/Reports"));
 const ManagerialReports = lazy(() => import("./pages/ManagerialReports"));
+const OperationalRoutines = lazy(() => import("./pages/OperationalRoutines"));
 const Recruitment = lazy(() => import("./pages/Recruitment"));
 const Timesheet = lazy(() => import("./pages/Timesheet"));
 const Payroll = lazy(() => import("./pages/Payroll"));
@@ -52,6 +53,7 @@ const AdmissionDetail = lazy(() => import("./pages/AdmissionDetail"));
 const TerminationList = lazy(() => import("./pages/TerminationList"));
 const TerminationDetail = lazy(() => import("./pages/TerminationDetail"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const Demands = lazy(() => import("./pages/Demands"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
 const KanbanBoards = lazy(() => import("./pages/KanbanBoards"));
@@ -100,6 +102,7 @@ function Router() {
         <Route path="/configuracoes" component={guarded(Settings, "admin")} />
         <Route path="/relatorios" component={guarded(Reports, "manager")} />
         <Route path="/relatorios-gerenciais" component={guarded(ManagerialReports, "manager")} />
+        <Route path="/rotinas-operacionais" component={guarded(OperationalRoutines, "manager")} />
         <Route path="/recrutamento" component={guarded(Recruitment, "manager")} />
         <Route path="/ponto" component={Timesheet} />
         <Route path="/horas-extras" component={OvertimeManagement} />
@@ -113,6 +116,7 @@ function Router() {
         <Route path="/desligamento" component={guarded(TerminationList, "admin")} />
         <Route path="/desligamento/:id" component={guarded(TerminationDetail, "admin")} />
         <Route path="/inbox" component={Inbox} />
+        <Route path="/demandas" component={Demands} />
         <Route path="/privacidade" component={Privacy} />
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
         <Route path="/kanban" component={KanbanBoards} />

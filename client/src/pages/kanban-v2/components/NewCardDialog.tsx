@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useRole } from "@/_core/hooks/useRole";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 
@@ -52,6 +54,8 @@ interface Props {
 
 export function NewCardDialog({ open, onOpenChange }: Props) {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const { isManager } = useRole();
 
   const [boardId, setBoardId] = useState<number | null>(null);
   const [listId, setListId] = useState<number | null>(null);
@@ -87,13 +91,23 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
   const boards = boardsQuery.data ?? [];
   const lists = listsQuery.data ?? [];
   const labels = labelsQuery.data ?? [];
+  const editableBoards = useMemo(
+    () => boards.filter((board: any) => board.viewerRole === "admin" || board.viewerRole === "editor"),
+    [boards],
+  );
+  const selectedBoard = useMemo(
+    () => boards.find((board: any) => board.id === boardId) ?? null,
+    [boards, boardId],
+  );
+  const canCreateOnSelectedBoard =
+    !selectedBoard || selectedBoard.viewerRole === "admin" || selectedBoard.viewerRole === "editor";
 
   // Auto-select board if only one exists
   useEffect(() => {
-    if (open && boards.length === 1 && !boardId) {
-      setBoardId((boards[0] as any).id);
+    if (open && editableBoards.length === 1 && !boardId) {
+      setBoardId((editableBoards[0] as any).id);
     }
-  }, [open, boards, boardId]);
+  }, [open, editableBoards, boardId]);
 
   // Auto-select first list (A Fazer) when lists load
   useEffect(() => {
@@ -143,6 +157,9 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
       const cardId = result.id;
 
       const promises: Promise<unknown>[] = [];
+      if (selectedAssigneeIds.length === 0 && user?.id != null && !isManager) {
+        promises.push(setAssigneesMut.mutateAsync({ cardId, boardId: boardId!, userIds: [user.id] }));
+      }
       if (selectedAssigneeIds.length > 0 && boardId) {
         promises.push(setAssigneesMut.mutateAsync({ cardId, boardId, userIds: selectedAssigneeIds }));
       }
@@ -184,6 +201,10 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
       toast.error("Preencha o titulo da demanda");
       return;
     }
+    if (!canCreateOnSelectedBoard) {
+      toast.error("Voce nao tem permissao para criar demandas neste quadro");
+      return;
+    }
     createCard.mutate({
       boardId,
       listId,
@@ -223,7 +244,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
   };
 
   const isPending = createCard.isPending || setAssigneesMut.isPending || setLabelsMut.isPending;
-  const showBoardSelector = boards.length > 1;
+  const showBoardSelector = editableBoards.length > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -240,7 +261,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
 
         <div className="space-y-4">
           {/* Board selector — only shown when multiple boards exist */}
-          {showBoardSelector && (
+          {editableBoards.length > 0 && showBoardSelector && (
             <div className="space-y-1.5">
               <Label htmlFor="nc-board">Quadro</Label>
               <Select
@@ -251,7 +272,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
                   <SelectValue placeholder={boardsQuery.isLoading ? "Carregando..." : "Selecione o quadro"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {boards.map((b: any) => (
+                  {editableBoards.map((b: any) => (
                     <SelectItem key={b.id} value={String(b.id)}>
                       {b.name}
                     </SelectItem>
@@ -259,6 +280,11 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
                 </SelectContent>
               </Select>
             </div>
+          )}
+          {editableBoards.length === 0 && boardsQuery.data && (
+            <p className="text-sm text-muted-foreground">
+              Voce nao tem nenhum quadro com permissao de edicao para criar demandas.
+            </p>
           )}
 
           {/* Title */}

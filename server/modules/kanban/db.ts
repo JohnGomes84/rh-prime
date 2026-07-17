@@ -128,7 +128,10 @@ export async function getUserBoardRole(userId: number, boardId: number, userRole
 // ============================================================
 // BOARDS
 // ============================================================
-export async function listBoardsForUser(userId: number, userRole?: string): Promise<KanbanBoard[]> {
+export async function listBoardsForUser(
+  userId: number,
+  userRole?: string,
+): Promise<Array<KanbanBoard & { viewerRole: BoardAccessRole }>> {
   const db = await requireDb();
 
   if (userRole === "admin") {
@@ -136,7 +139,8 @@ export async function listBoardsForUser(userId: number, userRole?: string): Prom
       .select()
       .from(kanbanBoards)
       .where(eq(kanbanBoards.archived, false))
-      .orderBy(desc(kanbanBoards.updatedAt));
+      .orderBy(desc(kanbanBoards.updatedAt))
+      .then((rows) => rows.map((board) => ({ ...board, viewerRole: "admin" as const })));
   }
 
   const owned = await db
@@ -176,7 +180,13 @@ export async function listBoardsForUser(userId: number, userRole?: string): Prom
   for (const b of publicBoards) map.set(b.id, b);
   for (const b of teamBoards) map.set(b.id, b);
 
-  return Array.from(map.values()).sort((a, b) => (b.updatedAt as any) - (a.updatedAt as any));
+  const boards = Array.from(map.values()).sort((a, b) => (b.updatedAt as any) - (a.updatedAt as any));
+  return Promise.all(
+    boards.map(async (board) => ({
+      ...board,
+      viewerRole: await getUserBoardRole(userId, board.id, userRole),
+    })),
+  ) as Promise<Array<KanbanBoard & { viewerRole: BoardAccessRole }>>;
 }
 
 export async function getBoardById(boardId: number): Promise<KanbanBoard | null> {

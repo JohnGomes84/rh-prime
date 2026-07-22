@@ -185,6 +185,15 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
   const setAssigneesMut = trpc.kanban.cards.setAssignees.useMutation();
   const setLabelsMut = trpc.kanban.cards.setLabels.useMutation();
   const createChecklistItem = trpc.kanban.checklist.create.useMutation();
+  const createList = trpc.kanban.lists.create.useMutation({
+    onSuccess: async (result, variables) => {
+      await utils.kanban.lists.listByBoard.invalidate({ boardId: variables.boardId });
+      setListId(result.id);
+    },
+    onError: (e) => {
+      toast.error(e.message ?? "Falha ao preparar o quadro para a nova demanda");
+    },
+  });
 
   const createLabel = trpc.kanban.labels.create.useMutation({
     onSuccess: async (result) => {
@@ -196,8 +205,8 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
     onError: (e) => toast.error(e.message ?? "Falha ao criar label"),
   });
 
-  const handleSubmit = () => {
-    if (!boardId || !listId || !title.trim()) {
+  const handleSubmit = async () => {
+    if (!boardId || !title.trim()) {
       toast.error("Preencha o titulo da demanda");
       return;
     }
@@ -205,9 +214,25 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
       toast.error("Voce nao tem permissao para criar demandas neste quadro");
       return;
     }
+    let targetListId = listId;
+    if (!targetListId) {
+      if (lists.length === 0) {
+        const createdList = await createList.mutateAsync({
+          boardId,
+          name: "A Fazer",
+        });
+        targetListId = createdList.id;
+      } else {
+        targetListId = (lists[0] as any)?.id ?? null;
+      }
+    }
+    if (!targetListId) {
+      toast.error("Nao foi possivel determinar a lista inicial da demanda");
+      return;
+    }
     createCard.mutate({
       boardId,
-      listId,
+      listId: targetListId,
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
@@ -243,8 +268,14 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
     );
   };
 
-  const isPending = createCard.isPending || setAssigneesMut.isPending || setLabelsMut.isPending;
+  const isPending =
+    createCard.isPending ||
+    createList.isPending ||
+    setAssigneesMut.isPending ||
+    setLabelsMut.isPending;
   const showBoardSelector = editableBoards.length > 1;
+  const submitDisabled =
+    isPending || !title.trim() || !boardId || !canCreateOnSelectedBoard;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -284,6 +315,12 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
           {editableBoards.length === 0 && boardsQuery.data && (
             <p className="text-sm text-muted-foreground">
               Voce nao tem nenhum quadro com permissao de edicao para criar demandas.
+            </p>
+          )}
+          {boardId && canCreateOnSelectedBoard && lists.length === 0 && !listsQuery.isLoading && (
+            <p className="text-xs text-muted-foreground">
+              Este quadro ainda nao tem listas. Vamos criar automaticamente a lista inicial
+              "A Fazer" ao salvar a demanda.
             </p>
           )}
 
@@ -541,7 +578,7 @@ export function NewCardDialog({ open, onOpenChange }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !title.trim() || !boardId || !listId}>
+          <Button onClick={() => void handleSubmit()} disabled={submitDisabled}>
             {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
             Criar demanda
           </Button>

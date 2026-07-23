@@ -22,7 +22,7 @@ export default function Home() {
     if (typeof window === "undefined") return;
     if (sessionStorage.getItem(REDIRECT_DISMISS_KEY) === "1") return;
     sessionStorage.setItem(REDIRECT_DISMISS_KEY, "1");
-    setLocation("/ponto");
+    setLocation("/app/ponto");
   }, [authLoading, role, setLocation]);
 
   if (authLoading) {

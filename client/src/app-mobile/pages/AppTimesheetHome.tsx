@@ -535,46 +535,21 @@ export default function AppTimesheetHome() {
 
   return (
     <MobileAppLayout
-      title="Ponto"
-      subtitle="Shell mobile ligado ao backend real de jornada."
+      title="Meu ponto"
+      subtitle={linkedEmployee?.fullName ? `Olá, ${linkedEmployee.fullName.split(" ")[0]}` : "Registre sua jornada"}
     >
       <div className="space-y-4">
         <Card className="border-slate-800 bg-slate-900 text-slate-50">
           <CardContent className="space-y-5 pt-6">
             <LiveClock />
 
-            <div className="grid gap-3 text-sm sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">colaborador</p>
-                <p className="mt-2 font-medium">{linkedEmployee?.fullName ?? "nao vinculado"}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Referencia: {journeyTodayStatus?.referenceDate ?? "--"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">proxima acao</p>
-                <p className="mt-2 font-medium">{nextActionLabel}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {currentBreak
-                    ? "Intervalo em andamento."
-                    : isWorking
-                      ? `Jornada aberta ha ${elapsedTime || "00:00:00"}.`
-                      : "Aguardando nova batida."}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">competencia</p>
-                <p className="mt-2 font-medium">{competence.shortLabel}</p>
-                <p className="mt-1 text-xs text-slate-500">{competence.fullLabel}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">ajustes em aberto</p>
-                <p className="mt-2 font-medium">{openAdjustmentsCount}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Solicitações abertas ou em análise nesta competência.
-                </p>
-              </div>
-            </div>
+            <p className="text-center text-sm text-slate-400">
+              {currentBreak
+                ? "Em intervalo"
+                : isWorking
+                  ? `Trabalhando há ${elapsedTime || "00:00:00"}`
+                  : "Você está fora de expediente"}
+            </p>
 
             <Button
               size="lg"
@@ -621,17 +596,13 @@ export default function AppTimesheetHome() {
 
             {!canUseTimesheet ? (
               <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                Seu usuario ainda nao esta vinculado a um funcionario. O app fica bloqueado ate esse vinculo existir.
+                Seu usuário ainda não está vinculado a um funcionário. Fale com o RH para liberar o ponto.
               </div>
-            ) : journeyTodayStatusQuery.error ? (
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                Nao foi possivel consultar o Journey V2 neste ambiente.
+            ) : shouldWarnInsecureTransport ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                Conexão insegura. Abra o app por HTTPS para registrar o ponto.
               </div>
-            ) : (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
-                {getJourneyReasonLabel(journeyTodayStatus?.reasonCode)}
-              </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 
@@ -639,44 +610,17 @@ export default function AppTimesheetHome() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Timer className="h-4 w-4 text-blue-300" />
-              Jornada de hoje
+              Hoje
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+          <CardContent className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-center">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">entrada</p>
-              <p className="mt-2 font-medium">{timelineSummary.firstClockInAt}</p>
+              <p className="mt-2 text-lg font-semibold tabular-nums">{timelineSummary.firstClockInAt}</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">saida</p>
-              <p className="mt-2 font-medium">{timelineSummary.lastClockOutAt}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">status operacional</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Badge
-                  variant="outline"
-                  className={
-                    isWorking
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                      : "border-slate-700 bg-slate-900 text-slate-300"
-                  }
-                >
-                  {isWorking ? "jornada aberta" : "aguardando acao"}
-                </Badge>
-                {currentBreak ? (
-                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-300">
-                    em intervalo
-                  </Badge>
-                ) : null}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">sessoes V2</p>
-              <p className="mt-2 font-medium">
-                {journeyDayTimelineQuery.data?.sessions?.length ?? 0}
-                {openSession ? " + 1 aberta" : ""}
-              </p>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-center">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">saída</p>
+              <p className="mt-2 text-lg font-semibold tabular-nums">{timelineSummary.lastClockOutAt}</p>
             </div>
           </CardContent>
         </Card>
@@ -720,14 +664,6 @@ export default function AppTimesheetHome() {
                           {event.source ?? "web"}
                         </Badge>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-                        <span className="rounded-full border border-slate-800 bg-slate-900 px-2 py-1">
-                          NSR {event.nsr ?? "--"}
-                        </span>
-                        <span className="rounded-full border border-slate-800 bg-slate-900 px-2 py-1">
-                          {event.sourceReference ?? "sem referencia"}
-                        </span>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -736,86 +672,19 @@ export default function AppTimesheetHome() {
           </Card>
         ) : null}
 
-        <Card className="border-slate-800 bg-slate-900 text-slate-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="h-4 w-4 text-emerald-300" />
-              Condicoes da batida
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <span className="flex items-center gap-2">
-                <Wifi className="h-4 w-4" />
-                Conexao
-              </span>
-              <Badge variant={isOnline ? "outline" : "destructive"}>
-                {isOnline ? "online" : "offline"}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <span className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Localizacao
-              </span>
-              <Badge variant={locationAvailable && hasGeoConsent ? "outline" : "secondary"}>
-                {hasGeoConsent
-                  ? locationAvailable ? "disponivel" : "indisponivel"
-                  : "sem consentimento"}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <span className="flex items-center gap-2">
-                <Camera className="h-4 w-4" />
-                Camera
-              </span>
-              <Badge variant={cameraAvailable && hasSelfieConsent ? "outline" : "secondary"}>
-                {hasSelfieConsent
-                  ? cameraAvailable ? "disponivel" : "nao liberada"
-                  : "sem consentimento"}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <span className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                Antifraude
-              </span>
-              <Badge variant="outline">fingerprint ativo</Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <span className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                Sessao
-              </span>
-              <Badge variant={shouldWarnInsecureTransport ? "destructive" : "outline"}>
-                {shouldWarnInsecureTransport ? "transporte inseguro" : "transporte seguro"}
-              </Badge>
-            </div>
-            {sessionSecurity?.expiresAt ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-400">
-                Sessao atual expira em {new Date(sessionSecurity.expiresAt).toLocaleString("pt-BR")}.
-              </div>
-            ) : null}
-            {(!hasGeoConsent || !hasSelfieConsent) ? (
-              <div className="space-y-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-200">
-                <p>Para usar selfie e geolocalizacao como evidencia do ponto, ative os consentimentos em Privacidade.</p>
-                <Link href="/privacidade">
-                  <Button
-                    variant="outline"
-                    className="h-10 w-full rounded-2xl border-amber-400/30 bg-transparent text-amber-100 hover:bg-amber-500/10"
-                  >
-                    Abrir Privacidade
-                  </Button>
-                </Link>
-              </div>
-            ) : null}
-            {lastLocation ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-400">
-                Ultima localizacao capturada: {lastLocation}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+        {canUseTimesheet && (!hasGeoConsent || !hasSelfieConsent) ? (
+          <div className="space-y-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-200">
+            <p>Para registrar o ponto com selfie e localização, ative os consentimentos em Privacidade.</p>
+            <Link href="/privacidade">
+              <Button
+                variant="outline"
+                className="h-10 w-full rounded-2xl border-amber-400/30 bg-transparent text-amber-100 hover:bg-amber-500/10"
+              >
+                Abrir Privacidade
+              </Button>
+            </Link>
+          </div>
+        ) : null}
 
         {journeyV2Enabled && canUseTimesheet ? (
           <Card className="border-slate-800 bg-slate-900 text-slate-50">
@@ -944,33 +813,7 @@ export default function AppTimesheetHome() {
           </Card>
         ) : null}
 
-        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
-          <div className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 text-blue-300" />
-            <p>
-              O shell mobile agora registra batidas, mostra a timeline do dia e recebe solicitacoes de ajuste sem depender do fluxo legado para a operacao basica.
-            </p>
-          </div>
-        </div>
-
-        <Link href="/ponto">
-          <Button
-            variant="outline"
-            className="h-12 w-full justify-between rounded-2xl border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-          >
-            Abrir fluxo completo atual
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-400">
-          <div className="flex items-start gap-2">
-            <FileClock className="mt-0.5 h-4 w-4 text-slate-500" />
-            <p>
-              Mantive o link para o /ponto atual como fallback operacional enquanto a migracao do app continua.
-            </p>
-          </div>
-        </div>
+        <p className="pt-2 text-center text-[11px] text-slate-600">RH Prime · ML Serviços</p>
       </div>
     </MobileAppLayout>
   );

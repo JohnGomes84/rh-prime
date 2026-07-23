@@ -1,6 +1,6 @@
 import type { CookieOptions, Request } from "express";
 
-function isSecureRequest(req: Request) {
+export function isSecureRequest(req: Request) {
   if (req.protocol === "https") return true;
   const forwardedProto = req.headers["x-forwarded-proto"];
   if (!forwardedProto) return false;

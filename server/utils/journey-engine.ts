@@ -88,6 +88,7 @@ export async function evaluateClockRecord(opts: {
   clockIn: Date;
   clockOut: Date;
   rule: ScheduleRule;
+  unpaidBreakMinutes?: number;
 }): Promise<ClockEvaluation> {
   const { clockIn, clockOut, rule } = opts;
   const notes: string[] = [];
@@ -107,7 +108,8 @@ export async function evaluateClockRecord(opts: {
     : 0;
 
   const totalMinutes = Math.floor((clockOut.getTime() - clockIn.getTime()) / MS_PER_MIN);
-  const workedMinutes = Math.max(0, totalMinutes - (isWorkday ? rule.lunchBreakMinutes : 0));
+  const breakMinutes = Math.max(0, opts.unpaidBreakMinutes ?? (isWorkday ? rule.lunchBreakMinutes : 0));
+  const workedMinutes = Math.max(0, totalMinutes - breakMinutes);
 
   // Atraso: comparar clockIn vs startTime no dia (com tolerância)
   let delayMinutes = 0;

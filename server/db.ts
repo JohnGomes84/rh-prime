@@ -2289,16 +2289,47 @@ export async function getTimeRecord(id: number) {
   }, "getTimeRecord");
 }
 
+function getCurrentTimesheetCompetenceRange(reference = new Date()) {
+  const year = reference.getFullYear();
+  const month = reference.getMonth();
+  const day = reference.getDate();
+
+  if (day >= 26) {
+    return {
+      start: new Date(year, month, 26, 0, 0, 0, 0),
+      end: new Date(year, month + 1, 25, 23, 59, 59, 999),
+    };
+  }
+
+  return {
+    start: new Date(year, month - 1, 26, 0, 0, 0, 0),
+    end: new Date(year, month, 25, 23, 59, 59, 999),
+  };
+}
+
+function getCurrentDayRange(reference = new Date()) {
+  return {
+    start: new Date(reference.getFullYear(), reference.getMonth(), reference.getDate(), 0, 0, 0, 0),
+    end: new Date(reference.getFullYear(), reference.getMonth(), reference.getDate(), 23, 59, 59, 999),
+  };
+}
+
 export async function getOpenTimeRecord(employeeId: number) {
   return withDBRetry(async () => {
     const db = await getDb();
     if (!db) return null;
+    const competence = getCurrentTimesheetCompetenceRange();
+    const currentDay = getCurrentDayRange();
 
     const result = await db.select().from(timeRecords)
       .where(
         and(
           eq(timeRecords.employeeId, employeeId),
-          sql`${timeRecords.clockOut} IS NULL`
+          sql`${timeRecords.clockOut} IS NULL`,
+          gte(timeRecords.clockIn, competence.start),
+          lte(timeRecords.clockIn, competence.end),
+          gte(timeRecords.clockIn, currentDay.start),
+          lte(timeRecords.clockIn, currentDay.end),
         )
       )
       .orderBy(desc(timeRecords.clockIn))

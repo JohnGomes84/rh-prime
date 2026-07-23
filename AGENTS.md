@@ -169,3 +169,82 @@ powershell .\scripts\doctor-agents.ps1
 - Tests added: `server/routers/inbox-ferias.test.ts` (approval hook, tampered-`days` payload, idempotency, rejection). Task 1's `server/utils/vacation-rules.test.ts` already covered the pure CLT rules.
 - Validation passed on merged `main`: `pnpm check`, `pnpm test` (206 passing), and `pnpm build`. Browser end-to-end (logged-in flow against a live DB) remains a manual step.
 - Merged to `main` as `15cd96f` and pushed (`ba6cd0a..15cd96f`).
+
+## Recent Journey / Collaborator App Work
+
+- 2026-07-22: The timesheet redesign effort was formalized across:
+  - `docs/superpowers/plans/2026-07-22-redesenho-ponto-e-jornada.md`
+  - `docs/superpowers/specs/2026-07-22-ponto-jornada-redesign.md`
+  - `docs/superpowers/specs/2026-07-22-ponto-legado-inventory.md`
+  - `docs/superpowers/specs/2026-07-22-schema-journey-v2.md`
+  - `docs/superpowers/specs/2026-07-22-v2-backlog-and-cutover-matrix.md`
+- Journey V2 foundation landed in:
+  - `server/modules/journey-v2/`
+  - `server/routers/journey-v2.ts`
+  - `drizzle/schema-journey-v2.ts`
+  - migration `drizzle/0034_journey_v2_foundation.sql`
+- Manual implantation flow for timesheet was expanded to accept full jornada (`clock_in`, `break_start`, `break_end`, `clock_out`) with mandatory justification and approved retroactive registration:
+  - backend in `server/routers/timesheet.ts`
+  - admin UI in `client/src/pages/JourneyAdmin.tsx`
+- Employee-facing `/ponto` remains the operational fallback and already contains:
+  - linked-employee guard via `auth.session`
+  - Journey V2 daily status
+  - timeline of the day
+  - latest receipt
+  - V2 adjustment requests
+  - selfie upload and location/fingerprint capture
+- A dedicated collaborator mobile app shell was created under `client/src/app-mobile/` with:
+  - `components/MobileAppLayout.tsx`
+  - `pages/AppHome.tsx`
+  - `pages/AppTimesheetHome.tsx`
+  - `hooks/useInstallPrompt.ts`
+  - `hooks/useCollaboratorAppAccess.ts`
+  - `services/journey.ts`
+  - `services/telemetry.ts`
+- New protected routes were added in `client/src/App.tsx`:
+  - `/app`
+  - `/app/ponto`
+- The collaborator app is currently PWA-based and uses:
+  - `client/public/manifest.webmanifest`
+  - `client/public/sw.js`
+  - `client/public/app-icon.svg`
+  - `client/public/app-icon-maskable.svg`
+  - service worker registration in `client/src/main.tsx`
+- Current collaborator app scope:
+  - home screen with eligibility, linked employee, install prompt, and point competence `26 -> 25`
+  - mobile point screen with real entry/exit/interval registration
+  - latest receipt
+  - V2 day timeline
+  - adjustment request creation
+  - recent adjustment request list
+  - competence visibility and open-adjustment count
+- Pilot control now exists server-side instead of frontend-only:
+  - helper `getCollaboratorAppPilotAccess()` in `server/_core/feature-flags.ts`
+  - surfaced through `server/_core/systemRouter.ts`
+  - supports `COLLABORATOR_APP_ALLOWED_ROLES`, `COLLABORATOR_APP_ALLOWED_EMAILS`, `COLLABORATOR_APP_ALLOWED_USER_IDS`
+  - admin override remains allowed for testing
+- Basic collaborator-app telemetry now exists via Umami-compatible tracking:
+  - home viewed
+  - timesheet viewed
+  - install prompt clicked
+  - clock in success
+  - clock out success
+  - journey event success
+  - adjustment request created
+- Planning and rollout documentation for the collaborator app now lives in:
+  - `docs/superpowers/plans/2026-07-22-app-colaborador-ponto-implantation.md`
+  - `docs/superpowers/plans/2026-07-22-app-colaborador-ponto-execution-backlog.md`
+  - `docs/superpowers/plans/2026-07-22-app-colaborador-homologacao-e-seguranca.md`
+- Current product decision:
+  - short/mid-term channel = PWA
+  - Android is the first homologation target
+  - Apple Safari / Add to Home Screen is supported next
+  - native store packaging should only be evaluated after pilot stability
+- Validation completed for the recent collaborator app phase:
+  - `pnpm check`
+  - `pnpm build`
+- Important note for continuation:
+  - rollout is not yet complete
+  - visual install instructions inside the app are still pending
+  - session-hardening and final mobile security tightening are still pending
+  - production deployment for the latest collaborator-app phase has not yet been recorded in `AGENTS.md`

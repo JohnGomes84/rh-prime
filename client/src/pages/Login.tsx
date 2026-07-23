@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 type Tab = "login" | "register" | "forgot";
 
@@ -22,6 +22,7 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -43,8 +44,9 @@ export function Login() {
     onError: (err) => {
       const code = err.data?.code;
       let msg = err.message || "Erro ao cadastrar";
-      if (code === "FORBIDDEN")
+      if (code === "FORBIDDEN") {
         msg = "Apenas emails @mlservicoseco.com.br podem se cadastrar.";
+      }
       setError(msg);
       setIsLoading(false);
     },
@@ -69,6 +71,7 @@ export function Login() {
     if (next === "register" && !publicRegistrationEnabled) return;
     setError("");
     setSuccess("");
+    setShowPassword(false);
     setTab(next);
   };
 
@@ -113,6 +116,36 @@ export function Login() {
     }
     forgotMutation.mutate({ email });
   };
+
+  const passwordField = (
+    id: string,
+    autoComplete: "current-password" | "new-password",
+    minLength?: number,
+  ) => (
+    <div className="relative">
+      <Input
+        id={id}
+        type={showPassword ? "text" : "password"}
+        placeholder="••••••••"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        disabled={isLoading}
+        autoComplete={autoComplete}
+        className="pr-10"
+        minLength={minLength}
+        required
+      />
+      <button
+        type="button"
+        onClick={() => setShowPassword((current) => !current)}
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+        aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+        disabled={isLoading}
+      >
+        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -170,7 +203,6 @@ export function Login() {
             </div>
           )}
 
-          {/* Login */}
           {tab === "login" && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
@@ -192,16 +224,7 @@ export function Login() {
                 <label htmlFor="password" className="text-sm font-medium text-gray-700">
                   Senha
                 </label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                  required
-                />
+                {passwordField("password", "current-password")}
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Entrando..." : "Entrar"}
@@ -216,7 +239,6 @@ export function Login() {
             </form>
           )}
 
-          {/* Register */}
           {publicRegistrationEnabled && tab === "register" && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
@@ -254,17 +276,7 @@ export function Login() {
                 <label htmlFor="reg-password" className="text-sm font-medium text-gray-700">
                   Senha
                 </label>
-                <Input
-                  id="reg-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
+                {passwordField("reg-password", "new-password", 8)}
                 <p className="text-xs text-gray-500">
                   Mínimo 8 caracteres, com maiúscula, minúscula, número e caractere especial.
                 </p>
@@ -278,7 +290,6 @@ export function Login() {
             </form>
           )}
 
-          {/* Forgot Password */}
           {tab === "forgot" && (
             <form onSubmit={handleForgot} className="space-y-4">
               <p className="text-sm text-gray-600">

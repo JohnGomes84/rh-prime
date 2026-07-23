@@ -1,6 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { NotificationBell } from "@/components/NotificationBell";
+import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,50 +24,48 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  LayoutDashboard,
-  Inbox,
-  LogOut,
-  PanelLeft,
-  Users,
+  ArrowRightLeft,
+  BarChart3,
+  Bell,
   Briefcase,
   Building2,
-  CalendarDays,
-  HeartPulse,
-  Clock,
-  FolderOpen,
-  FileText,
-  ClipboardList,
+  Calculator,
   CalendarClock,
-  ArrowRightLeft,
-  Bell,
+  CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
+  DollarSign,
+  FileText,
+  FolderOpen,
+  HeartPulse,
+  Inbox,
+  Kanban,
+  LayoutDashboard,
+  LogOut,
+  Network,
+  PanelLeft,
+  Receipt,
   Settings,
   Shield,
-  Timer,
-  DollarSign,
-  Receipt,
-  Calculator,
+  Smartphone,
   Stamp,
-  BarChart3,
-  UserSearch,
-  UserPlus,
-  UserMinus,
-  ClipboardCheck,
+  Timer,
   TimerOff,
-  Kanban,
-  Network,
   UserCog,
+  UserMinus,
+  UserPlus,
+  UserSearch,
+  Users,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
-import { Button } from "./ui/button";
 
 type MenuItem = {
   icon: any;
   label: string;
   path: string;
   section?: string;
-  /** Se omitido, visível para todos os logados. */
   requiredRoles?: Array<"admin" | "gestor" | "colaborador">;
 };
 
@@ -73,53 +73,53 @@ const ADMIN_ONLY = ["admin"] as const;
 const ADMIN_OR_MANAGER = ["admin", "gestor"] as const;
 
 const menuItems: MenuItem[] = [
-  // Geral
   { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
   { icon: Inbox, label: "Caixa de entrada", path: "/inbox", section: "Geral" },
   { icon: ClipboardList, label: "Demandas", path: "/demandas", section: "Geral" },
-  { icon: Users, label: "Funcionários", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
-  { icon: Briefcase, label: "Cargos e Funções", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Users, label: "Funcionarios", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Briefcase, label: "Cargos e Funcoes", path: "/cargos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: Building2, label: "Departamentos", path: "/departamentos", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: UserSearch, label: "Recrutamento", path: "/recrutamento", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Kanban, label: "Kanban", path: "/kanban-v2", section: "Geral" },
-  { icon: UserPlus, label: "Admissão", path: "/admissao", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
+  { icon: UserPlus, label: "Admissao", path: "/admissao", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
   { icon: UserMinus, label: "Desligamento", path: "/desligamento", section: "Geral", requiredRoles: [...ADMIN_ONLY] },
-  // Jornada
+
   { icon: Timer, label: "Bater Ponto", path: "/ponto", section: "Jornada" },
   { icon: Clock, label: "Banco de Horas", path: "/banco-horas", section: "Jornada" },
   { icon: TimerOff, label: "Horas Extras", path: "/horas-extras", section: "Jornada" },
-  { icon: Stamp, label: "Jornada — Admin", path: "/jornada-admin", section: "Jornada", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Stamp, label: "Jornada - Admin", path: "/jornada-admin", section: "Jornada", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Smartphone, label: "App do Colaborador", path: "/app-colaborador-admin", section: "Jornada", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: Shield, label: "Compliance Portaria 671", path: "/compliance-jornada", section: "Jornada", requiredRoles: [...ADMIN_ONLY] },
-  { icon: CalendarDays, label: "Férias", path: "/ferias", section: "Jornada" },
-  // Financeiro
+  { icon: CalendarDays, label: "Ferias", path: "/ferias", section: "Jornada" },
+
   { icon: DollarSign, label: "Folha de Pagamento", path: "/folha", section: "Financeiro", requiredRoles: [...ADMIN_ONLY] },
   { icon: Receipt, label: "Holerite", path: "/holerite", section: "Financeiro" },
   { icon: Calculator, label: "Calculadoras CLT", path: "/calculadoras", section: "Financeiro" },
-  // Saúde e Segurança
-  { icon: HeartPulse, label: "Saúde e Segurança", path: "/saude", section: "Saúde", requiredRoles: [...ADMIN_OR_MANAGER] },
-  { icon: ClipboardCheck, label: "Avaliações", path: "/avaliacoes", section: "Saúde", requiredRoles: [...ADMIN_OR_MANAGER] },
-  // Documentos
-  { icon: FolderOpen, label: "Dossiê Digital", path: "/documentos", section: "Documentos", requiredRoles: [...ADMIN_OR_MANAGER] },
+
+  { icon: HeartPulse, label: "Saude e Seguranca", path: "/saude", section: "Saude", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: ClipboardCheck, label: "Avaliacoes", path: "/avaliacoes", section: "Saude", requiredRoles: [...ADMIN_OR_MANAGER] },
+
+  { icon: FolderOpen, label: "Dossie Digital", path: "/documentos", section: "Documentos", requiredRoles: [...ADMIN_OR_MANAGER] },
   { icon: FileText, label: "Gerador de Docs", path: "/gerador", section: "Documentos", requiredRoles: [...ADMIN_ONLY] },
-  // Análise
-  { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
-  { icon: FileText, label: "Relatórios", path: "/relatorios", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
-  { icon: ClipboardList, label: "Relatórios Gerenciais", path: "/relatorios-gerenciais", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
-  { icon: CalendarClock, label: "Rotinas Operacionais", path: "/rotinas-operacionais", section: "Análise", requiredRoles: [...ADMIN_OR_MANAGER] },
-  { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Análise", requiredRoles: [...ADMIN_ONLY] },
-  // Sistema
-  { icon: ArrowRightLeft, label: "Integração", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
-  { icon: Bell, label: "Notificações", path: "/notificacoes", section: "Sistema" },
-  { icon: UserCog, label: "Usuários", path: "/usuarios", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+
+  { icon: BarChart3, label: "People Analytics", path: "/analytics", section: "Analise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: FileText, label: "Relatorios", path: "/relatorios", section: "Analise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: ClipboardList, label: "Relatorios Gerenciais", path: "/relatorios-gerenciais", section: "Analise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: CalendarClock, label: "Rotinas Operacionais", path: "/rotinas-operacionais", section: "Analise", requiredRoles: [...ADMIN_OR_MANAGER] },
+  { icon: Shield, label: "Auditoria", path: "/auditoria", section: "Analise", requiredRoles: [...ADMIN_ONLY] },
+
+  { icon: ArrowRightLeft, label: "Integracao", path: "/integracao", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Bell, label: "Notificacoes", path: "/notificacoes", section: "Sistema" },
+  { icon: UserCog, label: "Usuarios", path: "/usuarios", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Network, label: "Hierarquia", path: "/hierarquia", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
-  { icon: Shield, label: "Segurança", path: "/seguranca-config", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
-  { icon: Settings, label: "Configurações", path: "/configuracoes", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Shield, label: "Seguranca", path: "/seguranca-config", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
+  { icon: Settings, label: "Configuracoes", path: "/configuracoes", section: "Sistema", requiredRoles: [...ADMIN_ONLY] },
   { icon: Shield, label: "Privacidade (LGPD)", path: "/privacidade", section: "Sistema" },
 ];
 
 function filterByRole(items: MenuItem[], role: string | null | undefined): MenuItem[] {
-  if (!role) return items.filter((i) => !i.requiredRoles);
-  return items.filter((i) => !i.requiredRoles || i.requiredRoles.includes(role as any));
+  if (!role) return items.filter((item) => !item.requiredRoles);
+  return items.filter((item) => !item.requiredRoles || item.requiredRoles.includes(role as any));
 }
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -148,18 +148,17 @@ export default function DashboardLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex w-full max-w-md flex-col items-center gap-8 p-8">
           <div className="flex flex-col items-center gap-4">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
               <Shield className="h-8 w-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-center text-foreground">
+            <h1 className="text-center text-2xl font-semibold tracking-tight text-foreground">
               RH Prime
             </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Sistema de Gestão de Recursos Humanos. Faça login para acessar o
-              painel.
+            <p className="max-w-sm text-center text-sm text-muted-foreground">
+              Sistema de Gestao de Recursos Humanos. Faca login para acessar o painel.
             </p>
           </div>
           <Button
@@ -167,7 +166,7 @@ export default function DashboardLayout({
               window.location.href = "/login";
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full shadow-lg transition-all hover:shadow-xl"
           >
             Entrar
           </Button>
@@ -217,11 +216,10 @@ function DashboardLayoutContent({
   }, [isCollapsed]);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (event: MouseEvent) => {
       if (!isResizing) return;
-      const sidebarLeft =
-        sidebarRef.current?.getBoundingClientRect().left ?? 0;
-      const newWidth = e.clientX - sidebarLeft;
+      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      const newWidth = event.clientX - sidebarLeft;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setSidebarWidth(newWidth);
       }
@@ -249,23 +247,19 @@ function DashboardLayoutContent({
   return (
     <>
       <div className="relative" ref={sidebarRef}>
-        <Sidebar
-          collapsible="icon"
-          className="border-r-0"
-          disableTransition={isResizing}
-        >
+        <Sidebar collapsible="icon" className="border-r-0" disableTransition={isResizing}>
           <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
+            <div className="flex w-full items-center gap-3 px-2 transition-all">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Toggle navigation"
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-bold tracking-tight truncate text-primary text-lg">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-lg font-bold tracking-tight text-primary">
                     RH Prime
                   </span>
                 </div>
@@ -276,15 +270,16 @@ function DashboardLayoutContent({
           <SidebarContent className="gap-0 overflow-y-auto">
             <SidebarMenu className="px-2 py-1">
               {(() => {
-                let lastSection = '';
+                let lastSection = "";
                 return visibleMenuItems.map((item) => {
                   const isActive = location === item.path;
                   const showSection = item.section && item.section !== lastSection;
                   if (item.section) lastSection = item.section;
+
                   return (
                     <div key={item.path}>
                       {showSection && (
-                        <div className="px-3 pt-4 pb-1 group-data-[collapsible=icon]:hidden">
+                        <div className="px-3 pb-1 pt-4 group-data-[collapsible=icon]:hidden">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                             {item.section}
                           </span>
@@ -295,11 +290,9 @@ function DashboardLayoutContent({
                           isActive={isActive}
                           onClick={() => setLocation(item.path)}
                           tooltip={item.label}
-                          className={`h-9 transition-all font-normal text-[13px]`}
+                          className="h-9 text-[13px] font-normal transition-all"
                         >
-                          <item.icon
-                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                          />
+                          <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
                           <span>{item.label}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -313,17 +306,17 @@ function DashboardLayoutContent({
           <SidebarFooter className="p-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                <button className="group-data-[collapsible=icon]:justify-center flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Avatar className="h-9 w-9 shrink-0 border">
+                    <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
+                  <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                    <p className="truncate text-sm font-medium leading-none">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
+                    <p className="mt-1.5 truncate text-xs text-muted-foreground">
                       {user?.email || "-"}
                     </p>
                   </div>
@@ -341,8 +334,9 @@ function DashboardLayoutContent({
             </DropdownMenu>
           </SidebarFooter>
         </Sidebar>
+
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute right-0 top-0 h-full w-1 cursor-col-resize transition-colors hover:bg-primary/20 ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);
@@ -352,10 +346,10 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+        <div className="supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-2 backdrop-blur">
           <div className="flex items-center gap-2">
-            {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />}
-            <span className="tracking-tight text-foreground text-sm md:text-base">
+            {isMobile ? <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" /> : null}
+            <span className="text-sm tracking-tight text-foreground md:text-base">
               {activeMenuItem?.label ?? "Menu"}
             </span>
           </div>

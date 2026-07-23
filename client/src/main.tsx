@@ -18,6 +18,14 @@ if (typeof document !== "undefined" && analyticsEndpoint && analyticsWebsiteId) 
   document.head.appendChild(analyticsScript);
 }
 
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => {
+      console.warn("[PWA] service worker registration failed:", error);
+    });
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

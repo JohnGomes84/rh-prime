@@ -200,8 +200,25 @@ export const memoryDb = {
     return { success: true, id: record.id };
   },
   async getOpenTimeRecord(employeeId: number) {
+    const now = new Date();
+    const competenceStart = now.getDate() >= 26
+      ? new Date(now.getFullYear(), now.getMonth(), 26, 0, 0, 0, 0)
+      : new Date(now.getFullYear(), now.getMonth() - 1, 26, 0, 0, 0, 0);
+    const competenceEnd = now.getDate() >= 26
+      ? new Date(now.getFullYear(), now.getMonth() + 1, 25, 23, 59, 59, 999)
+      : new Date(now.getFullYear(), now.getMonth(), 25, 23, 59, 59, 999);
+    const currentDayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const currentDayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
     const recs = Array.from(timeRecords.values())
-      .filter((r) => r.employeeId === employeeId && !r.clockOut)
+      .filter((r) =>
+        r.employeeId === employeeId
+        && !r.clockOut
+        && r.clockIn >= competenceStart
+        && r.clockIn <= competenceEnd
+        && r.clockIn >= currentDayStart
+        && r.clockIn <= currentDayEnd
+      )
       .sort((a, b) => b.clockIn.getTime() - a.clockIn.getTime());
     return recs[0] ?? null;
   },

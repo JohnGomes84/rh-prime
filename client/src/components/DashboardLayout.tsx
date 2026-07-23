@@ -73,7 +73,7 @@ const ADMIN_ONLY = ["admin"] as const;
 const ADMIN_OR_MANAGER = ["admin", "gestor"] as const;
 
 const menuItems: MenuItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "Geral" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/painel", section: "Geral" },
   { icon: Inbox, label: "Caixa de entrada", path: "/inbox", section: "Geral" },
   { icon: ClipboardList, label: "Demandas", path: "/demandas", section: "Geral" },
   { icon: Users, label: "Funcionarios", path: "/funcionarios", section: "Geral", requiredRoles: [...ADMIN_OR_MANAGER] },

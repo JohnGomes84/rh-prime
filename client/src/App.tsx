@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -93,11 +93,16 @@ const authenticated = (Component: React.ComponentType) => () => (
   </ProtectedRoute>
 );
 
+// The root URL is the punch app — opening the link lands everyone on the ponto.
+// The admin dashboard lives at /painel (reachable from the app header).
+const RootLanding = () => <Redirect to="/app/ponto" />;
+
 function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/" component={RootLanding} />
+        <Route path="/painel" component={Home} />
         <Route path="/funcionarios" component={guarded(Employees, "manager")} />
         <Route path="/funcionarios/:id" component={guarded(EmployeeDetail, "manager")} />
         <Route path="/cargos" component={guarded(Positions, "admin")} />

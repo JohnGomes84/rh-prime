@@ -22,7 +22,7 @@ export function MobileAppLayout({ title, subtitle, children }: MobileAppLayoutPr
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-slate-950">
         <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/95 px-4 pb-4 pt-5 backdrop-blur supports-[padding:max(0px)]:pt-[max(1.25rem,env(safe-area-inset-top))]">
           <div className="mb-4 flex items-center justify-between">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-300">
+            <Link href="/painel" className="inline-flex items-center gap-2 text-sm text-slate-300">
               <ChevronLeft className="h-4 w-4" />
               Voltar ao sistema
             </Link>

@@ -29,6 +29,7 @@ import { useCollaboratorAppAccess } from "../hooks/useCollaboratorAppAccess";
 import { getJourneyReasonLabel, getTimesheetCompetence } from "../services/journey";
 import { trackCollaboratorAppEvent } from "../services/telemetry";
 import { MobileAppLayout } from "../components/MobileAppLayout";
+import { CameraCaptureSheet } from "../components/CameraCaptureSheet";
 
 type ReceiptPayload = {
   type?: string;
@@ -214,6 +215,8 @@ export default function AppTimesheetHome() {
     },
   );
   const uploadSelfieMutation = trpc.timesheet.uploadSelfie.useMutation();
+  const acceptConsentMutation = trpc.lgpd.accept.useMutation();
+  const [cameraOpen, setCameraOpen] = useState(false);
   const clockInMutation = trpc.timesheet.clockIn.useMutation({
     onSuccess: (data, variables) => {
       trackCollaboratorAppEvent("clock_in_success", {
@@ -367,7 +370,10 @@ export default function AppTimesheetHome() {
   const captureLocation = (): Promise<string | undefined> =>
     new Promise((resolve) => {
       if (!hasGeoConsent) return resolve(undefined);
-      if (!("geolocation" in navigator)) return resolve(undefined);
+      if (!("geolocation" in navigator)) {
+        toast.warning("Este dispositivo não expõe localização. A batida seguirá sem GPS.");
+        return resolve(undefined);
+      }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude.toFixed(6);
@@ -375,36 +381,49 @@ export default function AppTimesheetHome() {
           const acc = Math.round(pos.coords.accuracy);
           resolve(`${lat},${lng} (+/-${acc}m)`);
         },
-        () => resolve(undefined),
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 },
+        (err) => {
+          const msg =
+            err.code === err.PERMISSION_DENIED
+              ? "Permissão de localização negada."
+              : err.code === err.TIMEOUT
+                ? "Tempo esgotado ao obter a localização."
+                : "Localização indisponível no momento.";
+          toast.warning(`${msg} A batida seguirá sem GPS.`);
+          resolve(undefined);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
       );
     });
 
-  const captureSelfie = (): Promise<string | undefined> =>
-    new Promise((resolve) => {
-      if (!hasSelfieConsent) return resolve(undefined);
-      if (!("mediaDevices" in navigator)) return resolve(undefined);
-      navigator.mediaDevices
-        .getUserMedia({ video: { facingMode: "user", width: 320, height: 240 }, audio: false })
-        .then((stream) => {
-          const video = document.createElement("video");
-          video.srcObject = stream;
-          void video.play().catch(() => undefined);
-          setTimeout(() => {
-            const canvas = document.createElement("canvas");
-            canvas.width = 320;
-            canvas.height = 240;
-            const context = canvas.getContext("2d");
-            if (context) context.drawImage(video, 0, 0, 320, 240);
-            stream.getTracks().forEach((track) => track.stop());
-            resolve(canvas.toDataURL("image/jpeg", 0.6));
-          }, 600);
-        })
-        .catch(() => {
-          setCameraAvailable(false);
-          resolve(undefined);
+  // Entrada: envia a selfie capturada (câmera visível) e registra a batida com GPS.
+  const finishClockIn = async (selfieDataUrl?: string) => {
+    const location = await captureLocation();
+    setLastLocation(location);
+    let selfieUrl: string | undefined;
+    if (selfieDataUrl) {
+      try {
+        const uploaded = await uploadSelfieMutation.mutateAsync({
+          imageBase64: selfieDataUrl,
+          contentType: selfieDataUrl.startsWith("data:image/png") ? "image/png" : "image/jpeg",
         });
-    });
+        selfieUrl = uploaded.url;
+      } catch {
+        toast.warning("Selfie não foi enviada. A batida será registrada sem foto.");
+      }
+    }
+    clockInMutation.mutate({ location, selfieUrl, deviceFingerprint: fingerprint() });
+  };
+
+  const grantEvidenceConsent = async () => {
+    try {
+      await acceptConsentMutation.mutateAsync({ consentType: "selfie_capture" });
+      await acceptConsentMutation.mutateAsync({ consentType: "geo_capture" });
+      await Promise.all([selfieConsentQuery.refetch(), geoConsentQuery.refetch()]);
+      toast.success("Câmera e localização ativadas para o ponto.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível ativar as permissões.");
+    }
+  };
 
   const fingerprint = () => {
     const ua = navigator.userAgent;
@@ -430,38 +449,24 @@ export default function AppTimesheetHome() {
     }
 
     if (shouldWarnInsecureTransport) {
-      toast.error("O app precisa de conexao segura para registrar ponto com evidencias.");
+      toast.error("O app precisa de conexão segura (HTTPS) para registrar o ponto.");
       return;
     }
-
-    const [location, selfieDataUrl] = await Promise.all([captureLocation(), captureSelfie()]);
-    setLastLocation(location);
 
     if (isWorking) {
-      clockOutMutation.mutate({
-        notes: location ? `[saida] ${location}` : undefined,
-      });
+      // Saída — registra com localização.
+      const location = await captureLocation();
+      setLastLocation(location);
+      clockOutMutation.mutate({ notes: location ? `[saida] ${location}` : undefined });
       return;
     }
 
-    let selfieUrl: string | undefined;
-    if (selfieDataUrl) {
-      try {
-        const uploaded = await uploadSelfieMutation.mutateAsync({
-          imageBase64: selfieDataUrl,
-          contentType: selfieDataUrl.startsWith("data:image/png") ? "image/png" : "image/jpeg",
-        });
-        selfieUrl = uploaded.url;
-      } catch {
-        toast.warning("Selfie nao foi enviada. A batida sera registrada sem foto.");
-      }
+    // Entrada — abre a câmera visível quando há consentimento de selfie.
+    if (hasSelfieConsent) {
+      setCameraOpen(true);
+      return;
     }
-
-    clockInMutation.mutate({
-      location,
-      selfieUrl,
-      deviceFingerprint: fingerprint(),
-    });
+    await finishClockIn(undefined);
   };
 
   const handleBreakEvent = async (eventType: "break_start" | "break_end") => {
@@ -669,16 +674,18 @@ export default function AppTimesheetHome() {
         ) : null}
 
         {canUseTimesheet && (!hasGeoConsent || !hasSelfieConsent) ? (
-          <div className="space-y-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-200">
-            <p>Para registrar o ponto com selfie e localização, ative os consentimentos em Privacidade.</p>
-            <Link href="/privacidade">
-              <Button
-                variant="outline"
-                className="h-10 w-full rounded-2xl border-amber-400/30 bg-transparent text-amber-100 hover:bg-amber-500/10"
-              >
-                Abrir Privacidade
-              </Button>
-            </Link>
+          <div className="space-y-3 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4">
+            <p className="text-sm font-medium text-blue-100">Ative câmera e localização</p>
+            <p className="text-xs text-blue-200/80">
+              O ponto usa uma selfie e sua localização como comprovação da batida. Você autoriza uma vez, aqui mesmo — pode revisar em Privacidade depois.
+            </p>
+            <Button
+              onClick={() => void grantEvidenceConsent()}
+              disabled={acceptConsentMutation.isPending}
+              className="h-11 w-full rounded-2xl bg-blue-500 text-white hover:bg-blue-400"
+            >
+              {acceptConsentMutation.isPending ? "Ativando…" : "Ativar câmera e localização"}
+            </Button>
           </div>
         ) : null}
 
@@ -809,7 +816,22 @@ export default function AppTimesheetHome() {
           </Card>
         ) : null}
 
+        {lastLocation ? (
+          <p className="text-center text-[11px] text-slate-500">Última localização: {lastLocation}</p>
+        ) : null}
+
         <p className="pt-2 text-center text-[11px] text-slate-600">RH Prime · ML Serviços</p>
+
+        <CameraCaptureSheet
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onConfirm={(dataUrl) => {
+            setCameraOpen(false);
+            void finishClockIn(dataUrl);
+          }}
+          title="Selfie do ponto"
+          hint="Enquadre o rosto e toque em Tirar foto."
+        />
       </div>
     </MobileAppLayout>
   );

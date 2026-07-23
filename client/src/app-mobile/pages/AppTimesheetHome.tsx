@@ -309,27 +309,6 @@ export default function AppTimesheetHome() {
     };
   }, [journeyDayTimelineQuery.data]);
 
-  if (!collaboratorAppEnabled) {
-    return <Redirect to="/ponto" />;
-  }
-
-  if (appAccess.isLoading) {
-    return (
-      <MobileAppLayout
-        title="Ponto"
-        subtitle="Validando acesso ao app do colaborador."
-      >
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
-          Validando se este usuário faz parte do piloto do app.
-        </div>
-      </MobileAppLayout>
-    );
-  }
-
-  if (!appAccess.isAvailable) {
-    return <Redirect to="/ponto" />;
-  }
-
   const openRecord = openRecordQuery.data as any;
   const journeyTodayStatus = journeyTodayStatusQuery.data;
   const canRegister = journeyTodayStatus?.canRegisterPunch ?? false;
@@ -532,6 +511,23 @@ export default function AppTimesheetHome() {
     });
     window.sessionStorage.setItem(viewKey, "1");
   }, [appAccess.isAvailable, canUseTimesheet]);
+
+  // Guards run AFTER every hook (Rules of Hooks) — early returns must not skip hooks.
+  if (!collaboratorAppEnabled) {
+    return <Redirect to="/ponto" />;
+  }
+  if (appAccess.isLoading) {
+    return (
+      <MobileAppLayout title="Meu ponto" subtitle="Carregando…">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
+          Carregando…
+        </div>
+      </MobileAppLayout>
+    );
+  }
+  if (!appAccess.isAvailable) {
+    return <Redirect to="/ponto" />;
+  }
 
   return (
     <MobileAppLayout

@@ -1,5 +1,10 @@
+Finhub/
+.manus-logs/
+backups/
+dist/
 .claude/
 .codex/
+.codex-*
 .edge-headless-*/
 .openclaude/
 .playwright-mcp/

@@ -1,0 +1,25 @@
+{
+  "name": "RH Prime Colaborador",
+  "short_name": "RH Prime",
+  "description": "App do colaborador para ponto e jornada no RH Prime.",
+  "start_url": "/app/ponto",
+  "scope": "/app",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

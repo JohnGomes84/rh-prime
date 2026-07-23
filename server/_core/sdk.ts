@@ -29,6 +29,9 @@ class SDKServer {
     if (!user) {
       throw ForbiddenError("User not found");
     }
+    if ((user as any).status === "inactive") {
+      throw ForbiddenError("User inactive");
+    }
 
     return user;
   }

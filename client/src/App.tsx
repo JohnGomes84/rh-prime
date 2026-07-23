@@ -11,6 +11,7 @@ import { ConsentBanner } from "./components/ConsentBanner";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { AdminGuard, ManagerGuard } from "./components/RouteGuard";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const Home = lazy(() => import("./pages/Home"));
 const Employees = lazy(() => import("./pages/Employees"));
@@ -56,9 +57,12 @@ const Inbox = lazy(() => import("./pages/Inbox"));
 const Demands = lazy(() => import("./pages/Demands"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const CompliancePortaria = lazy(() => import("./pages/CompliancePortaria"));
+const CollaboratorAppAdmin = lazy(() => import("./pages/CollaboratorAppAdmin"));
 const KanbanBoards = lazy(() => import("./pages/KanbanBoards"));
 const KanbanBoard = lazy(() => import("./pages/KanbanBoard"));
 const KanbanBoardV2 = lazy(() => import("./pages/kanban-v2/KanbanBoardV2"));
+const CollaboratorAppHome = lazy(() => import("./app-mobile/pages/AppHome"));
+const CollaboratorAppTimesheet = lazy(() => import("./app-mobile/pages/AppTimesheetHome"));
 
 function PageLoader() {
   return (
@@ -82,6 +86,12 @@ const guarded = (Component: React.ComponentType, kind: "admin" | "manager") => (
     </ManagerGuard>
   );
 };
+
+const authenticated = (Component: React.ComponentType) => () => (
+  <ProtectedRoute>
+    <Component />
+  </ProtectedRoute>
+);
 
 function Router() {
   return (
@@ -118,6 +128,7 @@ function Router() {
         <Route path="/inbox" component={Inbox} />
         <Route path="/demandas" component={Demands} />
         <Route path="/privacidade" component={Privacy} />
+        <Route path="/app-colaborador-admin" component={guarded(CollaboratorAppAdmin, "manager")} />
         <Route path="/compliance-jornada" component={guarded(CompliancePortaria, "admin")} />
         <Route path="/kanban" component={KanbanBoards} />
         <Route path="/kanban/:id" component={KanbanBoard} />
@@ -126,6 +137,8 @@ function Router() {
         <Route path="/auditoria" component={guarded(Audit, "admin")} />
         <Route path="/analytics" component={guarded(PeopleAnalytics, "manager")} />
         <Route path="/login" component={Login} />
+        <Route path="/app" component={authenticated(CollaboratorAppHome)} />
+        <Route path="/app/ponto" component={authenticated(CollaboratorAppTimesheet)} />
         <Route path="/reset-password" component={ResetPassword} />
         <Route path="/usuarios" component={guarded(UserManagement, "admin")} />
         <Route path="/hierarquia" component={guarded(UserHierarchy, "admin")} />

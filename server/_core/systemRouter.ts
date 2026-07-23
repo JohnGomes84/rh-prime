@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isFeatureEnabled } from "./feature-flags.js";
+import { getCollaboratorAppPilotAccess, getCollaboratorAppRuntimeConfig } from "./collaborator-app-settings.js";
 import { notifyOwner } from "./notification.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./trpc.js";
 
@@ -14,10 +15,15 @@ export const systemRouter = router({
       ok: true,
     })),
 
-  flags: protectedProcedure.query(() => ({
+  flags: protectedProcedure.query(async ({ ctx }) => ({
     admissionV2: isFeatureEnabled("admission-v2"),
     kanbanV2: isFeatureEnabled("kanban-v2"),
+    collaboratorApp: await getCollaboratorAppPilotAccess(ctx.user),
   })),
+
+  collaboratorAppConfig: adminProcedure.query(async () => {
+    return getCollaboratorAppRuntimeConfig();
+  }),
 
   notifyOwner: adminProcedure
     .input(

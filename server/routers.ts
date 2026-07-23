@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { withDBRetry } from "./utils/retry.js";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const.js";
-import { getSessionCookieOptions } from "./_core/cookies.js";
+import { getSessionCookieOptions, isSecureRequest } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
 import { publicProcedure, protectedProcedure, adminProcedure, managerProcedure, router } from "./_core/trpc.js";
 import * as db from "./db.js";
@@ -31,9 +31,11 @@ import { kanbanRouter } from './routers/kanban.js';
 import { managerialReportsRouter } from './routers/managerial-reports.js';
 import { operationalRoutinesRouter } from './routers/operational-routines.js';
 import { demandsRouter } from './routers/demands.js';
+import { journeyV2Router } from './routers/journey-v2.js';
 import { TRPCError } from '@trpc/server';
+import { parse as parseCookieHeader } from "cookie";
 import { convertEmployeeInput, convertUpdateData, toDate, toDateOpt } from "./utils/type-converters.js";
-import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError, forgotPassword, resetPassword } from "./modules/auth/auth-service.js";
+import { login as authLogin, register as authRegister, RegisterEmailNotAllowedError, forgotPassword, resetPassword, verifyToken as verifyAuthToken } from "./modules/auth/auth-service.js";
 import { validatePasswordStrength } from "./auth/jwt-service.js";
 import { createDocumentRecord } from "./services/documents.service.js";
 
@@ -42,6 +44,28 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 function setSessionCookie(ctx: { req: any; res: any }, token: string) {
   const opts = getSessionCookieOptions(ctx.req);
   ctx.res.cookie(COOKIE_NAME, token, { ...opts, maxAge: SEVEN_DAYS_MS });
+}
+
+function getSessionSecuritySnapshot(req: any) {
+  const secureTransport = isSecureRequest(req);
+  const cookieHeader = req?.headers?.cookie as string | undefined;
+  const cookies = cookieHeader ? parseCookieHeader(cookieHeader) : {};
+  const rawToken = cookies[COOKIE_NAME];
+  const tokenPayload = rawToken ? verifyAuthToken(rawToken) : null;
+  const expiresAt = tokenPayload?.exp ? new Date(tokenPayload.exp * 1000).toISOString() : null;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const remainingSeconds = tokenPayload?.exp ? Math.max(tokenPayload.exp - nowSeconds, 0) : null;
+  const host = (req?.headers?.host as string | undefined) ?? "";
+  const localhost = /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host);
+
+  return {
+    secureTransport,
+    localhost,
+    cookieName: COOKIE_NAME,
+    sessionTtlHours: 168,
+    expiresAt,
+    remainingSeconds,
+  };
 }
 
 
@@ -54,12 +78,14 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     session: publicProcedure.query(async ({ ctx }) => {
+      const sessionSecurity = getSessionSecuritySnapshot(ctx.req);
       if (!ctx.user) {
         return {
           user: null,
           employee: null,
           isManager: false,
           scope: { own: null, subordinates: [] as number[], canSeeAll: false },
+          sessionSecurity,
         };
       }
       const employee = await db.getEmployeeForUser(ctx.user.id, ctx.user.email).catch(() => null);
@@ -89,6 +115,7 @@ export const appRouter = router({
           subordinates,
           canSeeAll: role === "admin",
         },
+        sessionSecurity,
       };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -1389,6 +1416,10 @@ export const appRouter = router({
   // TIMESHEET & OVERTIME
   // ============================================================
   timesheet: timesheetRouter,
+  // ============================================================
+  // JOURNEY V2 (novo motor de ponto/jornada)
+  // ============================================================
+  journeyV2: journeyV2Router,
   // ============================================================
   // REPORTS
   // ============================================================

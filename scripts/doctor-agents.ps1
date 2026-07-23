@@ -44,6 +44,52 @@ function Read-CodexHomeFromConfig {
     return $null
 }
 
+function Get-McpTableRow {
+    param(
+        [string[]]$Lines,
+        [string]$Name
+    )
+
+    if (-not $Lines) {
+        return $null
+    }
+
+    foreach ($line in $Lines) {
+        if ($line -match "^\s*$([regex]::Escape($Name))\s+") {
+            return $line.Trim()
+        }
+    }
+
+    return $null
+}
+
+function Get-McpAuthFromRow {
+    param([string]$Row)
+
+    if ([string]::IsNullOrWhiteSpace($Row)) {
+        return $null
+    }
+
+    $parts = $Row -split '\s{2,}'
+    if ($parts.Length -lt 1) {
+        return $null
+    }
+
+    return $parts[$parts.Length - 1].Trim()
+}
+
+function Test-RunningInsideCodex {
+    if ($env:CODEX_HOME) {
+        return $true
+    }
+
+    if ($env:CODEX_SANDBOX -or $env:CODEX_EXECUTION_ENV) {
+        return $true
+    }
+
+    return $false
+}
+
 Write-Section "Agent Paths"
 
 $defaultCodexHome = Join-Path $HOME ".codex"
@@ -66,13 +112,19 @@ if ($effectiveCodexHome -match "CodexSandboxOffline") {
 Write-Section "Codex Health"
 
 $codexCmd = Get-Command codex -ErrorAction SilentlyContinue
+$mcpListLines = $null
+$vercelMcpAuth = $null
+$runningInsideCodex = Test-RunningInsideCodex
 if (-not $codexCmd) {
     Write-Warning "codex command not found in PATH."
 } else {
     Write-Host "codex executable: $($codexCmd.Source)"
 
     try {
-        & $codexCmd.Source mcp list
+        $mcpListLines = & $codexCmd.Source mcp list 2>&1
+        $mcpListLines
+        $vercelMcpRow = Get-McpTableRow -Lines $mcpListLines -Name "vercel"
+        $vercelMcpAuth = Get-McpAuthFromRow -Row $vercelMcpRow
     } catch {
         Write-Warning "Failed to run 'codex mcp list': $($_.Exception.Message)"
     }
@@ -91,7 +143,22 @@ Write-Section "Project Recommendations"
 Write-Host "1. Run Codex from the same Windows user profile every time."
 Write-Host "2. Keep Codex auth and MCP config in the user home, not inside the repository."
 Write-Host "3. Keep project-specific Claude settings under .claude/."
-Write-Host "4. For Vercel MCP, use:"
-Write-Host "   codex mcp add vercel --url https://mcp.vercel.com"
-Write-Host "   codex mcp login vercel"
-Write-Host "5. If Codex and Claude disagree about state, check the paths shown above first."
+if ($vercelMcpAuth -eq "OAuth") {
+    Write-Host "4. Vercel MCP is configured and authenticated with OAuth."
+    Write-Host "   No further Vercel login step is required on this machine."
+} elseif ($vercelMcpAuth -eq "Unsupported") {
+    Write-Host "4. If Vercel MCP shows 'Auth Unsupported', re-add it with:"
+    Write-Host "   codex mcp add vercel --url https://mcp.vercel.com"
+    Write-Host "   Then complete the browser OAuth flow if prompted."
+} else {
+    Write-Host "4. For Vercel MCP, use:"
+    Write-Host "   codex mcp add vercel --url https://mcp.vercel.com"
+    Write-Host "   codex mcp login vercel"
+}
+if ($runningInsideCodex) {
+    Write-Host "5. This diagnosis is running inside a Codex-managed context."
+    Write-Host "   If MCP auth here disagrees with your normal terminal, rerun this script in your own PowerShell session."
+} else {
+    Write-Host "5. This diagnosis is running in your normal terminal context."
+}
+Write-Host "6. If Codex and Claude disagree about state, check the paths shown above first."

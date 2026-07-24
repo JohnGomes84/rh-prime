@@ -43,8 +43,11 @@ const conn = await mysql.createConnection({
   ...(needsTls ? { ssl: { minVersion: "TLSv1.2", rejectUnauthorized: true } } : {}),
 });
 
-function rows<T = any>(r: unknown): T[] {
-  return (Array.isArray(r) ? (r[0] as T[]) : []) ?? [];
+// mysql2 `execute` resolve para [rows, fields]; destructurando [x], x ja e o
+// array de linhas.
+function count(execResult: unknown): number {
+  const arr = (Array.isArray(execResult) ? execResult : []) as Array<{ n?: number }>;
+  return Number(arr[0]?.n ?? 0);
 }
 
 async function runVerify() {
@@ -61,10 +64,10 @@ async function runVerify() {
     "SELECT COUNT(DISTINCT legacy_time_record_id) n FROM journey_punch_events WHERE is_shadow_from_legacy = 1 AND source = 'import'",
   );
   const result = verifyBackfill({
-    expectedRecordCount: Number(rows<any>(rc)[0]?.n ?? 0),
-    expectedClosedCount: Number(rows<any>(cc)[0]?.n ?? 0),
-    shadowTotal: Number(rows<any>(st)[0]?.n ?? 0),
-    shadowDistinctLegacyIds: Number(rows<any>(sd)[0]?.n ?? 0),
+    expectedRecordCount: count(rc),
+    expectedClosedCount: count(cc),
+    shadowTotal: count(st),
+    shadowDistinctLegacyIds: count(sd),
   });
 
   console.log("\n=== VALIDACAO POS-BACKFILL ===");
@@ -81,13 +84,14 @@ async function runBackfill() {
   const [trRows] = await conn.execute(
     "SELECT id, employee_id AS employeeId, clock_in AS clockIn, clock_out AS clockOut FROM time_records ORDER BY id ASC",
   );
-  const records = rows<LegacyTimeRecord>(trRows);
+  const records = (Array.isArray(trRows) ? trRows : []) as unknown as LegacyTimeRecord[];
 
   const [existRows] = await conn.execute(
     "SELECT legacy_time_record_id AS legacyId, event_type AS eventType FROM journey_punch_events WHERE is_shadow_from_legacy = 1 AND source = 'import'",
   );
+  const existingRows = (Array.isArray(existRows) ? existRows : []) as Array<{ legacyId: number; eventType: string }>;
   const existingKeys = new Set(
-    rows<any>(existRows).map((r) => shadowKey(Number(r.legacyId), String(r.eventType))),
+    existingRows.map((r) => shadowKey(Number(r.legacyId), String(r.eventType))),
   );
 
   const allEvents: ShadowPunchEvent[] = records.flatMap(timeRecordToShadowEvents);

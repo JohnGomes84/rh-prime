@@ -8,7 +8,7 @@ import { resolveEmployeeIdInScope } from "../utils/scope.js";
 import { evaluateGeofence } from "../utils/geofence.js";
 import { storagePut } from "../storage.js";
 import { isFeatureEnabled } from "../_core/feature-flags.js";
-import { registerJourneyPunchEventForEmployeeId, registerJourneyPunchEventForUser } from "../modules/journey-v2/service.js";
+import { registerJourneyPunchEventForEmployeeId } from "../modules/journey-v2/service.js";
 import { nanoid } from "nanoid";
 
 async function loadGeofenceConfig(): Promise<{ lat: number; lng: number; radiusM: number } | null> {
@@ -31,7 +31,7 @@ async function resolveEmployeeId(
 }
 
 async function mirrorLegacyPunchToJourneyV2(
-  ctxUser: { id: number; email?: string; role: string } | undefined,
+  employeeId: number | undefined,
   input: {
     eventType: "clock_in" | "clock_out";
     occurredAt: Date;
@@ -41,12 +41,15 @@ async function mirrorLegacyPunchToJourneyV2(
     selfieUrl?: string;
   },
 ) {
-  if (!ctxUser?.id) return;
+  if (!employeeId) return;
   if (!isFeatureEnabled("journey-v2-api")) return;
   if (!isFeatureEnabled("journey-v2-dual-run")) return;
 
   try {
-    await registerJourneyPunchEventForUser(ctxUser.id, ctxUser.email, {
+    // Espelha para o employee RESOLVIDO da batida legada (nao o ctx.user), para
+    // que batidas por-conta-de-outro (manager/admin com employeeId explicito)
+    // gerem a sombra V2 no funcionario correto, sem divergir.
+    await registerJourneyPunchEventForEmployeeId(employeeId, {
       eventType: input.eventType,
       occurredAt: input.occurredAt,
       source: "legacy_shadow",
@@ -57,7 +60,7 @@ async function mirrorLegacyPunchToJourneyV2(
     });
   } catch (error) {
     console.warn("[JourneyV2][DualRun] Failed to mirror legacy punch:", {
-      userId: ctxUser.id,
+      employeeId,
       eventType: input.eventType,
       sourceReference: input.sourceReference,
       error: error instanceof Error ? error.message : error,
@@ -120,7 +123,7 @@ export const timesheetRouter = router({
         } as any);
       }, "clockIn");
 
-      await mirrorLegacyPunchToJourneyV2(ctx.user, {
+      await mirrorLegacyPunchToJourneyV2(employeeId, {
         eventType: "clock_in",
         occurredAt: clockIn,
         sourceReference: `time_record:${result.id ?? "unknown"}:clock_in`,
@@ -172,7 +175,7 @@ export const timesheetRouter = router({
         });
       }, "clockOut");
 
-      await mirrorLegacyPunchToJourneyV2(ctx.user, {
+      await mirrorLegacyPunchToJourneyV2(employeeId, {
         eventType: "clock_out",
         occurredAt: clockOut,
         sourceReference: `time_record:${openRecord.id}:clock_out`,

@@ -170,7 +170,9 @@ export default function CollaboratorAppAdmin() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState("");
   const [onlyLinkedUsers, setOnlyLinkedUsers] = useState(true);
-  const [onlyCollaborators, setOnlyCollaborators] = useState(true);
+  // Não filtrar por colaborador por padrão — senão a lista fica vazia quando os
+  // usuários vinculados são admin/gestor (o caso mais comum no piloto).
+  const [onlyCollaborators, setOnlyCollaborators] = useState(false);
 
   useEffect(() => {
     setAppEnabled((settingsMap["collaborator_app.enabled"] ?? "") === "true");
@@ -290,7 +292,7 @@ export default function CollaboratorAppAdmin() {
 
   const handleSavePilot = async () => {
     if (!isAdmin) {
-      toast.error("Somente administrador pode alterar a liberacao do piloto.");
+      toast.error("Somente administrador pode alterar a liberação do piloto.");
       return;
     }
 
@@ -322,9 +324,9 @@ export default function CollaboratorAppAdmin() {
         await savePilotSettings.mutateAsync(entry);
       }
 
-      toast.success("Liberacao do piloto atualizada no sistema.");
+      toast.success("Liberação do piloto atualizada no sistema.");
     } catch (error: any) {
-      toast.error(error?.message ?? "Falha ao salvar a liberacao do piloto.");
+      toast.error(error?.message ?? "Falha ao salvar a liberação do piloto.");
     }
   };
 
@@ -337,77 +339,35 @@ export default function CollaboratorAppAdmin() {
             App do Colaborador
           </h1>
           <p className="text-muted-foreground">
-            Central operacional do app/PWA de ponto: liberacao do piloto, acessos, jornada e uso real.
+            Central do app de ponto: libere o piloto, acompanhe acessos e siga o passo a passo abaixo.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Status do app</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Acesso deste usuario</span>
-                <AccessBadge enabled={Boolean(collaboratorApp?.enabled)} reason={collaboratorApp?.reason} />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Funcionario vinculado</span>
-                <span className="font-medium">{linkedEmployee?.fullName ?? "Nao vinculado"}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Canal do colaborador</span>
-                <Badge variant="outline">/app e /app/ponto</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Onde configurar permissoes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <span>`/usuarios`: cria usuario, define role, ativa ou inativa e vincula ao funcionario.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <span>`/funcionarios`: valida status do colaborador e dados cadastrais.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <span>`/funcionarios` &gt; Contratos: configura jornada, horario, intervalo e tipo de escala.</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Onde operar o ponto</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <span>`/jornada-admin`: implantacao, espelho, ajustes, aprovacao e fechamento.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <span>`/privacidade`: consentimentos e base operacional de selfie e geolocalizacao.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <span>`/app` e `/app/ponto`: experiencia real do colaborador no celular.</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Status do app</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm sm:grid-cols-3">
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <span className="text-muted-foreground">Seu acesso</span>
+              <AccessBadge enabled={Boolean(collaboratorApp?.enabled)} reason={collaboratorApp?.reason} />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <span className="text-muted-foreground">Funcionário vinculado</span>
+              <span className="font-medium">{linkedEmployee?.fullName ?? "Não vinculado"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <span className="text-muted-foreground">Endereço do app</span>
+              <Badge variant="outline">/app/ponto</Badge>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>Liberacao do piloto pelo sistema</CardTitle>
+            <CardTitle>Liberação do piloto</CardTitle>
             <CardDescription>
-              Roles e usuarios agora sao selecionados a partir do cadastro do proprio sistema.
+              Escolha quem pode usar o app do colaborador. Perfis e usuários vêm do próprio cadastro do sistema.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -416,7 +376,7 @@ export default function CollaboratorAppAdmin() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Somente leitura</AlertTitle>
                 <AlertDescription>
-                  Gestores podem consultar esta central, mas apenas administradores podem alterar a liberacao do piloto.
+                  Gestores podem consultar esta central, mas apenas administradores podem alterar a liberação do piloto.
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -439,7 +399,7 @@ export default function CollaboratorAppAdmin() {
 
                 <div className="space-y-3">
                   <div>
-                    <Label>Roles liberadas a partir dos usuarios cadastrados</Label>
+                    <Label>Perfis liberados</Label>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Marque os perfis que podem entrar no piloto.
                     </p>
@@ -461,7 +421,7 @@ export default function CollaboratorAppAdmin() {
                       );
                     })}
                     {roleOptions.length === 0 ? (
-                      <span className="text-sm text-muted-foreground">Nenhum role carregado do cadastro de usuarios.</span>
+                      <span className="text-sm text-muted-foreground">Nenhum perfil carregado do cadastro de usuários.</span>
                     ) : null}
                   </div>
                 </div>
@@ -469,9 +429,9 @@ export default function CollaboratorAppAdmin() {
                 <div className="space-y-3">
                   <div className="flex items-end justify-between gap-3">
                     <div>
-                      <Label>Usuarios do piloto</Label>
+                      <Label>Usuários do piloto</Label>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Selecionados do proprio banco. O sistema grava automaticamente os IDs e emails destes usuarios.
+                        Escolhidos do próprio cadastro. O sistema grava os IDs e e-mails automaticamente.
                       </p>
                     </div>
                     <Badge variant="outline">{selectedUsers.length} selecionado(s)</Badge>
@@ -505,7 +465,7 @@ export default function CollaboratorAppAdmin() {
                       </Label>
                     </div>
                     <Badge variant="secondary">
-                      {filteredUsers.length} visivel(eis)
+                      {filteredUsers.length} visível(eis)
                     </Badge>
                   </div>
 
@@ -515,7 +475,7 @@ export default function CollaboratorAppAdmin() {
                       value={userSearch}
                       onChange={(event) => setUserSearch(event.target.value)}
                       className="pl-9"
-                      placeholder="Buscar por nome, email, funcionario ou ID"
+                      placeholder="Buscar por nome, e-mail, funcionário ou ID"
                       disabled={!isAdmin || saving}
                     />
                   </div>
@@ -528,7 +488,7 @@ export default function CollaboratorAppAdmin() {
                       onClick={handleSelectVisibleUsers}
                       disabled={!isAdmin || saving || filteredUsers.length === 0}
                     >
-                      Selecionar visiveis
+                      Selecionar visíveis
                     </Button>
                     <Button
                       type="button"
@@ -546,7 +506,7 @@ export default function CollaboratorAppAdmin() {
                       onClick={handleClearSelectedUsers}
                       disabled={!isAdmin || saving || selectedUsers.length === 0}
                     >
-                      Limpar selecao
+                      Limpar seleção
                     </Button>
                   </div>
 
@@ -555,9 +515,9 @@ export default function CollaboratorAppAdmin() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[90px]">Piloto</TableHead>
-                          <TableHead>Usuario</TableHead>
-                          <TableHead>Funcionario</TableHead>
-                          <TableHead>Role</TableHead>
+                          <TableHead>Usuário</TableHead>
+                          <TableHead>Funcionário</TableHead>
+                          <TableHead>Perfil</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -595,11 +555,11 @@ export default function CollaboratorAppAdmin() {
                                     <div className="space-y-1">
                                       <div>{user.linkedEmployeeName}</div>
                                       <div className="text-xs text-muted-foreground">
-                                        Vinculo OK
+                                        Vínculo OK
                                       </div>
                                     </div>
                                   ) : (
-                                    <Badge variant="secondary">Sem vinculo</Badge>
+                                    <Badge variant="secondary">Sem vínculo</Badge>
                                   )}
                                 </TableCell>
                                 <TableCell>
@@ -611,7 +571,7 @@ export default function CollaboratorAppAdmin() {
                         ) : (
                           <TableRow>
                             <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                              Nenhum usuario encontrado para este filtro.
+                              Nenhum usuário encontrado. Ajuste os filtros ou a busca acima.
                             </TableCell>
                           </TableRow>
                         )}
@@ -623,9 +583,9 @@ export default function CollaboratorAppAdmin() {
                 <div className="flex flex-wrap gap-3">
                   <Button onClick={handleSavePilot} disabled={!isAdmin || saving}>
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Salvar liberacao do piloto
+                    Salvar liberação do piloto
                   </Button>
-                  <Button variant="outline" onClick={() => navigate("/app")}>
+                  <Button variant="outline" onClick={() => navigate("/app/ponto")}>
                     Abrir app do colaborador
                   </Button>
                 </div>
@@ -636,29 +596,29 @@ export default function CollaboratorAppAdmin() {
                   <Shield className="h-4 w-4" />
                   <AlertTitle>Regra aplicada</AlertTitle>
                   <AlertDescription>
-                    Se o app estiver ativo e nenhum role e nenhum usuario forem selecionados, o sistema entende isso como liberacao global para todos os usuarios logados.
+                    Com o app ativo e nenhum perfil ou usuário marcado, a liberação vale para todos os usuários logados (liberação global).
                   </AlertDescription>
                 </Alert>
 
                 {selectedUsersWithoutLink.length > 0 ? (
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Usuarios selecionados sem vinculo</AlertTitle>
+                    <AlertTitle>Usuários selecionados sem vínculo</AlertTitle>
                     <AlertDescription>
-                      Existem {selectedUsersWithoutLink.length} usuario(s) escolhidos sem funcionario vinculado. Eles podem entrar no piloto tecnico, mas o app continuara bloqueando a operacao de ponto ate o vinculo ser corrigido.
+                      {selectedUsersWithoutLink.length} usuário(s) escolhido(s) não têm funcionário vinculado. Eles entram no piloto, mas o ponto fica bloqueado até o vínculo ser feito em Usuários.
                     </AlertDescription>
                   </Alert>
                 ) : null}
 
                 <Card className="border bg-muted/30 shadow-none">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Resumo da configuracao</CardTitle>
+                    <CardTitle className="text-base">Resumo da configuração</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">App ligado</span>
                       <Badge variant={appEnabled ? "default" : "secondary"}>
-                        {appEnabled ? "Sim" : "Nao"}
+                        {appEnabled ? "Sim" : "Não"}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3">
@@ -666,31 +626,23 @@ export default function CollaboratorAppAdmin() {
                       <Badge variant="outline">{scopedPilot ? "Controlado" : "Global"}</Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Fonte em runtime</span>
-                      <Badge variant="outline">{runtimeConfig?.source ?? "carregando"}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Roles selecionadas</span>
+                      <span className="text-muted-foreground">Perfis selecionados</span>
                       <span>{selectedRoles.length}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Usuarios selecionados</span>
+                      <span className="text-muted-foreground">Usuários selecionados</span>
                       <span>{selectedUsers.length}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Selecionados sem vinculo</span>
+                      <span className="text-muted-foreground">Sem vínculo</span>
                       <span>{selectedUsersWithoutLink.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Emails derivados</span>
-                      <span>{selectedUsers.length}</span>
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="border bg-muted/30 shadow-none">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Usuarios escolhidos</CardTitle>
+                    <CardTitle className="text-base">Usuários escolhidos</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {selectedUsers.length > 0 ? (
@@ -704,14 +656,14 @@ export default function CollaboratorAppAdmin() {
                             {user.linkedEmployeeName ? (
                               <Badge variant="outline">{user.linkedEmployeeName}</Badge>
                             ) : (
-                              <Badge variant="secondary">Sem vinculo</Badge>
+                              <Badge variant="secondary">Sem vínculo</Badge>
                             )}
                           </div>
                         </div>
                       ))
                     ) : (
                       <div className="text-sm text-muted-foreground">
-                        Nenhum usuario selecionado. Se deixar assim e nao marcar roles, o app fica em liberacao global quando estiver ativo.
+                        Nenhum usuário selecionado. Se deixar assim e não marcar perfis, o app fica em liberação global quando estiver ativo.
                       </div>
                     )}
                   </CardContent>
@@ -721,58 +673,64 @@ export default function CollaboratorAppAdmin() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <ActionCard
-            icon={UserCog}
-            title="1. Acesso e vinculo"
-            description="Primeiro passo para qualquer colaborador usar o app."
-            actionLabel="Abrir Usuarios"
-            onAction={() => navigate("/usuarios")}
-            bullets={[
-              "Criar o usuario de acesso.",
-              "Ativar ou reativar a conta.",
-              "Vincular o usuario ao funcionario correto.",
-            ]}
-          />
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Passo a passo para liberar um colaborador</h2>
+            <p className="text-sm text-muted-foreground">Siga na ordem. Cada passo abre a tela certa do sistema.</p>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <ActionCard
+              icon={UserCog}
+              title="1. Acesso e vínculo"
+              description="Primeiro passo para qualquer colaborador usar o app."
+              actionLabel="Abrir Usuários"
+              onAction={() => navigate("/usuarios")}
+              bullets={[
+                "Criar o usuário de acesso.",
+                "Ativar ou reativar a conta.",
+                "Vincular o usuário ao funcionário correto.",
+              ]}
+            />
 
-          <ActionCard
-            icon={Users}
-            title="2. Cadastro e jornada"
-            description="Sem funcionario ativo e contrato valido, o app nao fecha a elegibilidade."
-            actionLabel="Abrir Funcionarios"
-            onAction={() => navigate("/funcionarios")}
-            bullets={[
-              "Conferir status do colaborador.",
-              "Abrir o funcionario e revisar contratos.",
-              "Validar horario, escala e intervalo no contrato.",
-            ]}
-          />
+            <ActionCard
+              icon={Users}
+              title="2. Cadastro e jornada"
+              description="Sem funcionário ativo e contrato válido, o app não libera o ponto."
+              actionLabel="Abrir Funcionários"
+              onAction={() => navigate("/funcionarios")}
+              bullets={[
+                "Conferir o status do colaborador.",
+                "Abrir o funcionário e revisar os contratos.",
+                "Validar horário, escala e intervalo no contrato.",
+              ]}
+            />
 
-          <ActionCard
-            icon={Stamp}
-            title="3. Operacao do RH"
-            description="Aqui o RH executa implantacao, ajustes e fechamento da competencia."
-            actionLabel="Abrir Jornada Admin"
-            onAction={() => navigate("/jornada-admin")}
-            bullets={[
-              "Registrar implantacao manual do mes atual.",
-              "Aprovar ou decidir ajustes.",
-              "Fechar e reabrir competencia quando necessario.",
-            ]}
-          />
+            <ActionCard
+              icon={Stamp}
+              title="3. Operação do RH"
+              description="Onde o RH faz implantação, ajustes e fechamento da competência."
+              actionLabel="Abrir Jornada Admin"
+              onAction={() => navigate("/jornada-admin")}
+              bullets={[
+                "Registrar a implantação manual do mês atual.",
+                "Aprovar ou decidir ajustes.",
+                "Fechar e reabrir a competência quando necessário.",
+              ]}
+            />
 
-          <ActionCard
-            icon={Shield}
-            title="4. Privacidade e evidencias"
-            description="Base operacional para camera, geolocalizacao e ciencia do colaborador."
-            actionLabel="Abrir Privacidade"
-            onAction={() => navigate("/privacidade")}
-            bullets={[
-              "Revisar consentimentos necessarios.",
-              "Orientar o colaborador quando houver bloqueio.",
-              "Conferir a governanca de evidencias do ponto.",
-            ]}
-          />
+            <ActionCard
+              icon={Shield}
+              title="4. Privacidade e evidências"
+              description="Base para câmera, geolocalização e ciência do colaborador."
+              actionLabel="Abrir Privacidade"
+              onAction={() => navigate("/privacidade")}
+              bullets={[
+                "Revisar os consentimentos necessários.",
+                "Orientar o colaborador quando houver bloqueio.",
+                "Conferir a governança de evidências do ponto.",
+              ]}
+            />
+          </div>
         </div>
       </div>
     </DashboardLayout>

@@ -1,8 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { isFeatureEnabled } from "../_core/feature-flags.js";
-import { managerProcedure, protectedProcedure, router } from "../_core/trpc.js";
+import { adminProcedure, managerProcedure, protectedProcedure, router } from "../_core/trpc.js";
 import * as db from "../db.js";
+import { setupJourneyV2Pilot } from "../modules/journey-v2/pilot-setup.js";
 import {
   closeJourneyPeriod,
   createJourneyAdjustmentRequest,
@@ -32,6 +33,13 @@ function assertJourneyV2Enabled() {
 }
 
 export const journeyV2Router = router({
+  // Admin-only, one-time setup: creates the journey tables + pilot policy and
+  // assigns eligible employees. Runs on the server's own DB connection, so it
+  // works even when the DB isn't reachable from a developer machine. NOT gated
+  // by the feature flag — it prepares the data before the flag is turned on.
+  setupPilot: adminProcedure.mutation(async () => {
+    return setupJourneyV2Pilot();
+  }),
   getTodayStatus: protectedProcedure
     .input(z.object({
       referenceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

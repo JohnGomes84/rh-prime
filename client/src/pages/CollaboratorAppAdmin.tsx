@@ -256,6 +256,15 @@ export default function CollaboratorAppAdmin() {
     },
   });
 
+  const setupPilotMutation = trpc.journeyV2.setupPilot.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(
+        `Jornada de 4 batidas preparada: ${r.journeyTables} tabelas, política #${r.policyId}, ${r.assignmentsTotal} funcionário(s) apto(s).`,
+      );
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao preparar a jornada de 4 batidas."),
+  });
+
   const collaboratorApp = flagsQuery.data?.collaboratorApp;
   const linkedEmployee = sessionQuery.data?.employee;
   const runtimeConfig = configQuery.data;
@@ -362,6 +371,33 @@ export default function CollaboratorAppAdmin() {
             </div>
           </CardContent>
         </Card>
+
+        {isAdmin ? (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Jornada de 4 batidas (entrada · almoço · retorno · saída)</CardTitle>
+              <CardDescription>
+                Prepara o banco de produção (tabelas + política) para o ponto completo. Rode uma vez; depois eu ligo o recurso.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => setupPilotMutation.mutate()}
+                disabled={setupPilotMutation.isPending}
+              >
+                {setupPilotMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Preparar jornada de 4 batidas
+              </Button>
+              {setupPilotMutation.data ? (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  Pronto: {(setupPilotMutation.data as any).journeyTables} tabelas ·
+                  política #{(setupPilotMutation.data as any).policyId} ·
+                  {" "}{(setupPilotMutation.data as any).assignmentsTotal} funcionário(s) apto(s).
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card className="border-0 shadow-sm">
           <CardHeader>

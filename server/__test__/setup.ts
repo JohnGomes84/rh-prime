@@ -38,6 +38,7 @@ vi.mock("../db", async () => {
     getOvertimeStats: memoryDb.getOvertimeStats.bind(memoryDb),
     getOpenTimeRecord: memoryDb.getOpenTimeRecord.bind(memoryDb),
     updateTimeRecord: memoryDb.updateTimeRecord.bind(memoryDb),
+    listContracts: memoryDb.listContracts.bind(memoryDb),
     findOvertimeAuthorizationFor: memoryDb.findOvertimeAuthorizationFor.bind(memoryDb),
     consumeOvertimeAuthorization: memoryDb.consumeOvertimeAuthorization.bind(memoryDb),
     createTimeBankEntry: memoryDb.createTimeBankEntry.bind(memoryDb),

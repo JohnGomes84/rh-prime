@@ -243,6 +243,11 @@ export const memoryDb = {
   async getLastRecordHash() {
     return null;
   },
+  async listContracts(_employeeId: number) {
+    // No active contract by default -> getActiveScheduleRule() returns null,
+    // so legacy clockOut takes the "no rule -> APPROVED" path deterministically.
+    return [];
+  },
   async listTimeRecords(employeeId: number, startDate?: Date, endDate?: Date) {
     return Array.from(timeRecords.values()).filter(record => {
       if (record.employeeId !== employeeId) return false;

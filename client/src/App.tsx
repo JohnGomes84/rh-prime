@@ -12,6 +12,7 @@ import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { AdminGuard, ManagerGuard } from "./components/RouteGuard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const Home = lazy(() => import("./pages/Home"));
 const Employees = lazy(() => import("./pages/Employees"));
@@ -93,9 +94,16 @@ const authenticated = (Component: React.ComponentType) => () => (
   </ProtectedRoute>
 );
 
-// The root URL is the punch app — opening the link lands everyone on the ponto.
-// The admin dashboard lives at /painel (reachable from the app header).
-const RootLanding = () => <Redirect to="/app/ponto" />;
+// Root landing is role-aware: admins/managers go to the dashboard, collaborators
+// to the punch app. Not authenticated → login. (Login redirects here on success.)
+const RootLanding = () => {
+  const { user, loading, isAuthenticated } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!isAuthenticated || !user) return <Redirect to="/login" />;
+  const role = (user as any).role;
+  if (role === "admin" || role === "gestor") return <Redirect to="/painel" />;
+  return <Redirect to="/app/ponto" />;
+};
 
 function Router() {
   return (
